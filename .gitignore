@@ -1,0 +1,21 @@
+# Ignore dependencies
+node_modules/
+
+# Ignore build output
+dist/
+.vite/
+.cache/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore logs
+*.log
+npm-debug.log*
+
+# Ignore Vercel build output (if any)
+.vercel/
+
+# Optional: Ignore env/config files
+.env
