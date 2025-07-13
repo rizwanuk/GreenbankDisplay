@@ -20,6 +20,11 @@ export default function EmbedScreen() {
   const hijriOffset = parseInt(settings?.islamicCalendar?.offset || 0);
   const hijriDate = moment().add(hijriOffset, "days").format("iD iMMMM iYYYY");
 
+  const lastUpdated = settings?.meta?.lastUpdated
+    ? moment.utc(settings.meta.lastUpdated).local().format("D MMM YYYY, h:mm A")
+    : "";
+
+  const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
   const todayTimetable = timetable.find(
     (t) => parseInt(t.Day) === today.date() && parseInt(t.Month) === today.month() + 1
   );
@@ -28,22 +33,17 @@ export default function EmbedScreen() {
     return <div className="text-white p-4">Today's prayer times not found.</div>;
   }
 
-  const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
   const now = moment();
-
+  const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
-  const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
-
-  // Makrooh windows from settings
   const zawalStart = moment(todayTimetable["Zawal Start"], "HH:mm");
   const zawalEnd = moment(todayTimetable["Zawal End"], "HH:mm");
   const sunriseStart = moment(todayTimetable["Shouruq"], "HH:mm").subtract(5, "minutes");
   const sunriseEnd = moment(todayTimetable["Shouruq"], "HH:mm").add(10, "minutes");
 
   const isMakroohNow = now.isBetween(zawalStart, zawalEnd) || now.isBetween(sunriseStart, sunriseEnd);
-
   const isFriday = today.day() === 5;
   const jummahTime = settings.jummah?.time || "13:30";
 
@@ -72,6 +72,11 @@ export default function EmbedScreen() {
                   <span>{today.format("dddd, D MMMM YYYY")}</span>
                   <span>{hijriDate} AH</span>
                 </div>
+              </th>
+            </tr>
+            <tr className="text-xs text-right text-white/60">
+              <th className="text-right" colSpan={6}>
+                {lastUpdated && <span>Last updated: {lastUpdated}</span>}
               </th>
             </tr>
             <tr className="border-t border-white/20">

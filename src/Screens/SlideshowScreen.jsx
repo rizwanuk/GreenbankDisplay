@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import moment from "moment";
 import Header from "../Components/Header";
 import SlideshowClock from "../Components/slideshow/SlideshowClock";
@@ -18,8 +18,7 @@ export default function SlideshowScreen() {
     name: "Greenbank Masjid",
     address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
     webpage: "greenbankbristol.org",
-    logoUrl:
-      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
+    logoUrl: "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
   };
 
   const extractTheme = (group) =>
@@ -78,6 +77,26 @@ export default function SlideshowScreen() {
   const tomorrowRow = getRow(tomorrow);
 
   const is24Hour = toggles.clock24Hours === "TRUE";
+
+  // Auto-reload logic
+  const [_, forceUpdate] = useState(0);
+  const lastUpdatedRef = useRef(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentUpdated = settingsMap["meta.lastUpdated"];
+      if (!lastUpdatedRef.current) {
+        lastUpdatedRef.current = currentUpdated;
+      } else if (lastUpdatedRef.current !== currentUpdated) {
+        console.log("🔄 Google Sheet has changed, reloading page.");
+        window.location.reload();
+      } else {
+        console.log("✅ No change in Google Sheet data.");
+      }
+    }, 60000); // Check every 60 seconds
+
+    return () => clearInterval(interval);
+  }, [settingsMap]);
 
   return (
     <div className="w-screen h-screen flex flex-col bg-black text-white relative">

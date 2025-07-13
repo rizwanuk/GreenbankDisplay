@@ -71,20 +71,22 @@ export default function UpcomingPrayerRows({
 
   return (
     <div
-      className={`
-        mt-6
-        ${theme.bgColor || "bg-white/5"}
-        ${theme.textColor || "text-white"}
-        ${theme.fontEng || "font-rubik"}
-        rounded-2xl
-        backdrop-blur-md
-        border border-white/10
-        shadow-md
-        px-4
-        py-6
-        space-y-6
-      `}
-    >
+  className={`
+    mt-6
+    max-h-full overflow-hidden
+    ${theme.bgColor || "bg-white/5"}
+    ${theme.textColor || "text-white"}
+    ${theme.fontEng || "font-rubik"}
+    rounded-2xl
+    backdrop-blur-md
+    border border-white/10
+    shadow-md
+    px-4
+    py-6
+    space-y-6
+  `}
+>
+
       <div
         className={`grid grid-cols-2 sm:grid-cols-4 font-semibold text-white/80 px-4 pb-2 ${
           theme.headerSize || "text-xl sm:text-2xl md:text-3xl"
@@ -100,7 +102,8 @@ export default function UpcomingPrayerRows({
         <div
           key={i}
           className={`grid grid-cols-2 sm:grid-cols-4 items-center gap-4 px-4 py-4 border-t border-white/10 ${
-            theme.rowSize || "text-3xl sm:text-5xl md:text-6xl"
+            theme.rowSize || "text-[clamp(1.5rem,2.5vw,3rem)]"
+
           } leading-tight`}
         >
           <div className="truncate font-bold whitespace-nowrap overflow-visible text-ellipsis">

@@ -1,5 +1,5 @@
 // Slideshow.jsx
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom/client";
 import moment from "moment";
 import SlideshowScreen from "./Screens/SlideshowScreen.jsx";
@@ -9,6 +9,9 @@ import usePrayerTimes from "./hooks/usePrayerTimes";
 function SlideshowApp() {
   const settings = useSettings();
   const timetable = usePrayerTimes();
+
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const previousLastUpdated = useRef(null);
 
   const mosque = {
     name: "Greenbank Masjid",
@@ -47,6 +50,33 @@ function SlideshowApp() {
     acc[row.Key] = row.Value;
     return acc;
   }, {});
+
+  useEffect(() => {
+    const metaUpdate = settings.find(
+      (row) => row.Group === "meta" && row.Key === "lastUpdated"
+    );
+    if (metaUpdate) {
+      const newValue = metaUpdate.Value;
+      setLastUpdated(newValue);
+
+      if (previousLastUpdated.current && previousLastUpdated.current !== newValue) {
+        console.log("🔄 Change detected in lastUpdated — refreshing page...");
+        window.location.reload();
+      }
+
+      previousLastUpdated.current = newValue;
+    }
+  }, [settings]);
+
+  // Optional: Periodic silent check (every 60 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch(window.location.href).then(() => {
+        // Can add fetch logic here in future
+      });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <SlideshowScreen

@@ -39,8 +39,14 @@ export default function InfoCard({ settings, settingsMap, now, theme }) {
 
   // Helper: get Jama'ah time from settingsMap
   const getTime = (key) => {
-    const raw = settingsMap[key];
+    const raw =
+      settingsMap[key] ||
+      settingsMap[key.toLowerCase()] ||
+      settingsMap[key.replace("Iqamah", "Iqama")] ||
+      null;
+
     if (!raw) return null;
+
     return moment(raw, "HH:mm").set({
       year: now.year(),
       month: now.month(),

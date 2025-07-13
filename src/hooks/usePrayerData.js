@@ -1,4 +1,3 @@
-// usePrayerData.js
 import { useMemo } from "react";
 import moment from "moment";
 import {
@@ -88,6 +87,22 @@ export default function usePrayerData(settings, timetable) {
     };
   }, [settingsMap]);
 
+  // 🆕 Sheet lastUpdated time detection
+  const lastUpdated = useMemo(() => {
+    const raw = settingsMap?.["meta.lastUpdated"];
+    return raw ? moment.utc(raw) : null;
+  }, [settingsMap]);
+
+  const lastUpdatedAgeMinutes = useMemo(() => {
+    if (!lastUpdated) return null;
+    return moment().diff(lastUpdated, "minutes"); // local vs UTC
+  }, [lastUpdated]);
+
+  const needsRefresh = useMemo(() => {
+    if (lastUpdatedAgeMinutes == null) return false;
+    return lastUpdatedAgeMinutes > 30; // can change this threshold
+  }, [lastUpdatedAgeMinutes]);
+
   return {
     settingsMap,
     todayRow,
@@ -98,5 +113,8 @@ export default function usePrayerData(settings, timetable) {
     labels,
     arabicLabels,
     mosque,
+    lastUpdated,
+    lastUpdatedAgeMinutes,
+    needsRefresh,
   };
 }
