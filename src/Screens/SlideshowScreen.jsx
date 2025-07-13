@@ -1,11 +1,11 @@
 import React from "react";
 import moment from "moment";
-import Header from "../components/Header";
-import SlideshowClock from "../components/slideshow/SlideshowClock";
-import SlideshowDateCard from "../components/slideshow/SlideshowDateCard";
-import SlideshowCurrentPrayerCard from "../components/slideshow/SlideshowCurrentPrayerCard";
-import SlideshowUpcomingPrayerRows from "../components/slideshow/SlideshowUpcomingPrayerRows";
-import SlideshowPanel from "../components/SlideshowPanel";
+import Header from "../Components/Header";
+import SlideshowClock from "../Components/slideshow/SlideshowClock";
+import SlideshowDateCard from "../Components/slideshow/SlideshowDateCard";
+import SlideshowCurrentPrayerCard from "../Components/slideshow/SlideshowCurrentPrayerCard";
+import SlideshowUpcomingPrayerRows from "../Components/slideshow/SlideshowUpcomingPrayerRows";
+import SlideshowPanel from "../Components/SlideshowPanel";
 import useSettings from "../hooks/useSettings";
 import usePrayerTimes from "../hooks/usePrayerTimes";
 
