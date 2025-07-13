@@ -62,19 +62,19 @@ export default function EmbedScreen() {
   });
 
   return (
-    <div className="min-h-screen bg-black p-4 text-white font-sans flex flex-col items-center gap-6">
+    <div className="min-h-screen bg-black p-4 text-white font-sans flex flex-col items-center gap-4">
       <div className="w-full max-w-xl bg-gray-800 rounded-xl shadow p-2 backdrop-blur">
-        <table className="w-full table-fixed text-center text-[3.5vw] sm:text-xl md:text-2xl">
+        <table className="w-full table-fixed text-center text-[0.8rem] sm:text-sm md:text-base lg:text-lg xl:text-xl">
           <thead>
-            <tr className="text-[3vw] sm:text-base md:text-lg">
+            <tr className="text-xs sm:text-sm">
               <th className="text-left py-1" colSpan={6}>
-                <div className="flex flex-wrap justify-between gap-x-2">
-                  <span>{today.format("dddd, D MMMM YYYY")}</span>
-                  <span>{hijriDate} AH</span>
+                <div className="flex justify-between flex-wrap gap-1">
+                  <span className="truncate">{today.format("dddd, D MMMM YYYY")}</span>
+                  <span className="truncate">{hijriDate} AH</span>
                 </div>
               </th>
             </tr>
-            <tr className="text-[2.5vw] sm:text-xs text-right text-white/60">
+            <tr className="text-[0.6rem] text-right text-white/60">
               <th className="text-right" colSpan={6}>
                 {lastUpdated && <span>Last updated: {lastUpdated}</span>}
               </th>
@@ -96,7 +96,7 @@ export default function EmbedScreen() {
                 return (
                   <th
                     key={key}
-                    className={`w-1/6 px-1 py-1 font-semibold ${
+                    className={`w-1/6 px-1 py-1 font-semibold whitespace-nowrap ${
                       isActive ? "bg-white/20 rounded" : ""
                     }`}
                   >
@@ -108,7 +108,7 @@ export default function EmbedScreen() {
           </thead>
           <tbody>
             <tr className="border-t border-white/10">
-              <td className="text-left py-1 font-medium text-[3.5vw] sm:text-base">Begins</td>
+              <td className="text-left py-1 font-medium whitespace-nowrap">Begins</td>
               {prayers.map((key) => (
                 <td key={key + "-adhan"} className="py-1">
                   {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
@@ -116,64 +116,25 @@ export default function EmbedScreen() {
               ))}
             </tr>
             <tr className="border-t border-white/10">
-              <td className="text-left py-1 font-medium text-[3.5vw] sm:text-base">Jama‘ah</td>
+              <td className="text-left py-1 font-medium whitespace-nowrap">Jama‘ah</td>
               {prayers.map((key) => (
                 <td key={key + "-iqamah"} className="py-1">
                   {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
                 </td>
               ))}
             </tr>
-            <tr className="border-t border-white/10 text-sm md:text-base">
-              <td className="text-left py-1 font-medium text-[3.5vw] sm:text-base">Info</td>
-              {prayers.map((key, idx) => {
-                const isActivePrayer = key === activePrayerKey;
-                const isFajr = key === "fajr";
-                const isZuhr = key === "dhuhr";
-
-                const infoItems = [];
-
-                if (isActivePrayer && isMakroohNow) {
-                  infoItems.push(
-                    <span className="text-red-400 italic whitespace-nowrap" key="makrooh">
-                      Avoid praying now
-                    </span>
-                  );
-                }
-
-                if (isFajr) {
-                  infoItems.push(
-                    <span className="text-gray-300 whitespace-nowrap" key="shouruq">
-                      Shouruq: {formatTime(todayTimetable["Shouruq"])}
-                    </span>
-                  );
-                }
-
-                if (isZuhr && !isFriday) {
-                  infoItems.push(
-                    <span className="text-gray-300 whitespace-nowrap" key="jummah">
-                      Jummah: {formatTime(jummahTime)}
-                    </span>
-                  );
-                }
-
-                return (
-                  <td key={key + "-info"} className="py-1">
-                    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-[3.3vw] sm:text-xs md:text-sm">
-                      {infoItems.map((item, i) => (
-                        <React.Fragment key={i}>
-                          {item}
-                          {i < infoItems.length - 1 && (
-                            <span className="text-white/40 px-1">|</span>
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
           </tbody>
         </table>
+        <div className="pt-2 text-sm sm:text-base text-white/90 text-left px-2">
+          {isMakroohNow ? (
+            <div className="text-red-400 italic">Avoid praying now (Makrooh time)</div>
+          ) : (
+            <div className="flex flex-wrap gap-3 whitespace-nowrap">
+              <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
+              <span>Jummah: {formatTime(jummahTime)}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
