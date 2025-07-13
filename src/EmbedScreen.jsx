@@ -108,7 +108,11 @@ export default function EmbedScreen() {
           </thead>
           <tbody>
             <tr className="border-t border-white/10">
-              <td className="text-left py-1 font-medium">Begins</td>
+  <td className="text-left py-1 font-medium">
+    <span className="block md:hidden">Beg.</span>
+    <span className="hidden md:block">Begins</span>
+  </td>
+
               {prayers.map((key) => (
                 <td key={key + "-adhan"} className="py-1">
                   {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
@@ -116,7 +120,11 @@ export default function EmbedScreen() {
               ))}
             </tr>
             <tr className="border-t border-white/10">
-              <td className="text-left py-1 font-medium">Jama‘ah</td>
+  <td className="text-left py-1 font-medium">
+    <span className="block md:hidden">Jam.</span>
+    <span className="hidden md:block">Jama‘ah</span>
+  </td>
+
               {prayers.map((key) => (
                 <td key={key + "-iqamah"} className="py-1">
                   {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
