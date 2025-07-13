@@ -64,11 +64,11 @@ export default function EmbedScreen() {
   return (
     <div className="min-h-screen bg-black p-4 text-white font-sans flex flex-col items-center gap-6">
       <div className="w-full max-w-xl bg-gray-800 rounded-xl shadow p-2 backdrop-blur">
-        <table className="w-full table-fixed text-center text-xl md:text-2xl">
+        <table className="w-full table-fixed text-center text-sm sm:text-base md:text-lg lg:text-xl">
           <thead>
-            <tr className="text-base md:text-lg">
+            <tr>
               <th className="text-left py-1" colSpan={6}>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-xs sm:text-sm md:text-base font-semibold">
                   <span>{today.format("dddd, D MMMM YYYY")}</span>
                   <span>{hijriDate} AH</span>
                 </div>
@@ -96,11 +96,11 @@ export default function EmbedScreen() {
                 return (
                   <th
                     key={key}
-                    className={`w-1/6 px-1 py-1 font-semibold ${
+                    className={`w-1/6 px-1 py-1 font-semibold truncate ${
                       isActive ? "bg-white/20 rounded" : ""
                     }`}
                   >
-                    {label}
+                    <span className="text-xs sm:text-sm md:text-base lg:text-lg">{label}</span>
                   </th>
                 );
               })}
@@ -108,11 +108,10 @@ export default function EmbedScreen() {
           </thead>
           <tbody>
             <tr className="border-t border-white/10">
-  <td className="text-left py-1 font-medium">
-    <span className="block md:hidden">Beg.</span>
-    <span className="hidden md:block">Begins</span>
-  </td>
-
+              <td className="text-left py-1 font-medium">
+                <span className="block sm:hidden">Beg.</span>
+                <span className="hidden sm:block">Begins</span>
+              </td>
               {prayers.map((key) => (
                 <td key={key + "-adhan"} className="py-1">
                   {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
@@ -120,18 +119,17 @@ export default function EmbedScreen() {
               ))}
             </tr>
             <tr className="border-t border-white/10">
-  <td className="text-left py-1 font-medium">
-    <span className="block md:hidden">Jam.</span>
-    <span className="hidden md:block">Jama‘ah</span>
-  </td>
-
+              <td className="text-left py-1 font-medium">
+                <span className="block sm:hidden">Jam.</span>
+                <span className="hidden sm:block">Jama‘ah</span>
+              </td>
               {prayers.map((key) => (
                 <td key={key + "-iqamah"} className="py-1">
                   {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
                 </td>
               ))}
             </tr>
-            <tr className="border-t border-white/10 text-sm md:text-base">
+            <tr className="border-t border-white/10 text-xs sm:text-sm md:text-base">
               <td className="text-left py-1 font-medium">Info</td>
               {prayers.map((key, idx) => {
                 const isActivePrayer = key === activePrayerKey;
@@ -144,13 +142,13 @@ export default function EmbedScreen() {
                   content = <span className="text-red-400 italic whitespace-nowrap">Avoid praying now</span>;
                 } else if (isFajr) {
                   content = (
-                    <span className="text-gray-300 whitespace-nowrap block text-sm">
+                    <span className="text-gray-300 whitespace-nowrap block">
                       Shouruq: {formatTime(todayTimetable["Shouruq"])}
                     </span>
                   );
                 } else if (isZuhr && !isFriday) {
                   content = (
-                    <span className="text-gray-300 whitespace-nowrap block text-sm">
+                    <span className="text-gray-300 whitespace-nowrap block">
                       Jummah: {formatTime(jummahTime)}
                     </span>
                   );
