@@ -1,12 +1,12 @@
 import React from "react";
 import moment from "moment";
-import Header from "./components/Header";
-import Clock from "./components/Clock";
-import DateCard from "./components/DateCard";
-import CurrentPrayerCard from "./components/CurrentPrayerCard";
-import UpcomingPrayerRows from "./components/UpcomingPrayerRows";
-import NextPrayerCard from "./components/NextPrayerCard";
-import InfoCard from "./components/InfoCard"; // ✅ Added
+import Header from "./Components/Header";
+import Clock from "./Components/Clock";
+import DateCard from "./Components/DateCard";
+import CurrentPrayerCard from "./Components/CurrentPrayerCard";
+import UpcomingPrayerRows from "./Components/UpcomingPrayerRows";
+import NextPrayerCard from "./Components/NextPrayerCard";
+import InfoCard from "./Components/InfoCard"; // ✅ Added
 import useSettings from "./hooks/useSettings";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 
