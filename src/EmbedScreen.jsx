@@ -12,7 +12,7 @@ export default function EmbedScreen() {
   const rawSettings = useSettings();
 
   if (!timetable || !rawSettings) {
-    return <div className="text-white p-4">Loading...</div>;
+    return <div className="text-black p-4">Loading...</div>;
   }
 
   const settings = parseSettings(rawSettings);
@@ -30,7 +30,7 @@ export default function EmbedScreen() {
   );
 
   if (!todayTimetable) {
-    return <div className="text-white p-4">Today's prayer times not found.</div>;
+    return <div className="text-black p-4">Today's prayer times not found.</div>;
   }
 
   const now = moment();
@@ -62,8 +62,8 @@ export default function EmbedScreen() {
   });
 
   return (
-    <div className="min-h-screen bg-black p-4 text-white font-sans flex flex-col items-center gap-4">
-      <div className="w-full max-w-xl bg-gray-800 rounded-xl shadow p-2 backdrop-blur">
+    <div className="bg-white text-black font-sans flex flex-col items-center">
+      <div className="w-full max-w-xl bg-gray-800 text-white rounded-xl shadow p-2 backdrop-blur">
         <table className="w-full table-fixed text-center text-[0.8rem] sm:text-sm md:text-base lg:text-lg xl:text-xl">
           <thead>
             <tr className="text-xs sm:text-sm">
