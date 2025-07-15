@@ -25,41 +25,70 @@ export default function EmbedScreen() {
     : "";
 
   const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+  const now = moment();
+
   const todayTimetable = timetable.find(
     (t) => parseInt(t.Day) === today.date() && parseInt(t.Month) === today.month() + 1
+  );
+  const tomorrow = moment().add(1, "day");
+  const tomorrowTimetable = timetable.find(
+    (t) => parseInt(t.Day) === tomorrow.date() && parseInt(t.Month) === tomorrow.month() + 1
   );
 
   if (!todayTimetable) {
     return <div className="text-black p-4">Today's prayer times not found.</div>;
   }
 
-  const now = moment();
   const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
   const zawalStart = moment(todayTimetable["Zawal Start"], "HH:mm");
   const zawalEnd = moment(todayTimetable["Zawal End"], "HH:mm");
-  const sunriseStart = moment(todayTimetable["Shouruq"], "HH:mm").subtract(5, "minutes");
-  const sunriseEnd = moment(todayTimetable["Shouruq"], "HH:mm").add(10, "minutes");
+  const sunrise = moment(todayTimetable["Shouruq"], "HH:mm");
+  const sunriseStart = sunrise.clone().subtract(5, "minutes");
+  const sunriseEnd = sunrise.clone().add(10, "minutes");
 
   const isMakroohNow = now.isBetween(zawalStart, zawalEnd) || now.isBetween(sunriseStart, sunriseEnd);
   const isFriday = today.day() === 5;
   const jummahTime = settings.jummah?.time || "13:30";
 
-  const getPrayerStart = (key) => moment(todayTimetable[`${capitalize(key)} Adhan`], "HH:mm");
-  const getNextPrayerStart = (idx) => {
-    const nextKey = prayers[idx + 1];
-    return nextKey
-      ? moment(todayTimetable[`${capitalize(nextKey)} Adhan`], "HH:mm")
-      : moment("23:59", "HH:mm");
+  const getPrayerStart = (key) => {
+    const timeStr = todayTimetable[`${capitalize(key)} Adhan`];
+    return moment(`${today.format("YYYY-MM-DD")} ${timeStr}`, "YYYY-MM-DD HH:mm");
   };
 
-  const activePrayerKey = prayers.find((key, idx) => {
-    const start = getPrayerStart(key);
-    const end = getNextPrayerStart(idx);
-    return now.isSameOrAfter(start) && now.isBefore(end);
-  });
+  const getPrayerEnd = (key, idx) => {
+    const nextKey = prayers[idx + 1];
+    if (nextKey) {
+      const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
+      return moment(`${today.format("YYYY-MM-DD")} ${nextStr}`, "YYYY-MM-DD HH:mm");
+    } else {
+      // Isha ends at midnight for display logic
+      return moment(today).endOf("day");
+    }
+  };
+
+  let activePrayerKey = null;
+
+  if (now.isSame(today, "day")) {
+    activePrayerKey = prayers.find((key, idx) => {
+      const start = getPrayerStart(key);
+      const end = getPrayerEnd(key, idx);
+      const isActive = now.isSameOrAfter(start) && now.isBefore(end);
+
+      console.log(`⏱ ${key}:`, {
+        start: start.format("YYYY-MM-DD HH:mm"),
+        end: end.format("YYYY-MM-DD HH:mm"),
+        now: now.format("YYYY-MM-DD HH:mm"),
+        isActive,
+      });
+
+      return isActive;
+    });
+  }
+
+  console.log("✅ Final Active Prayer Key:", activePrayerKey);
 
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
@@ -81,23 +110,19 @@ export default function EmbedScreen() {
             </tr>
             <tr className="border-t border-white/20">
               <th className="text-left py-1 w-1/6"></th>
-              {prayers.map((key, idx) => {
+              {prayers.map((key) => {
                 const label =
                   key === "dhuhr" && isFriday
                     ? settings.prayers?.jummah?.en || "Jummah"
                     : settings.prayers?.[key]?.en || capitalize(key);
 
-                const isActive =
-                  !isMakroohNow &&
-                  key === activePrayerKey &&
-                  now.isSameOrAfter(getPrayerStart(key)) &&
-                  now.isBefore(getNextPrayerStart(idx));
+                const isActive = !isMakroohNow && key === activePrayerKey;
 
                 return (
                   <th
                     key={key}
                     className={`w-1/6 px-1 py-1 font-semibold whitespace-nowrap ${
-                      isActive ? "bg-white/20 rounded" : ""
+                      isActive ? "bg-green-600 text-white font-bold rounded" : ""
                     }`}
                   >
                     {label}
@@ -109,19 +134,31 @@ export default function EmbedScreen() {
           <tbody>
             <tr className="border-t border-white/10">
               <td className="text-left py-1 font-medium whitespace-nowrap">Begins</td>
-              {prayers.map((key) => (
-                <td key={key + "-adhan"} className="py-1">
-                  {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
-                </td>
-              ))}
+              {prayers.map((key) => {
+                const isActive = !isMakroohNow && key === activePrayerKey;
+                return (
+                  <td
+                    key={key + "-adhan"}
+                    className={`py-1 ${isActive ? "bg-green-600 text-white font-semibold rounded" : ""}`}
+                  >
+                    {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
+                  </td>
+                );
+              })}
             </tr>
             <tr className="border-t border-white/10">
               <td className="text-left py-1 font-medium whitespace-nowrap">Jama‘ah</td>
-              {prayers.map((key) => (
-                <td key={key + "-iqamah"} className="py-1">
-                  {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
-                </td>
-              ))}
+              {prayers.map((key) => {
+                const isActive = !isMakroohNow && key === activePrayerKey;
+                return (
+                  <td
+                    key={key + "-iqamah"}
+                    className={`py-1 ${isActive ? "bg-green-600 text-white font-semibold rounded" : ""}`}
+                  >
+                    {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
+                  </td>
+                );
+              })}
             </tr>
           </tbody>
         </table>
