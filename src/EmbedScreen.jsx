@@ -16,6 +16,8 @@ export default function EmbedScreen() {
   }
 
   const settings = parseSettings(rawSettings);
+  const timings = settings?.timings || {};
+
   const today = moment();
   const hijriOffset = parseInt(settings?.islamicCalendar?.offset || 0);
   const hijriDate = moment().add(hijriOffset, "days").format("iD iMMMM iYYYY");
@@ -30,10 +32,6 @@ export default function EmbedScreen() {
   const todayTimetable = timetable.find(
     (t) => parseInt(t.Day) === today.date() && parseInt(t.Month) === today.month() + 1
   );
-  const tomorrow = moment().add(1, "day");
-  const tomorrowTimetable = timetable.find(
-    (t) => parseInt(t.Day) === tomorrow.date() && parseInt(t.Month) === tomorrow.month() + 1
-  );
 
   if (!todayTimetable) {
     return <div className="text-black p-4">Today's prayer times not found.</div>;
@@ -43,13 +41,30 @@ export default function EmbedScreen() {
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
-  const zawalStart = moment(todayTimetable["Zawal Start"], "HH:mm");
-  const zawalEnd = moment(todayTimetable["Zawal End"], "HH:mm");
-  const sunrise = moment(todayTimetable["Shouruq"], "HH:mm");
-  const sunriseStart = sunrise.clone().subtract(5, "minutes");
-  const sunriseEnd = sunrise.clone().add(10, "minutes");
+  // Sunrise Makrooh Period
+  const sunrise = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Shouruq"]}`, "YYYY-MM-DD HH:mm");
+  const sunriseStart = sunrise.clone().subtract(timings.makroohBeforeSunrise || 0, "minutes");
+  const sunriseEnd = sunrise.clone().add(timings.makroohAfterSunrise || 0, "minutes");
 
-  const isMakroohNow = now.isBetween(zawalStart, zawalEnd) || now.isBetween(sunriseStart, sunriseEnd);
+  // Zawal Makrooh Period
+  const zawalStart = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Zawal Start"]}`, "YYYY-MM-DD HH:mm");
+  const zawalEnd = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Zawal End"]}`, "YYYY-MM-DD HH:mm");
+
+  // Maghrib Makrooh Period
+  const maghrib = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Maghrib Adhan"]}`, "YYYY-MM-DD HH:mm");
+  const maghribMakroohStart = maghrib.clone().subtract(timings.makroohBeforeMaghrib || 0, "minutes");
+  const maghribMakroohEnd = maghrib;
+
+  const isMakroohNow =
+    now.isBetween(zawalStart, zawalEnd) ||
+    now.isBetween(sunriseStart, sunriseEnd) ||
+    now.isBetween(maghribMakroohStart, maghribMakroohEnd);
+
+  let makroohLabel = "";
+  if (now.isBetween(zawalStart, zawalEnd)) makroohLabel = "Zawal (midday)";
+  else if (now.isBetween(sunriseStart, sunriseEnd)) makroohLabel = "Sunrise";
+  else if (now.isBetween(maghribMakroohStart, maghribMakroohEnd)) makroohLabel = "Before Maghrib";
+
   const isFriday = today.day() === 5;
   const jummahTime = settings.jummah?.time || "13:30";
 
@@ -60,39 +75,25 @@ export default function EmbedScreen() {
 
   const getPrayerEnd = (key, idx) => {
     if (key === "fajr") {
-      return moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Shouruq"]}`, "YYYY-MM-DD HH:mm");
+      return sunrise;
     }
-
     const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
       return moment(`${today.format("YYYY-MM-DD")} ${nextStr}`, "YYYY-MM-DD HH:mm");
     } else {
-      // Isha ends at midnight for display logic
       return moment(today).endOf("day");
     }
   };
 
   let activePrayerKey = null;
-
   if (now.isSame(today, "day")) {
     activePrayerKey = prayers.find((key, idx) => {
       const start = getPrayerStart(key);
       const end = getPrayerEnd(key, idx);
-      const isActive = now.isSameOrAfter(start) && now.isBefore(end);
-
-      console.log(`⏱ ${key}:`, {
-        start: start.format("YYYY-MM-DD HH:mm"),
-        end: end.format("YYYY-MM-DD HH:mm"),
-        now: now.format("YYYY-MM-DD HH:mm"),
-        isActive,
-      });
-
-      return isActive;
+      return now.isSameOrAfter(start) && now.isBefore(end);
     });
   }
-
-  console.log("✅ Final Active Prayer Key:", activePrayerKey);
 
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
@@ -119,9 +120,7 @@ export default function EmbedScreen() {
                   key === "dhuhr" && isFriday
                     ? settings.prayers?.jummah?.en || "Jummah"
                     : settings.prayers?.[key]?.en || capitalize(key);
-
                 const isActive = !isMakroohNow && key === activePrayerKey;
-
                 return (
                   <th
                     key={key}
@@ -168,7 +167,7 @@ export default function EmbedScreen() {
         </table>
         <div className="pt-2 text-sm sm:text-base text-black/90 text-left px-2">
           {isMakroohNow ? (
-            <div className="text-red-600 italic">Avoid praying now (Makrooh time)</div>
+            <div className="text-red-600 italic">Avoid praying now ({makroohLabel})</div>
           ) : (
             <div className="flex flex-wrap gap-3 whitespace-nowrap">
               <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
