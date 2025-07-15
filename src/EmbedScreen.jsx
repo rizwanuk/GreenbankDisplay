@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 import useSettings from "./hooks/useSettings";
 import { parseSettings } from "./utils/parseSettings";
@@ -10,6 +10,12 @@ moment.locale("en-gb");
 export default function EmbedScreen() {
   const timetable = usePrayerTimes();
   const rawSettings = useSettings();
+  const [now, setNow] = useState(moment());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(moment()), 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   if (!timetable || !rawSettings) {
     return <div className="text-black p-4">Loading...</div>;
@@ -27,13 +33,12 @@ export default function EmbedScreen() {
     : "";
 
   const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
-  const now = moment();
 
   const todayTimetable = timetable.find(
     (t) => parseInt(t.Day) === today.date() && parseInt(t.Month) === today.month() + 1
   );
 
-  if (!todayTimetable) {
+  if (timetable && !todayTimetable) {
     return <div className="text-black p-4">Today's prayer times not found.</div>;
   }
 
