@@ -124,11 +124,11 @@ export default function CurrentPrayerCard({
   } else if (now.isSameOrAfter(maghribJamaah) && now.isBefore(maghribJamaah.clone().add(jamaahDuration, 'minutes'))) {
     return <JamaahBanner label={labels?.maghrib} arabic={arabicLabels?.maghrib} theme={theme} />;
   } else if (now.isBefore(ishaStart)) {
-    key = 'isha';
+    key = 'maghrib'; // ✅ FIXED: show Maghrib until Isha begins
     label = labels?.[key];
     arabic = arabicLabels?.[key];
-    start = ishaStart;
-    jamaah = ishaJamaah;
+    start = maghribStart;
+    jamaah = maghribJamaah;
   } else if (now.isSameOrAfter(ishaJamaah) && now.isBefore(ishaJamaah.clone().add(jamaahDuration, 'minutes'))) {
     return <JamaahBanner label={labels?.isha} arabic={arabicLabels?.isha} theme={theme} />;
   } else {
