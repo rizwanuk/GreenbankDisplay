@@ -59,6 +59,10 @@ export default function EmbedScreen() {
   };
 
   const getPrayerEnd = (key, idx) => {
+    if (key === "fajr") {
+      return moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Shouruq"]}`, "YYYY-MM-DD HH:mm");
+    }
+
     const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
@@ -92,7 +96,7 @@ export default function EmbedScreen() {
 
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
-      <div className="w-full max-w-xl bg-gray-800 text-white rounded-xl shadow p-2 backdrop-blur">
+      <div className="w-full max-w-xl bg-gray-100 text-black rounded-xl shadow p-2">
         <table className="w-full table-fixed text-center text-[0.8rem] sm:text-sm md:text-base lg:text-lg xl:text-xl">
           <thead>
             <tr className="text-xs sm:text-sm">
@@ -103,12 +107,12 @@ export default function EmbedScreen() {
                 </div>
               </th>
             </tr>
-            <tr className="text-[0.6rem] text-right text-white/60">
+            <tr className="text-[0.6rem] text-right text-black/60">
               <th className="text-right" colSpan={6}>
                 {lastUpdated && <span>Last updated: {lastUpdated}</span>}
               </th>
             </tr>
-            <tr className="border-t border-white/20">
+            <tr className="border-t border-black/20">
               <th className="text-left py-1 w-1/6"></th>
               {prayers.map((key) => {
                 const label =
@@ -122,7 +126,7 @@ export default function EmbedScreen() {
                   <th
                     key={key}
                     className={`w-1/6 px-1 py-1 font-semibold whitespace-nowrap ${
-                      isActive ? "bg-green-600 text-white font-bold rounded" : ""
+                      isActive ? "bg-green-200 text-black font-bold rounded" : ""
                     }`}
                   >
                     {label}
@@ -132,28 +136,28 @@ export default function EmbedScreen() {
             </tr>
           </thead>
           <tbody>
-            <tr className="border-t border-white/10">
+            <tr className="border-t border-black/10">
               <td className="text-left py-1 font-medium whitespace-nowrap">Begins</td>
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
                   <td
                     key={key + "-adhan"}
-                    className={`py-1 ${isActive ? "bg-green-600 text-white font-semibold rounded" : ""}`}
+                    className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}
                   >
                     {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
                   </td>
                 );
               })}
             </tr>
-            <tr className="border-t border-white/10">
+            <tr className="border-t border-black/10">
               <td className="text-left py-1 font-medium whitespace-nowrap">Jama‘ah</td>
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
                   <td
                     key={key + "-iqamah"}
-                    className={`py-1 ${isActive ? "bg-green-600 text-white font-semibold rounded" : ""}`}
+                    className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}
                   >
                     {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
                   </td>
@@ -162,9 +166,9 @@ export default function EmbedScreen() {
             </tr>
           </tbody>
         </table>
-        <div className="pt-2 text-sm sm:text-base text-white/90 text-left px-2">
+        <div className="pt-2 text-sm sm:text-base text-black/90 text-left px-2">
           {isMakroohNow ? (
-            <div className="text-red-400 italic">Avoid praying now (Makrooh time)</div>
+            <div className="text-red-600 italic">Avoid praying now (Makrooh time)</div>
           ) : (
             <div className="flex flex-wrap gap-3 whitespace-nowrap">
               <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
