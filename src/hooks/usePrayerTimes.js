@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const TIMETABLE_URL =
+const SHEET_URL =
   "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/PrayerTimes";
 const META_URL =
   "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/settings?group=meta&key=lastUpdated";
@@ -19,11 +19,11 @@ export default function usePrayerTimes() {
   }, []);
 
   useEffect(() => {
-    const fetchTimetable = async () => {
+    const fetchPrayerTimes = async () => {
       try {
-        const res = await fetch(TIMETABLE_URL);
+        const res = await fetch(SHEET_URL);
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setTimetable(data);
           localStorage.setItem(
             CACHE_KEY,
@@ -31,7 +31,7 @@ export default function usePrayerTimes() {
           );
         }
       } catch (error) {
-        console.error("⛔ Failed to fetch timetable.");
+        console.error("⛔ Failed to fetch prayer times.");
       }
     };
 
@@ -45,10 +45,10 @@ export default function usePrayerTimes() {
         const localTimestamp = cached ? JSON.parse(cached).timestamp : null;
 
         if (!localTimestamp || new Date(remoteTimestamp) > new Date(localTimestamp)) {
-          fetchTimetable();
+          fetchPrayerTimes();
         }
       } catch (error) {
-        console.warn("⚠️ Failed to fetch lastUpdated meta for timetable.");
+        console.warn("⚠️ Failed to fetch lastUpdated meta for prayer times.");
       }
     };
 

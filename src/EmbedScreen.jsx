@@ -13,8 +13,15 @@ export default function EmbedScreen() {
   const [now, setNow] = useState(moment());
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(moment()), 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => setNow(moment()), 30000); // update time every 30s
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const fullReload = setInterval(() => {
+      window.location.reload();
+    }, 30 * 60 * 1000); // reload every 30 minutes
+    return () => clearInterval(fullReload);
   }, []);
 
   if (!timetable || !rawSettings) {
@@ -46,16 +53,13 @@ export default function EmbedScreen() {
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
-  // Sunrise Makrooh Period
   const sunrise = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Shouruq"]}`, "YYYY-MM-DD HH:mm");
   const sunriseStart = sunrise.clone().subtract(timings.makroohBeforeSunrise || 0, "minutes");
   const sunriseEnd = sunrise.clone().add(timings.makroohAfterSunrise || 0, "minutes");
 
-  // Zawal Makrooh Period
   const zawalStart = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Zawal Start"]}`, "YYYY-MM-DD HH:mm");
   const zawalEnd = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Zawal End"]}`, "YYYY-MM-DD HH:mm");
 
-  // Maghrib Makrooh Period
   const maghrib = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Maghrib Adhan"]}`, "YYYY-MM-DD HH:mm");
   const maghribMakroohStart = maghrib.clone().subtract(timings.makroohBeforeMaghrib || 0, "minutes");
   const maghribMakroohEnd = maghrib;
