@@ -13,8 +13,18 @@ export default function EmbedScreen() {
   const [now, setNow] = useState(moment());
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(moment()), 30000); // update time every 30s
+    const interval = setInterval(() => setNow(moment()), 1000); // update every 1s
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setNow(moment()); // reset time when returning to tab
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   useEffect(() => {
@@ -53,24 +63,33 @@ export default function EmbedScreen() {
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
+  // Sunrise Makrooh
   const sunrise = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Shouruq"]}`, "YYYY-MM-DD HH:mm");
   const sunriseStart = sunrise.clone().subtract(timings.makroohBeforeSunrise || 0, "minutes");
   const sunriseEnd = sunrise.clone().add(timings.makroohAfterSunrise || 0, "minutes");
 
-  const zawalStart = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Zawal Start"]}`, "YYYY-MM-DD HH:mm");
-  const zawalEnd = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Zawal End"]}`, "YYYY-MM-DD HH:mm");
+  // Zawal (before Dhuhr)
+  const zuhrAdhan = todayTimetable["Dhuhr Adhan"];
+  const zawalStart =
+    zuhrAdhan && timings.makroohBeforeZuhr !== undefined
+      ? moment(`${today.format("YYYY-MM-DD")} ${zuhrAdhan}`, "YYYY-MM-DD HH:mm").subtract(timings.makroohBeforeZuhr, "minutes")
+      : null;
+  const zawalEnd = zuhrAdhan
+    ? moment(`${today.format("YYYY-MM-DD")} ${zuhrAdhan}`, "YYYY-MM-DD HH:mm")
+    : null;
 
+  // Before Maghrib
   const maghrib = moment(`${today.format("YYYY-MM-DD")} ${todayTimetable["Maghrib Adhan"]}`, "YYYY-MM-DD HH:mm");
   const maghribMakroohStart = maghrib.clone().subtract(timings.makroohBeforeMaghrib || 0, "minutes");
   const maghribMakroohEnd = maghrib;
 
   const isMakroohNow =
-    now.isBetween(zawalStart, zawalEnd) ||
+    (zawalStart && zawalEnd && now.isBetween(zawalStart, zawalEnd)) ||
     now.isBetween(sunriseStart, sunriseEnd) ||
     now.isBetween(maghribMakroohStart, maghribMakroohEnd);
 
   let makroohLabel = "";
-  if (now.isBetween(zawalStart, zawalEnd)) makroohLabel = "Zawal (midday)";
+  if (zawalStart && zawalEnd && now.isBetween(zawalStart, zawalEnd)) makroohLabel = "Zawal (before Dhuhr)";
   else if (now.isBetween(sunriseStart, sunriseEnd)) makroohLabel = "Sunrise";
   else if (now.isBetween(maghribMakroohStart, maghribMakroohEnd)) makroohLabel = "Before Maghrib";
 
@@ -174,9 +193,12 @@ export default function EmbedScreen() {
             </tr>
           </tbody>
         </table>
+
         <div className="pt-2 text-sm sm:text-base text-black/90 text-left px-2">
           {isMakroohNow ? (
-            <div className="text-red-600 italic">Avoid praying now ({makroohLabel})</div>
+            <div className="bg-red-600 text-white font-semibold text-center rounded p-2">
+              Avoid praying now ({makroohLabel})
+            </div>
           ) : (
             <div className="flex flex-wrap gap-3 whitespace-nowrap">
               <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
