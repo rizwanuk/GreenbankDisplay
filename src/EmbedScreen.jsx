@@ -43,7 +43,31 @@ export default function EmbedScreen() {
 
   const today = moment();
   const hijriOffset = parseInt(settings?.islamicCalendar?.offset || 0);
-  const hijriDate = moment().add(hijriOffset, "days").format("iD iMMMM iYYYY");
+
+  const hijriMoment = moment().add(hijriOffset, "days");
+  const hijriDay = hijriMoment.iDate();
+  const hijriMonth = hijriMoment.iMonth() + 1;
+  const hijriYear = hijriMoment.iYear();
+
+  const hijriMonthKeys = [
+    "muharram",
+    "safar",
+    "rabiAwal",
+    "rabiThani",
+    "jumadaAwal",
+    "jumadaThani",
+    "rajab",
+    "shaban",
+    "ramadan",
+    "shawwal",
+    "dhulQadah",
+    "dhulHijjah",
+  ];
+
+  const hijriMonthKey = hijriMonthKeys[hijriMonth - 1];
+  const hijriMonthName = settings.labels?.[hijriMonthKey] || hijriMoment.format("iMMMM");
+
+  const hijriDate = `${hijriDay} ${hijriMonthName} ${hijriYear}`;
 
   const lastUpdated = settings?.meta?.lastUpdated
     ? moment.utc(settings.meta.lastUpdated).local().format("D MMM YYYY, h:mm A")
@@ -55,7 +79,7 @@ export default function EmbedScreen() {
     (t) => parseInt(t.Day) === today.date() && parseInt(t.Month) === today.month() + 1
   );
 
-  if (timetable && !todayTimetable) {
+  if (!todayTimetable) {
     return <div className="text-black p-4">Today's prayer times not found.</div>;
   }
 
@@ -131,8 +155,8 @@ export default function EmbedScreen() {
             <tr className="text-xs sm:text-sm">
               <th className="text-left py-1" colSpan={6}>
                 <div className="flex justify-between flex-wrap gap-1">
-                  <span className="truncate">{today.format("dddd, D MMMM YYYY")}</span>
-                  <span className="truncate">{hijriDate} AH</span>
+                  <span className="truncate font-poppins">{today.format("dddd, D MMMM YYYY")}</span>
+                  <span className="truncate font-poppins">{hijriDate} AH</span>
                 </div>
               </th>
             </tr>

@@ -47,9 +47,9 @@ export default function UpcomingPrayerRows({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      if (isFriday && p.name.toLowerCase() === "dhuhr") {
+      if (isFriday && lookupKey === "dhuhr") {
         name = "Jummah";
-        lookupKey = "zuhr";
+        lookupKey = "jummah"; // Use correct key for Jummah
         const jummahTimeStr = settingsMap["timings.jummahTime"];
         const jummahMoment = moment(jummahTimeStr, "HH:mm");
         if (jummahMoment.isValid()) jamaah = jummahMoment;
@@ -66,27 +66,26 @@ export default function UpcomingPrayerRows({
 
   const is24 = settingsMap["clock24Hours"] === "TRUE";
 
-  const getLabel = (key) => labels[key.toLowerCase()] || key;
+  const getLabel = (key) => labels[key?.toLowerCase()] || key;
   const getArabic = (p) => arabicLabels[p.lookupKey?.toLowerCase()] || "";
 
   return (
     <div
-  className={`
-    mt-6
-    max-h-full overflow-hidden
-    ${theme.bgColor || "bg-white/5"}
-    ${theme.textColor || "text-white"}
-    ${theme.fontEng || "font-rubik"}
-    rounded-2xl
-    backdrop-blur-md
-    border border-white/10
-    shadow-md
-    px-4
-    py-6
-    space-y-6
-  `}
->
-
+      className={`
+        mt-6
+        max-h-full overflow-hidden
+        ${theme.bgColor || "bg-white/5"}
+        ${theme.textColor || "text-white"}
+        ${theme.fontEng || "font-rubik"}
+        rounded-2xl
+        backdrop-blur-md
+        border border-white/10
+        shadow-md
+        px-4
+        py-6
+        space-y-6
+      `}
+    >
       <div
         className={`grid grid-cols-2 sm:grid-cols-4 font-semibold text-white/80 px-4 pb-2 ${
           theme.headerSize || "text-xl sm:text-2xl md:text-3xl"
@@ -103,11 +102,10 @@ export default function UpcomingPrayerRows({
           key={i}
           className={`grid grid-cols-2 sm:grid-cols-4 items-center gap-4 px-4 py-4 border-t border-white/10 ${
             theme.rowSize || "text-[clamp(1.5rem,2.5vw,3rem)]"
-
           } leading-tight`}
         >
           <div className="truncate font-bold whitespace-nowrap overflow-visible text-ellipsis">
-            {getLabel(p.name)}
+            {getLabel(p.lookupKey || p.name)}
           </div>
           <div className={`${theme.fontAra || "font-cairo"} opacity-90 sm:text-center`}>
             {getArabic(p)}

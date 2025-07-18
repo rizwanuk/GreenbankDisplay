@@ -98,58 +98,124 @@ export default function SlideshowScreen() {
     return () => clearInterval(interval);
   }, [settingsMap]);
 
+  // 🔍 Zoom state and controls
+  const [zoom, setZoom] = useState(() => {
+    const stored = localStorage.getItem("zoomLevel");
+    return stored ? parseFloat(stored) : 1;
+  });
+  const [zoomBoxVisible, setZoomBoxVisible] = useState(false);
+  const zoomTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem("zoomLevel", zoom);
+  }, [zoom]);
+
+  const showZoomBox = () => {
+    setZoomBoxVisible(true);
+    clearTimeout(zoomTimeoutRef.current);
+    zoomTimeoutRef.current = setTimeout(() => {
+      setZoomBoxVisible(false);
+    }, 10000); // Hide after 10s
+  };
+
+  useEffect(() => {
+    return () => clearTimeout(zoomTimeoutRef.current);
+  }, []);
+
   return (
-    <div className="w-screen h-screen flex flex-col bg-black text-white relative">
-      {/* Header */}
-      <div className="shrink-0">
-        <Header mosque={mosque} theme={themeHeader} />
+    <div className="relative w-screen h-screen bg-black text-white overflow-auto">
+      {/* Zoomable content using CSS zoom */}
+      <div
+        style={{
+          zoom: zoom,
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        <div className="w-screen h-screen flex flex-col">
+          {/* Header */}
+          <div className="shrink-0">
+            <Header mosque={mosque} theme={themeHeader} />
+          </div>
+
+          {/* Main content area */}
+          <div className="flex flex-grow overflow-hidden p-4 gap-4">
+            {/* Left column */}
+            <div className="w-[30%] flex flex-col items-stretch gap-4 overflow-hidden min-h-0">
+              <SlideshowClock now={now} theme={themeClock} settingsMap={settingsMap} />
+              <SlideshowDateCard now={now} theme={themeDateCard} settingsMap={settingsMap} />
+              <SlideshowCurrentPrayerCard
+                now={now}
+                theme={themeCurrentPrayer}
+                todayRow={todayRow}
+                yesterdayRow={yesterdayRow}
+                settingsMap={settingsMap}
+                labels={labelMap}
+                arabicLabels={arabicLabelMap}
+                is24Hour={is24Hour}
+              />
+              <SlideshowUpcomingPrayerRows
+                now={now}
+                timetable={timetable}
+                todayRow={todayRow}
+                yesterdayRow={yesterdayRow}
+                tomorrowRow={tomorrowRow}
+                settingsMap={settingsMap}
+                theme={themeUpcomingPrayer}
+                labels={labelMap}
+                arabicLabels={arabicLabelMap}
+                is24Hour={is24Hour}
+              />
+            </div>
+
+            {/* Right column */}
+            <div className="w-[70%] overflow-hidden">
+              <SlideshowPanel
+                settings={settings}
+                now={now}
+                settingsMap={settingsMap}
+                theme={themeSlideshow}
+              />
+            </div>
+          </div>
+
+          {/* 🔄 Cache info (inside zoomed content) */}
+          <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-2">
+            <span className="text-green-400">●</span>
+            <span>Last updated: {now.format("HH:mm:ss")}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-grow overflow-hidden p-4 gap-4">
-        {/* Left column */}
-        <div className="w-[30%] flex flex-col items-stretch gap-4 overflow-hidden min-h-0">
-          <SlideshowClock now={now} theme={themeClock} settingsMap={settingsMap} />
-          <SlideshowDateCard now={now} theme={themeDateCard} settingsMap={settingsMap} />
-          <SlideshowCurrentPrayerCard
-            now={now}
-            theme={themeCurrentPrayer}
-            todayRow={todayRow}
-            yesterdayRow={yesterdayRow}
-            settingsMap={settingsMap}
-            labels={labelMap}
-            arabicLabels={arabicLabelMap}
-            is24Hour={is24Hour}
-          />
-          <SlideshowUpcomingPrayerRows
-            now={now}
-            timetable={timetable}
-            todayRow={todayRow}
-            yesterdayRow={yesterdayRow}
-            tomorrowRow={tomorrowRow}
-            settingsMap={settingsMap}
-            theme={themeUpcomingPrayer}
-            labels={labelMap}
-            arabicLabels={arabicLabelMap}
-            is24Hour={is24Hour}
-          />
-        </div>
+      {/* 🔍 Zoom icon and control box (outside zoomed content) */}
+      <div className="absolute bottom-2 left-2 z-50">
+        <button
+          onClick={showZoomBox}
+          className="bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition"
+          title="Zoom"
+        >
+          🔍
+        </button>
 
-        {/* Right column */}
-        <div className="w-[70%] overflow-hidden">
-          <SlideshowPanel
-            settings={settings}
-            now={now}
-            settingsMap={settingsMap}
-            theme={themeSlideshow}
-          />
-        </div>
-      </div>
-
-      {/* 🔄 Cache info (bottom-left) */}
-      <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-2">
-        <span className="text-green-400">●</span>
-        <span>Last updated: {now.format("HH:mm:ss")}</span>
+        {zoomBoxVisible && (
+          <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-44 flex flex-col items-center">
+            <div className="text-xs mb-2">Zoom: {Math.round(zoom * 100)}%</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setZoom((z) => Math.min(z + 0.05, 1.5))}
+                className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
+              >
+                ▲
+              </button>
+              <button
+                onClick={() => setZoom((z) => Math.max(z - 0.05, 0.5))}
+                className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
+              >
+                ▼
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

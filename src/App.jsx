@@ -16,6 +16,30 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const prevLastUpdated = useRef(null);
 
+  // Zoom state and control
+  const [zoom, setZoom] = useState(() => {
+    const stored = localStorage.getItem("zoomLevel");
+    return stored ? parseFloat(stored) : 1;
+  });
+  const [zoomBoxVisible, setZoomBoxVisible] = useState(false);
+  const zoomTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem("zoomLevel", zoom);
+  }, [zoom]);
+
+  const showZoomBox = () => {
+    setZoomBoxVisible(true);
+    clearTimeout(zoomTimeoutRef.current);
+    zoomTimeoutRef.current = setTimeout(() => {
+      setZoomBoxVisible(false);
+    }, 10000); // Hide after 10s
+  };
+
+  useEffect(() => {
+    return () => clearTimeout(zoomTimeoutRef.current);
+  }, []);
+
   const mosque = {
     name: "Greenbank Masjid",
     address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
@@ -115,76 +139,115 @@ function App() {
     return () => clearInterval(interval);
   }, [settings]);
 
-return (
-  <div className="min-h-screen flex flex-col relative bg-black text-white">
-    <Header mosque={mosque} theme={themeHeader} />
+  return (
+    <div className="relative bg-black text-white min-h-screen overflow-auto">
+      {/* Zoom wrapper */}
+      <div
+        style={{
+          zoom: zoom,
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        <div className="flex flex-col">
+          <Header mosque={mosque} theme={themeHeader} />
 
-    <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
-      <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
-        <Clock settings={toggles} theme={themeClock} />
-        <DateCard
-          theme={themeDateCard}
-          islamicMonths={islamicMonths}
-          islamicOffset={islamicOffset}
-        />
-        <NextPrayerCard
-          now={moment()}
-          todayRow={todayRow}
-          tomorrowRow={tomorrowRow}
-          isFriday={today.day() === 5}
-          labels={labelMap}
-          arabicLabels={arabicLabelMap}
-          settingsMap={settingsMap}
-          theme={themeNextPrayer}
-        />
-        <InfoCard
-          settings={settings}
-          settingsMap={settingsMap}
-          now={moment()}
-          theme={themeInfoCard}
-        />
+          <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
+            <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
+              <Clock settings={toggles} theme={themeClock} />
+              <DateCard
+                theme={themeDateCard}
+                islamicMonths={islamicMonths}
+                islamicOffset={islamicOffset}
+              />
+              <NextPrayerCard
+                now={moment()}
+                todayRow={todayRow}
+                tomorrowRow={tomorrowRow}
+                isFriday={today.day() === 5}
+                labels={labelMap}
+                arabicLabels={arabicLabelMap}
+                settingsMap={settingsMap}
+                theme={themeNextPrayer}
+              />
+              <InfoCard
+                settings={settings}
+                settingsMap={settingsMap}
+                now={moment()}
+                theme={themeInfoCard}
+              />
+            </div>
+
+            <div className="w-full md:w-2/3 flex flex-col h-full overflow-hidden min-h-0">
+              <div className="shrink-0 mb-6">
+                <CurrentPrayerCard
+                  now={moment()}
+                  theme={themeCurrentPrayer}
+                  todayRow={todayRow}
+                  yesterdayRow={yesterdayRow}
+                  settingsMap={settingsMap}
+                  labels={labelMap}
+                  arabicLabels={arabicLabelMap}
+                  is24Hour={is24Hour}
+                />
+              </div>
+              <div className="flex-1 flex flex-col">
+                <UpcomingPrayerRows
+                  now={moment()}
+                  todayRow={todayRow}
+                  tomorrowRow={tomorrowRow}
+                  yesterdayRow={yesterdayRow}
+                  settings={settings}
+                  labels={labelMap}
+                  arabicLabels={arabicLabelMap}
+                  settingsMap={settingsMap}
+                  numberToShow={parseInt(toggles.numberUpcomingPrayers || "6", 10)}
+                  theme={themeUpcomingPrayer}
+                  is24Hour={is24Hour}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 🔄 Cache info (bottom-left) */}
+          <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
+            ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
+          </div>
+        </div>
       </div>
 
-      <div className="w-full md:w-2/3 flex flex-col h-full overflow-hidden min-h-0">
+      {/* 🔍 Zoom icon and control (outside zoomed content) */}
+      <div className="absolute bottom-2 left-2 z-50">
+        <button
+          onClick={showZoomBox}
+          className="bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition"
+          title="Zoom"
+        >
+          🔍
+        </button>
 
-  <div className="shrink-0 mb-6">
-    <CurrentPrayerCard
-      now={moment()}
-      theme={themeCurrentPrayer}
-      todayRow={todayRow}
-      yesterdayRow={yesterdayRow}
-      settingsMap={settingsMap}
-      labels={labelMap}
-      arabicLabels={arabicLabelMap}
-      is24Hour={is24Hour}
-    />
-  </div>
-  <div className="flex-1 flex flex-col">
-    <UpcomingPrayerRows
-      now={moment()}
-      todayRow={todayRow}
-      tomorrowRow={tomorrowRow}
-      yesterdayRow={yesterdayRow}
-      settings={settings}
-      labels={labelMap}
-      arabicLabels={arabicLabelMap}
-      settingsMap={settingsMap}
-      numberToShow={parseInt(toggles.numberUpcomingPrayers || "6", 10)}
-      theme={themeUpcomingPrayer}
-      is24Hour={is24Hour}
-    />
-  </div>
-</div>
-
+        {zoomBoxVisible && (
+          <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-44 flex flex-col items-center">
+            <div className="text-xs mb-2">Zoom: {Math.round(zoom * 100)}%</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setZoom((z) => Math.min(z + 0.05, 1.5))}
+                className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
+              >
+                ▲
+              </button>
+              <button
+                onClick={() => setZoom((z) => Math.max(z - 0.05, 0.5))}
+                className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
+              >
+                ▼
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-
-    {/* 🔄 Cache info (bottom-left) */}
-    <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
-      ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
-    </div>
-  </div>
-);
-
+  );
 }
 
 export default App;

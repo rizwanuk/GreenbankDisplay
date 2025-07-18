@@ -63,7 +63,7 @@ export default function NextPrayerCard({
 
       add("Fajr", todayRow, today);
       if (isFriday) {
-        add("Dhuhr", todayRow, today, "Jummah", arabicLabels.jummah, jummahTime);
+        add("Dhuhr", todayRow, today, labels.jummah, arabicLabels.jummah, jummahTime);
       } else {
         add("Dhuhr", todayRow, today);
       }
@@ -72,7 +72,7 @@ export default function NextPrayerCard({
       add("Isha", todayRow, today);
       add("Fajr", tomorrowRow, tomorrow);
 
-      // Add Ishraq (starts at sunrise + offset, but listed right after Fajr starts)
+      // Add Ishraq (starts at sunrise + offset, listed after Fajr)
       const fajrStartRaw = todayRow["Fajr Adhan"] || todayRow["Fajr"];
       const sunriseRaw = todayRow["Shouruq"];
       if (fajrStartRaw && sunriseRaw) {
@@ -91,7 +91,7 @@ export default function NextPrayerCard({
 
         prayers.push({
           key: "ishraq",
-          label: "Ishraq",
+          label: labels.ishraq || "Ishraq",
           arabic: arabicLabels.ishraq || "الإشراق",
           start: ishraqStart,
           jamaah: ishraqStart,
@@ -126,8 +126,7 @@ export default function NextPrayerCard({
 
       let display = "";
       if (duringJamaah) {
-        // Skip showing Jama‘ah in progress — already handled by current prayer card
-        return;
+        return; // Skip showing countdown, handled by CurrentPrayerCard
       } else {
         const target = now.isBefore(upcoming.start) ? upcoming.start : upcoming.jamaah;
         const prefix = now.isBefore(upcoming.start) ? "Begins in" : "Jama‘ah in";
