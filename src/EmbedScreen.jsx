@@ -226,7 +226,8 @@ export default function EmbedScreen() {
           ) : (
             <div className="flex flex-wrap gap-3 whitespace-nowrap">
               <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
-              <span>Jummah: {formatTime(jummahTime)}</span>
+              <span>{settings.prayers?.jummah?.en || "Jum‘ah"}: {formatTime(jummahTime)}</span>
+
             </div>
           )}
         </div>
