@@ -38,7 +38,7 @@ export default function UpcomingPrayerRows({
       settingsMap,
     }) || [];
 
-  const isFriday = now.format("dddd") === "Friday";
+  const is24 = settingsMap["clock24Hours"] === "TRUE";
 
   const upcoming = fullTimeline
     .filter((p) => now.isBefore(p.start) && p.name !== "Ishraq")
@@ -47,7 +47,10 @@ export default function UpcomingPrayerRows({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      if (isFriday && lookupKey === "dhuhr") {
+      const isSameDayAsToday = p.start.isSame(now, "day");
+      const isFriday = now.format("dddd") === "Friday";
+
+      if (isFriday && isSameDayAsToday && lookupKey === "dhuhr") {
         name = "Jummah";
         lookupKey = "jummah"; // Use correct key for Jummah
         const jummahTimeStr = settingsMap["timings.jummahTime"];
@@ -63,8 +66,6 @@ export default function UpcomingPrayerRows({
       };
     })
     .slice(0, numberToShow);
-
-  const is24 = settingsMap["clock24Hours"] === "TRUE";
 
   const getLabel = (key) => labels[key?.toLowerCase()] || key;
   const getArabic = (p) => arabicLabels[p.lookupKey?.toLowerCase()] || "";

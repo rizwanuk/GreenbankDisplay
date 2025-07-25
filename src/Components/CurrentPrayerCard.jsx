@@ -46,6 +46,7 @@ export default function CurrentPrayerCard({
   const eshaJamaahFromYesterday = getTime(yesterdayRow, 'Isha Iqamah');
 
   const jamaahDuration = parseInt(settingsMap['timings.jamaahHighlightDuration'] || '5', 10);
+  const isFriday = now.format('dddd') === 'Friday';
 
   let key = null;
   let label = null;
@@ -91,18 +92,26 @@ export default function CurrentPrayerCard({
     arabic = null;
   } else if (now.isBefore(dhuhrJamaah)) {
     key = 'dhuhr';
-    label = labels?.[key];
-    arabic = arabicLabels?.[key];
+    label = isFriday ? labels?.jummah || 'Jummah' : labels?.[key];
+    arabic = isFriday ? arabicLabels?.jummah : arabicLabels?.[key];
     start = dhuhrStart;
-    jamaah = dhuhrJamaah;
+    if (isFriday && settingsMap['jummah.jamaahTime']) {
+      jamaah = moment(settingsMap['jummah.jamaahTime'], 'HH:mm');
+    } else {
+      jamaah = dhuhrJamaah;
+    }
   } else if (now.isSameOrAfter(dhuhrJamaah) && now.isBefore(dhuhrJamaah.clone().add(jamaahDuration, 'minutes'))) {
-    return <JamaahBanner label={labels?.dhuhr} arabic={arabicLabels?.dhuhr} theme={theme} />;
+    return <JamaahBanner label={isFriday ? labels?.jummah : labels?.dhuhr} arabic={isFriday ? arabicLabels?.jummah : arabicLabels?.dhuhr} theme={theme} />;
   } else if (now.isBefore(asrStart)) {
     key = 'dhuhr';
-    label = labels?.[key];
-    arabic = arabicLabels?.[key];
+    label = isFriday ? labels?.jummah || 'Jummah' : labels?.[key];
+    arabic = isFriday ? arabicLabels?.jummah : arabicLabels?.[key];
     start = dhuhrStart;
-    jamaah = dhuhrJamaah;
+    if (isFriday && settingsMap['jummah.jamaahTime']) {
+      jamaah = moment(settingsMap['jummah.jamaahTime'], 'HH:mm');
+    } else {
+      jamaah = dhuhrJamaah;
+    }
   } else if (now.isBefore(asrJamaah)) {
     key = 'asr';
     label = labels?.[key];
@@ -124,7 +133,7 @@ export default function CurrentPrayerCard({
   } else if (now.isSameOrAfter(maghribJamaah) && now.isBefore(maghribJamaah.clone().add(jamaahDuration, 'minutes'))) {
     return <JamaahBanner label={labels?.maghrib} arabic={arabicLabels?.maghrib} theme={theme} />;
   } else if (now.isBefore(ishaStart)) {
-    key = 'maghrib'; // ✅ FIXED: show Maghrib until Isha begins
+    key = 'maghrib';
     label = labels?.[key];
     arabic = arabicLabels?.[key];
     start = maghribStart;

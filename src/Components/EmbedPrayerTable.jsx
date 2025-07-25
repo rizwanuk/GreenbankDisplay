@@ -19,7 +19,13 @@ export default function EmbedPrayerTable({ timetable, settings }) {
     return <div className="text-white p-4">Loading or invalid settings...</div>;
   }
 
-  const today = moment();
+  const today = now.clone(); // Use same instance to avoid inconsistencies
+  const isFriday = today.format('dddd') === 'Friday';
+
+  console.log('📅 Today is:', today.format('dddd, D MMMM YYYY'));
+  console.log('🕒 now:', now.format('HH:mm:ss'));
+  console.log('📦 Jummah settings:', settings.timings?.jummahTimes);
+
   const todayTimetable = timetable.find(
     (t) =>
       parseInt(t.Day) === today.date() &&
@@ -32,7 +38,10 @@ export default function EmbedPrayerTable({ timetable, settings }) {
 
   const prayers = [
     { key: 'fajr', timetableKey: 'Fajr' },
-    { key: 'dhuhr', timetableKey: 'Dhuhr' },
+    {
+      key: 'dhuhr',
+      timetableKey: isFriday ? "Jum'ah" : 'Dhuhr',
+    },
     { key: 'asr', timetableKey: 'Asar' },
     { key: 'maghrib', timetableKey: 'Maghrib' },
     { key: 'isha', timetableKey: 'Esha' },
@@ -57,15 +66,43 @@ export default function EmbedPrayerTable({ timetable, settings }) {
     ? settings.labels?.makrooh || 'Avoid prayer during this time'
     : null;
 
-  const getTime = (prayerKey, type) => {
+  const getTime = (_prayerKey, type) => {
+    const prayerKey = _prayerKey.toLowerCase();
     const mapping = prayers.find((p) => p.key === prayerKey);
     if (!mapping) return null;
+
+    // 🕌 Jummah Jama‘ah override (ONLY on Friday)
+    if (
+      prayerKey === 'dhuhr' &&
+      type.toLowerCase() === 'iqamah' &&
+      isFriday
+    ) {
+      const month = now.month(); // 0 = Jan, 1 = Feb, ..., 11 = Dec
+      const seasonalTime =
+        month >= 1 && month <= 9
+          ? settings.timings?.jummahTimes?.['February-October']
+          : settings.timings?.jummahTimes?.['November-January'];
+
+      console.log('✅ Jummah override triggered');
+      console.log('➡ Current month index:', month);
+      console.log('➡ Seasonal Jummah time:', seasonalTime);
+
+      return seasonalTime
+        ? moment(seasonalTime, 'HH:mm').set({
+            year: now.year(),
+            month: now.month(),
+            date: now.date(),
+          })
+        : null;
+    }
 
     const fullKey = `${mapping.timetableKey} ${type}`;
     const matchedKey = Object.keys(todayTimetable).find(
       (k) => k.toLowerCase() === fullKey.toLowerCase()
     );
     const raw = matchedKey ? todayTimetable[matchedKey] : null;
+
+    console.log(`🕓 Fallback time for ${fullKey}:`, raw);
 
     return raw
       ? moment(raw, 'HH:mm').set({
@@ -113,7 +150,9 @@ export default function EmbedPrayerTable({ timetable, settings }) {
                 key={p.key}
                 className={`px-2 py-2 font-semibold ${columnClasses[i]}`}
               >
-                {settings.prayers[p.key]?.en || capitalize(p.key)}
+                {p.key === 'dhuhr' && isFriday
+                  ? settings.labels?.jummah || 'Jummah'
+                  : settings.prayers[p.key]?.en || capitalize(p.key)}
               </th>
             ))}
           </tr>
@@ -139,15 +178,22 @@ export default function EmbedPrayerTable({ timetable, settings }) {
             <td className="text-left py-2 font-medium">
               {makroohMessage
                 ? 'Warning'
-                : today.format('dddd') === 'Friday'
+                : isFriday
                 ? settings.labels?.jummah || 'Jummah'
                 : settings.labels?.shouruq || 'Shouruq'}
             </td>
             <td colSpan={prayers.length} className={`py-2 ${makroohMessage ? 'text-red-300' : ''}`}>
               {makroohMessage
                 ? makroohMessage
-                : today.format('dddd') === 'Friday'
-                ? formatTime(moment(settings.timings?.jummahTime, 'HH:mm'))
+                : isFriday
+                ? formatTime(
+                    moment(
+                      now.month() >= 1 && now.month() <= 9
+                        ? settings.timings?.jummahTimes?.['February-October']
+                        : settings.timings?.jummahTimes?.['November-January'],
+                      'HH:mm'
+                    )
+                  )
                 : formatTime(moment(settings.timings?.shouruq, 'HH:mm'))}
             </td>
           </tr>

@@ -66,7 +66,6 @@ export default function EmbedScreen() {
 
   const hijriMonthKey = hijriMonthKeys[hijriMonth - 1];
   const hijriMonthName = settings.labels?.[hijriMonthKey] || hijriMoment.format("iMMMM");
-
   const hijriDate = `${hijriDay} ${hijriMonthName} ${hijriYear}`;
 
   const lastUpdated = settings?.meta?.lastUpdated
@@ -210,7 +209,9 @@ export default function EmbedScreen() {
                     key={key + "-iqamah"}
                     className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}
                   >
-                    {formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
+                    {key === "dhuhr" && isFriday
+                      ? formatTime(jummahTime)
+                      : formatTime(todayTimetable[`${capitalize(key)} Iqamah`])}
                   </td>
                 );
               })}
@@ -227,7 +228,6 @@ export default function EmbedScreen() {
             <div className="flex flex-wrap gap-3 whitespace-nowrap">
               <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
               <span>{settings.prayers?.jummah?.en || "Jum‘ah"}: {formatTime(jummahTime)}</span>
-
             </div>
           )}
         </div>
