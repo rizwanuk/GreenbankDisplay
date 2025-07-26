@@ -1,14 +1,11 @@
 export function parseSettings(rawSettingsArray) {
   const settingsObj = {
-    prayers: {}, // we'll build this from labels and labels.arabic
+    prayers: {},
   };
-
-  const jummahTimes = {};
 
   for (const row of rawSettingsArray) {
     const group = row.Group?.trim();
     const key = row.Key?.trim();
-    const subkey = row.Subkey?.trim();
     const value = row.Value?.trim();
 
     if (!group || !key) continue;
@@ -19,9 +16,11 @@ export function parseSettings(rawSettingsArray) {
     } else if (group === 'labels.arabic') {
       if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
       settingsObj.prayers[key].ar = value;
-    } else if (group === 'timings' && key === 'jummahTimes' && subkey) {
-      // ✅ Special handling for jummahTimes with seasonal subkeys
-      jummahTimes[subkey] = value;
+    } else if (group === 'jummahTimes') {
+      // ✅ Cleanly handle month-based jummahTimes
+      if (!settingsObj.timings) settingsObj.timings = {};
+      if (!settingsObj.timings.jummahTimes) settingsObj.timings.jummahTimes = {};
+      settingsObj.timings.jummahTimes[key] = value;
     } else {
       if (!settingsObj[group]) settingsObj[group] = {};
       try {
@@ -32,12 +31,6 @@ export function parseSettings(rawSettingsArray) {
     }
   }
 
-  // Inject jummahTimes if any were found
-  if (Object.keys(jummahTimes).length > 0) {
-    if (!settingsObj.timings) settingsObj.timings = {};
-    settingsObj.timings.jummahTimes = jummahTimes;
-    console.log('✅ Parsed jummahTimes:', jummahTimes);
-  }
-
+  console.log('✅ Parsed jummahTimes:', settingsObj.timings?.jummahTimes);
   return settingsObj;
 }

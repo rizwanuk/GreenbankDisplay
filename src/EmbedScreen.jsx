@@ -79,6 +79,14 @@ export default function EmbedScreen() {
     return now.isSameOrAfter(start) && now.isBefore(end);
   });
 
+  // ✅ Debugging logs
+  console.log("🟢 EmbedScreen rendering");
+  console.log("📆 Today:", today.format("dddd, D MMM YYYY"));
+  console.log("🕒 Now:", now.format("HH:mm:ss"));
+  console.log("📌 Active Prayer:", activePrayerKey);
+  console.log("🕌 Jummah Time:", jummahMoment?.format("HH:mm"));
+  console.log("🌄 Shouruq:", todayTimetable["Shouruq"]);
+
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
       <div className="w-full max-w-xl bg-gray-100 text-black rounded-xl shadow p-2">

@@ -27,16 +27,24 @@ export function useMakroohTimes(settings, now) {
   };
 }
 
-// 3. Jummah time logic
+// 3. Jummah time logic (per-month logic)
 export function getJummahTime(settings, now) {
-  const month = now.month(); // Jan = 0
-  const seasonal =
-    month >= 1 && month <= 9
-      ? settings?.timings?.jummahTimes?.['February-October']
-      : settings?.timings?.jummahTimes?.['November-January'];
-  return seasonal
-    ? moment(seasonal, 'HH:mm').set({ year: now.year(), month: now.month(), date: now.date() })
-    : null;
+  const monthName = now.format('MMMM'); // e.g. "July"
+  const jummahTimes = settings?.timings?.jummahTimes || {};
+  const timeStr = jummahTimes[monthName];
+
+  if (!timeStr) {
+    console.warn(`⚠️ Jummah time not found for ${monthName}`);
+    return null;
+  }
+
+  const jummahMoment = moment(`${now.format("YYYY-MM-DD")} ${timeStr}`, "YYYY-MM-DD HH:mm");
+  if (!jummahMoment.isValid()) {
+    console.warn('⚠️ Invalid Jummah time format:', timeStr);
+    return null;
+  }
+
+  return jummahMoment;
 }
 
 // 4. Get today's timetable row
