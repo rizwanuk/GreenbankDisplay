@@ -1,6 +1,11 @@
 import React from "react";
 import moment from "moment";
 import { buildPrayerTimeline } from "../helpers/getCurrentPrayer";
+import {
+  getJummahTime,
+  getArabicLabel,
+  getLabel,
+} from "../hooks/usePrayerHelpers";
 
 // Helper to format time with small AM/PM
 const formatWithSmallAmPm = (time, is24Hour) => {
@@ -53,9 +58,8 @@ export default function UpcomingPrayerRows({
       if (isFriday && isSameDayAsToday && lookupKey === "dhuhr") {
         name = "Jummah";
         lookupKey = "jummah"; // Use correct key for Jummah
-        const jummahTimeStr = settingsMap["timings.jummahTime"];
-        const jummahMoment = moment(jummahTimeStr, "HH:mm");
-        if (jummahMoment.isValid()) jamaah = jummahMoment;
+        const jummahMoment = getJummahTime(settingsMap, now);
+        if (jummahMoment?.isValid()) jamaah = jummahMoment;
       }
 
       return {
@@ -66,9 +70,6 @@ export default function UpcomingPrayerRows({
       };
     })
     .slice(0, numberToShow);
-
-  const getLabel = (key) => labels[key?.toLowerCase()] || key;
-  const getArabic = (p) => arabicLabels[p.lookupKey?.toLowerCase()] || "";
 
   return (
     <div
@@ -106,10 +107,10 @@ export default function UpcomingPrayerRows({
           } leading-tight`}
         >
           <div className="truncate font-bold whitespace-nowrap overflow-visible text-ellipsis">
-            {getLabel(p.lookupKey || p.name)}
+            {getLabel(p.lookupKey || p.name, labels)}
           </div>
           <div className={`${theme.fontAra || "font-cairo"} opacity-90 sm:text-center`}>
-            {getArabic(p)}
+            {getArabicLabel(p.lookupKey || p.name, arabicLabels)}
           </div>
           <div className="text-center">{formatWithSmallAmPm(p.start, is24)}</div>
           <div className="text-right">

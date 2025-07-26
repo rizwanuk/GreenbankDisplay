@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import moment from 'moment';
 import formatWithSmallAmPm from '../helpers/formatWithSmallAmPm';
+import { getJummahTime } from '../hooks/usePrayerHelpers';
 
 export default function CurrentPrayerCard({
   theme = {},
@@ -22,7 +23,8 @@ export default function CurrentPrayerCard({
 
   if (!todayRow || !settingsMap) return null;
 
-  const getTime = (row, key) => (row?.[key] ? moment(row[key], 'HH:mm') : null);
+  const getTime = (row, key) =>
+    row?.[key] ? moment(row[key], 'HH:mm') : null;
 
   const fajrStart = getTime(todayRow, 'Fajr Adhan');
   const fajrJamaah = getTime(todayRow, 'Fajr Iqamah');
@@ -48,6 +50,9 @@ export default function CurrentPrayerCard({
   const jamaahDuration = parseInt(settingsMap['timings.jamaahHighlightDuration'] || '5', 10);
   const isFriday = now.format('dddd') === 'Friday';
 
+  // Jummah override
+  const jummahTime = getJummahTime(settingsMap, now);
+
   let key = null;
   let label = null;
   let arabic = null;
@@ -56,7 +61,7 @@ export default function CurrentPrayerCard({
 
   if (now.isBefore(fajrStart)) {
     key = 'isha';
-    label = labels?.[key] || 'Isha';
+    label = labels?.[key];
     arabic = arabicLabels?.[key];
     start = eshaFromYesterday;
     jamaah = eshaJamaahFromYesterday;
@@ -95,23 +100,21 @@ export default function CurrentPrayerCard({
     label = isFriday ? labels?.jummah || 'Jummah' : labels?.[key];
     arabic = isFriday ? arabicLabels?.jummah : arabicLabels?.[key];
     start = dhuhrStart;
-    if (isFriday && settingsMap['jummah.jamaahTime']) {
-      jamaah = moment(settingsMap['jummah.jamaahTime'], 'HH:mm');
-    } else {
-      jamaah = dhuhrJamaah;
-    }
+    jamaah = isFriday && jummahTime ? jummahTime : dhuhrJamaah;
   } else if (now.isSameOrAfter(dhuhrJamaah) && now.isBefore(dhuhrJamaah.clone().add(jamaahDuration, 'minutes'))) {
-    return <JamaahBanner label={isFriday ? labels?.jummah : labels?.dhuhr} arabic={isFriday ? arabicLabels?.jummah : arabicLabels?.dhuhr} theme={theme} />;
+    return (
+      <JamaahBanner
+        label={isFriday ? labels?.jummah : labels?.dhuhr}
+        arabic={isFriday ? arabicLabels?.jummah : arabicLabels?.dhuhr}
+        theme={theme}
+      />
+    );
   } else if (now.isBefore(asrStart)) {
     key = 'dhuhr';
     label = isFriday ? labels?.jummah || 'Jummah' : labels?.[key];
     arabic = isFriday ? arabicLabels?.jummah : arabicLabels?.[key];
     start = dhuhrStart;
-    if (isFriday && settingsMap['jummah.jamaahTime']) {
-      jamaah = moment(settingsMap['jummah.jamaahTime'], 'HH:mm');
-    } else {
-      jamaah = dhuhrJamaah;
-    }
+    jamaah = isFriday && jummahTime ? jummahTime : dhuhrJamaah;
   } else if (now.isBefore(asrJamaah)) {
     key = 'asr';
     label = labels?.[key];
@@ -157,35 +160,32 @@ export default function CurrentPrayerCard({
     <div className={`rounded-xl px-4 py-4 mb-4 text-center ${bgClass} h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex items-center justify-center`}>
       <div className={`flex flex-col items-center justify-center w-full ${theme?.textColor || 'text-white'} gap-4`}>
         <div className="flex flex-col items-center justify-center w-full gap-2">
+
           {theme?.name === 'slideshow' && key !== 'makrooh' && (
             <span className={`px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 ${theme?.badges?.current || 'bg-white/10 text-white'}`}>
               Current
             </span>
           )}
-
           <div className="flex items-center gap-4 flex-wrap justify-center text-center break-words whitespace-normal">
             <span className={`${
               key === 'makrooh'
                 ? 'text-3xl sm:text-4xl md:text-5xl'
                 : theme?.nameSize || 'text-6xl sm:text-7xl md:text-8xl'
-            } ${theme?.fontEng || 'font-rubik'} font-semibold break-words whitespace-normal text-wrap`}>
+            } ${theme?.fontEng || 'font-rubik'} font-semibold`}>
               {label}
             </span>
-
             {arabic && (
-              <span className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${theme?.fontAra || 'font-arabic'} flex-shrink-0`}>
+              <span className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${theme?.fontAra || 'font-arabic'}`}>
                 {arabic}
               </span>
             )}
-
             {theme?.name !== 'slideshow' && key !== 'makrooh' && (
-              <span className={`ml-2 px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 ${theme?.badges?.current || 'bg-white/10 text-white'} max-w-full sm:max-w-none`}>
+              <span className={`ml-2 px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 ${theme?.badges?.current || 'bg-white/10 text-white'}`}>
                 Current
               </span>
             )}
           </div>
         </div>
-
         {start && jamaah && (
           <div className={`${theme?.timeRowSize || 'text-4xl md:text-6xl'} text-white/80 ${theme?.fontEng || 'font-rubik'}`}>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-2">

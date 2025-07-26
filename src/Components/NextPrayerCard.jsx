@@ -72,7 +72,7 @@ export default function NextPrayerCard({
       add("Isha", todayRow, today);
       add("Fajr", tomorrowRow, tomorrow);
 
-      // Add Ishraq (starts at sunrise + offset, listed after Fajr)
+      // Add Ishraq
       const fajrStartRaw = todayRow["Fajr Adhan"] || todayRow["Fajr"];
       const sunriseRaw = todayRow["Shouruq"];
       if (fajrStartRaw && sunriseRaw) {
@@ -126,7 +126,7 @@ export default function NextPrayerCard({
 
       let display = "";
       if (duringJamaah) {
-        return; // Skip showing countdown, handled by CurrentPrayerCard
+        return;
       } else {
         const target = now.isBefore(upcoming.start) ? upcoming.start : upcoming.jamaah;
         const prefix = now.isBefore(upcoming.start) ? "Begins in" : "Jama‘ah in";
