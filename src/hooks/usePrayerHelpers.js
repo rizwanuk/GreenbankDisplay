@@ -1,11 +1,27 @@
 import moment from 'moment-hijri';
 
-// 1. Hijri date with offset
+// 1. Hijri date with offset and custom month label
 export function useHijriDate(settings) {
   const offset = parseInt(settings?.islamicCalendar?.offset || 0, 10);
   const hijriMoment = moment().add(offset, 'days');
+
+  const hijriDay = hijriMoment.format('iD');
+  const hijriMonthIndex = parseInt(hijriMoment.format('iM'), 10); // 1–12
+  const hijriYear = hijriMoment.format('iYYYY');
+
+  const hijriMonthKey = [
+    'muharram', 'safar', 'rabiAwal', 'rabiThani',
+    'jumadaAwal', 'jumadaThani', 'rajab', 'shaban',
+    'ramadan', 'shawwal', 'dhulQadah', 'dhulHijjah',
+  ][hijriMonthIndex - 1];
+
+  const customMonthName =
+    settings?.labels?.[hijriMonthKey] || hijriMoment.format('iMMMM');
+
+  const hijriDateString = `${hijriDay} ${customMonthName} ${hijriYear}`;
+
   return {
-    hijriDateString: hijriMoment.format('iD iMMMM iYYYY'),
+    hijriDateString,
     hijriMoment,
   };
 }

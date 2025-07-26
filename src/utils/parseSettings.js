@@ -1,6 +1,7 @@
 export function parseSettings(rawSettingsArray) {
   const settingsObj = {
     prayers: {},
+    labels: {},
   };
 
   for (const row of rawSettingsArray) {
@@ -13,11 +14,12 @@ export function parseSettings(rawSettingsArray) {
     if (group === 'labels') {
       if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
       settingsObj.prayers[key].en = value;
+      // ✅ Also store month overrides in settings.labels (e.g. safar: "Ṣafar")
+      settingsObj.labels[key.toLowerCase()] = value;
     } else if (group === 'labels.arabic') {
       if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
       settingsObj.prayers[key].ar = value;
     } else if (group === 'jummahTimes') {
-      // ✅ Cleanly handle month-based jummahTimes
       if (!settingsObj.timings) settingsObj.timings = {};
       if (!settingsObj.timings.jummahTimes) settingsObj.timings.jummahTimes = {};
       settingsObj.timings.jummahTimes[key] = value;
@@ -32,5 +34,6 @@ export function parseSettings(rawSettingsArray) {
   }
 
   console.log('✅ Parsed jummahTimes:', settingsObj.timings?.jummahTimes);
+  console.log('✅ Hijri label overrides:', settingsObj.labels);
   return settingsObj;
 }
