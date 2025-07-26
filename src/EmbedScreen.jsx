@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 import useSettings from "./hooks/useSettings";
 import { parseSettings } from "./utils/parseSettings";
-import { useHijriDate, useMakroohTimes, getJummahTime } from "./hooks/usePrayerHelpers";
+import { useHijriDate, getTime, getJummahTime, useMakroohTimes } from "./hooks/usePrayerHelpers";
 import { getCurrentPrayerMessage } from "./utils/getCurrentPrayerMessage";
 import moment from "moment-hijri";
 import "moment/locale/en-gb";
@@ -157,25 +157,26 @@ export default function EmbedScreen() {
           </tbody>
         </table>
 
+        {/* Current prayer message row */}
         {prayerMessage && (
           <div className={`mt-2 font-semibold text-center rounded p-2 ${messageStyle}`}>
             {prayerMessage}
           </div>
         )}
 
+        {/* Info row */}
         <div className="pt-2 text-sm sm:text-base text-black/90 px-2">
-  {!prayerMessage && isMakroohNow ? (
-    <div className="bg-red-600 text-white font-semibold text-center rounded p-2">
-      Avoid praying now ({makroohLabel})
-    </div>
-  ) : (
-    <div className="flex justify-center flex-wrap gap-3 whitespace-nowrap text-center">
-      <span>Shouruq (Sunrise): {formatTime(todayTimetable["Shouruq"])}</span>
-      <span>Jum‘ah: {formatTime(jummahMoment?.format("HH:mm"))}</span>
-    </div>
-  )}
-</div>
-
+          {!prayerMessage && isMakroohNow ? (
+            <div className="bg-red-600 text-white font-semibold text-center rounded p-2">
+              Avoid praying now ({makroohLabel})
+            </div>
+          ) : (
+            <div className="flex justify-center flex-wrap gap-3 whitespace-nowrap text-center">
+              <span>Shouruq (Sunrise): {formatTime(todayTimetable["Shouruq"])}</span>
+              <span>Jum‘ah: {formatTime(jummahMoment?.format("HH:mm"))}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
