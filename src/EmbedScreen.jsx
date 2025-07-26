@@ -163,19 +163,19 @@ export default function EmbedScreen() {
           </div>
         )}
 
-        <div className="pt-2 text-sm sm:text-base text-black/90 text-left px-2">
-          {!prayerMessage && isMakroohNow ? (
-            <div className="bg-red-600 text-white font-semibold text-center rounded p-2">
-              Avoid praying now ({makroohLabel})
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-3 whitespace-nowrap">
-  <span>Shouruq (Sunrise): {formatTime(todayTimetable["Shouruq"])}</span>
-  <span>Jum‘ah: {formatTime(jummahMoment?.format("HH:mm"))}</span>
+        <div className="pt-2 text-sm sm:text-base text-black/90 px-2">
+  {!prayerMessage && isMakroohNow ? (
+    <div className="bg-red-600 text-white font-semibold text-center rounded p-2">
+      Avoid praying now ({makroohLabel})
+    </div>
+  ) : (
+    <div className="flex justify-center flex-wrap gap-3 whitespace-nowrap text-center">
+      <span>Shouruq (Sunrise): {formatTime(todayTimetable["Shouruq"])}</span>
+      <span>Jum‘ah: {formatTime(jummahMoment?.format("HH:mm"))}</span>
+    </div>
+  )}
 </div>
 
-          )}
-        </div>
       </div>
     </div>
   );
