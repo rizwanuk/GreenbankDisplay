@@ -3,6 +3,7 @@ import usePrayerTimes from "./hooks/usePrayerTimes";
 import useSettings from "./hooks/useSettings";
 import { parseSettings } from "./utils/parseSettings";
 import { useHijriDate, useMakroohTimes, getJummahTime } from "./hooks/usePrayerHelpers";
+import { getCurrentPrayerMessage } from "./utils/getCurrentPrayerMessage";
 import moment from "moment-hijri";
 import "moment/locale/en-gb";
 
@@ -40,14 +41,27 @@ export default function EmbedScreen() {
   const { hijriDateString } = useHijriDate(settings);
   const { isMakroohNow, label: makroohLabel } = useMakroohTimes(settings, now);
 
+  const todayRow = timetable.find(
+    (t) => parseInt(t.Day) === now.date() && parseInt(t.Month) === now.month() + 1
+  );
+  const yesterday = now.clone().subtract(1, "day");
+  const yesterdayRow = timetable.find(
+    (t) => parseInt(t.Day) === yesterday.date() && parseInt(t.Month) === yesterday.month() + 1
+  );
+
+  const { message: prayerMessage, style: messageStyle } = getCurrentPrayerMessage({
+    now,
+    todayRow,
+    yesterdayRow,
+    settings,
+  });
+
   const lastUpdated = settings?.meta?.lastUpdated
     ? moment.utc(settings.meta.lastUpdated).local().format("D MMM YYYY, h:mm A")
     : "";
 
   const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
-  const todayTimetable = timetable.find(
-    (t) => parseInt(t.Day) === today.date() && parseInt(t.Month) === today.month() + 1
-  );
+  const todayTimetable = todayRow;
 
   if (!todayTimetable) return <div className="text-black p-4">Today's prayer times not found.</div>;
 
@@ -78,14 +92,6 @@ export default function EmbedScreen() {
     const end = getPrayerEnd(key, idx);
     return now.isSameOrAfter(start) && now.isBefore(end);
   });
-
-  // ✅ Debugging logs
-  console.log("🟢 EmbedScreen rendering");
-  console.log("📆 Today:", today.format("dddd, D MMM YYYY"));
-  console.log("🕒 Now:", now.format("HH:mm:ss"));
-  console.log("📌 Active Prayer:", activePrayerKey);
-  console.log("🕌 Jummah Time:", jummahMoment?.format("HH:mm"));
-  console.log("🌄 Shouruq:", todayTimetable["Shouruq"]);
 
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
@@ -151,8 +157,14 @@ export default function EmbedScreen() {
           </tbody>
         </table>
 
+        {prayerMessage && (
+          <div className={`mt-2 font-semibold text-center rounded p-2 ${messageStyle}`}>
+            {prayerMessage}
+          </div>
+        )}
+
         <div className="pt-2 text-sm sm:text-base text-black/90 text-left px-2">
-          {isMakroohNow ? (
+          {!prayerMessage && isMakroohNow ? (
             <div className="bg-red-600 text-white font-semibold text-center rounded p-2">
               Avoid praying now ({makroohLabel})
             </div>

@@ -109,3 +109,20 @@ export function getLabel(key, labels) {
 export function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+// 9. Exported Makrooh time getter (NEW)
+export function getMakroohTimes(settings) {
+  const now = moment();
+  const dateStr = now.format('YYYY-MM-DD');
+
+  const zawalStart = moment(`${dateStr} ${settings?.timings?.zawalStart || '11:50'}`, 'YYYY-MM-DD HH:mm');
+  const zawalEnd = moment(`${dateStr} ${settings?.timings?.zawalEnd || '12:10'}`, 'YYYY-MM-DD HH:mm');
+
+  const sunriseStart = moment(`${dateStr} ${settings?.timings?.sunriseMakroohStart || '05:00'}`, 'YYYY-MM-DD HH:mm');
+  const sunriseEnd = moment(`${dateStr} ${settings?.timings?.sunriseMakroohEnd || '05:10'}`, 'YYYY-MM-DD HH:mm');
+
+  return {
+    zawal: { start: zawalStart, end: zawalEnd },
+    sunrise: { start: sunriseStart, end: sunriseEnd },
+  };
+}
