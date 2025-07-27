@@ -43,13 +43,15 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     },
   ];
 
-  // Makrooh times
+  // Makrooh and Ishraq times
   const sunrise = getTime(todayRow, 'Shouruq');
   const makroohBeforeSunrise = sunrise?.clone().subtract(parseInt(timings.makroohBeforeSunrise || '1'), 'minutes');
   const makroohAfterSunrise = sunrise?.clone().add(parseInt(timings.makroohAfterSunrise || '10'), 'minutes');
-  const dhuhrStart = getTime(todayRow, 'Dhuhr Adhan');
+  const ishraqDuration = parseInt(timings.showIshraq || '30', 10);
+  const ishraqEnd = makroohAfterSunrise?.clone().add(ishraqDuration, 'minutes');
+  const dhuhrStart = prayers[1]?.start;
   const makroohBeforeZuhr = dhuhrStart?.clone().subtract(parseInt(timings.makroohBeforeZuhr || '10'), 'minutes');
-  const maghribStart = getTime(todayRow, 'Maghrib Adhan');
+  const maghribStart = prayers[3]?.start;
   const makroohBeforeMaghrib = maghribStart?.clone().subtract(parseInt(timings.makroohBeforeMaghrib || '10'), 'minutes');
 
   const inMakrooh =
@@ -65,38 +67,56 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     };
   }
 
+  // ✅ Show Ishraq after sunrise + makrooh
+  if (now.isBetween(makroohAfterSunrise, ishraqEnd)) {
+    const label = labels.ishraq || 'Ishraq';
+    const ar = arabic.ishraq || '';
+    return {
+      message: `${label}${ar ? ` ${ar}` : ''} — ${labels.current || 'Current'}`,
+      style: 'bg-white/70 text-black font-bold',
+    };
+  }
+
+  // ✅ Loop through each prayer to determine current
   for (let i = 0; i < prayers.length; i++) {
     const { key, start, jamaah } = prayers[i];
     if (!start || !jamaah) continue;
 
     const jamaahEnd = jamaah.clone().add(duration, 'minutes');
-    const nextStart = prayers[i + 1]?.start || moment(start).add(1, 'day');
+
+    // Determine nextStart
+    let nextStart;
+    if (key === 'fajr') {
+      nextStart = sunrise; // Fajr ends at sunrise
+    } else if (key === 'isha') {
+      nextStart = prayers[0]?.start?.clone().add(1, 'day'); // Isha ends at Fajr next day
+    } else {
+      nextStart = prayers[i + 1]?.start;
+    }
+
+    if (!nextStart) continue;
 
     const label = key === 'dhuhr' && isFriday ? labels.jummah || 'Jum‘ah' : labels[key] || key;
     const ar = key === 'dhuhr' && isFriday ? arabic.jummah || '' : arabic[key] || '';
 
-    if (now.isBetween(jamaah, jamaahEnd)) {
+    // Jama‘ah in progress
+    if (now.isSameOrAfter(jamaah) && now.isBefore(jamaahEnd)) {
       return {
         message: `${label}${ar ? ` ${ar}` : ''} Jama‘ah in progress`,
         style: 'bg-yellow-300 text-black',
       };
     }
 
-    if (now.isBetween(jamaahEnd, nextStart)) {
+    // Prayer is current from start → next start
+    if (now.isSameOrAfter(start) && now.isBefore(nextStart)) {
       return {
         message: `${label}${ar ? ` ${ar}` : ''} — ${labels.current || 'Current'}`,
         style: 'bg-white/70 text-black font-bold',
       };
     }
-
-    if (now.isBetween(start, jamaah)) {
-      return {
-        message: `${labels.nafl || 'Nafl'} ${labels.prayers || 'prayers'} can be offered`,
-        style: 'bg-green-100 text-black',
-      };
-    }
   }
 
+  // 🟢 Fallback if no prayer matched
   return {
     message: `${labels.nafl || 'Nafl'} ${labels.prayers || 'prayers'} can be offered`,
     style: 'bg-green-100 text-black',
