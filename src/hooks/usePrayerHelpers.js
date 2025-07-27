@@ -43,9 +43,9 @@ export function useMakroohTimes(settings, now) {
   };
 }
 
-// 3. Jummah time logic (per-month logic)
+// 3. Jummah time logic (per-month logic, lowercase key fix)
 export function getJummahTime(settings, now) {
-  const monthName = now.format('MMMM'); // e.g. "July"
+  const monthName = now.format('MMMM').toLowerCase(); // ✅ lowercase to match settings
   const jummahTimes = settings?.timings?.jummahTimes || {};
   const timeStr = jummahTimes[monthName];
 

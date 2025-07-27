@@ -1,39 +1,47 @@
-export function parseSettings(rawSettingsArray) {
+export function parseSettings(rows) {
   const settingsObj = {
-    prayers: {},
+    meta: {},
     labels: {},
+    arabic: {},
+    prayers: {},
+    themes: {},
+    toggles: {},
+    timings: {},
+    messages: {},
+    months: {},
   };
 
-  for (const row of rawSettingsArray) {
-    const group = row.Group?.trim();
-    const key = row.Key?.trim();
+  rows.forEach((row) => {
+    const groupRaw = row.Group?.trim();
+    const group = groupRaw?.toLowerCase();
+    const keyRaw = row.Key?.trim();
+    const key = keyRaw?.toLowerCase();
     const value = row.Value?.trim();
 
-    if (!group || !key) continue;
+    if (!group || !key || value === undefined) return;
 
     if (group === 'labels') {
-      if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
-      settingsObj.prayers[key].en = value;
-      // ✅ Also store month overrides in settings.labels (e.g. safar: "Ṣafar")
-      settingsObj.labels[key.toLowerCase()] = value;
+      settingsObj.labels[key] = value;
     } else if (group === 'labels.arabic') {
       if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
       settingsObj.prayers[key].ar = value;
-    } else if (group === 'jummahTimes') {
-      if (!settingsObj.timings) settingsObj.timings = {};
-      if (!settingsObj.timings.jummahTimes) settingsObj.timings.jummahTimes = {};
+
+      if (!settingsObj.arabic) settingsObj.arabic = {};
+      settingsObj.arabic[key] = value;
+    } else if (group === 'jummahtimes') {
+      // ✅ Fix: Ensure jummahTimes is nested under timings
+      if (!settingsObj.timings.jummahTimes) {
+        settingsObj.timings.jummahTimes = {};
+      }
       settingsObj.timings.jummahTimes[key] = value;
     } else {
-      if (!settingsObj[group]) settingsObj[group] = {};
-      try {
-        settingsObj[group][key] = JSON.parse(value);
-      } catch {
-        settingsObj[group][key] = value;
+      // Ensure group exists in settings object
+      if (!settingsObj[group]) {
+        settingsObj[group] = {};
       }
+      settingsObj[group][key] = value;
     }
-  }
+  });
 
-  console.log('✅ Parsed jummahTimes:', settingsObj.timings?.jummahTimes);
-  console.log('✅ Hijri label overrides:', settingsObj.labels);
   return settingsObj;
 }
