@@ -56,8 +56,9 @@ export default function EmbedScreen() {
     settings,
   });
 
-  const lastUpdated = settings?.meta?.lastUpdated
-    ? moment.utc(settings.meta.lastUpdated).local().format("D MMM YYYY, h:mm A")
+  const lastUpdatedRaw = settings?.meta?.lastupdated;
+  const lastUpdated = lastUpdatedRaw
+    ? moment.utc(lastUpdatedRaw).local().format("D MMM YYYY, h:mm A")
     : "";
 
   const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
@@ -120,7 +121,12 @@ export default function EmbedScreen() {
                     : settings.prayers?.[key]?.en || capitalize(key);
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
-                  <th key={key} className={`w-1/6 px-1 py-1 font-semibold ${isActive ? "bg-green-200 text-black font-bold rounded" : ""}`}>
+                  <th
+                    key={key}
+                    className={`w-1/6 px-1 py-1 font-semibold ${
+                      isActive ? "bg-green-200 text-black font-bold rounded" : ""
+                    }`}
+                  >
                     {label}
                   </th>
                 );
@@ -133,7 +139,10 @@ export default function EmbedScreen() {
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
-                  <td key={key + "-adhan"} className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}>
+                  <td
+                    key={key + "-adhan"}
+                    className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}
+                  >
                     {formatTime(todayTimetable[`${capitalize(key)} Adhan`])}
                   </td>
                 );
@@ -148,7 +157,10 @@ export default function EmbedScreen() {
                     ? formatTime(jummahMoment?.format("HH:mm"))
                     : formatTime(todayTimetable[`${capitalize(key)} Iqamah`]);
                 return (
-                  <td key={key + "-iqamah"} className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}>
+                  <td
+                    key={key + "-iqamah"}
+                    className={`py-1 ${isActive ? "bg-green-200 text-black font-semibold rounded" : ""}`}
+                  >
                     {jamaahTime}
                   </td>
                 );
