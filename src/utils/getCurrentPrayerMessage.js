@@ -72,7 +72,8 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     const label = labels.ishraq || 'Ishraq';
     const ar = arabic.ishraq || '';
     return {
-      message: `${label}${ar ? ` ${ar}` : ''} — ${labels.current || 'Current'}`,
+      message: `${label} — ${labels.current || 'Current'}`,
+      ar,
       style: 'bg-white/70 text-black font-bold',
     };
   }
@@ -102,7 +103,8 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     // Jama‘ah in progress
     if (now.isSameOrAfter(jamaah) && now.isBefore(jamaahEnd)) {
       return {
-        message: `${label}${ar ? ` ${ar}` : ''} Jama‘ah in progress`,
+        message: `${label} Jama‘ah in progress`,
+        ar,
         style: 'bg-yellow-300 text-black',
       };
     }
@@ -110,7 +112,8 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     // Prayer is current from start → next start
     if (now.isSameOrAfter(start) && now.isBefore(nextStart)) {
       return {
-        message: `${label}${ar ? ` ${ar}` : ''} — ${labels.current || 'Current'}`,
+        message: `${label} — ${labels.current || 'Current'}`,
+        ar,
         style: 'bg-white/70 text-black font-bold',
       };
     }

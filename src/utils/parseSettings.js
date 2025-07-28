@@ -2,6 +2,7 @@ export function parseSettings(rows) {
   const settingsObj = {
     meta: {},
     labels: {},
+    labelsArabic: {}, // ✅ Add this
     arabic: {},
     prayers: {},
     themes: {},
@@ -28,14 +29,14 @@ export function parseSettings(rows) {
 
       if (!settingsObj.arabic) settingsObj.arabic = {};
       settingsObj.arabic[key] = value;
+
+      settingsObj.labelsArabic[key] = value; // ✅ Add this line
     } else if (group === 'jummahtimes') {
-      // ✅ Fix: Ensure jummahTimes is nested under timings
       if (!settingsObj.timings.jummahTimes) {
         settingsObj.timings.jummahTimes = {};
       }
       settingsObj.timings.jummahTimes[key] = value;
     } else {
-      // Ensure group exists in settings object
       if (!settingsObj[group]) {
         settingsObj[group] = {};
       }

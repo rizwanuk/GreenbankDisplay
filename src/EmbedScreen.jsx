@@ -49,7 +49,7 @@ export default function EmbedScreen() {
     (t) => parseInt(t.Day) === yesterday.date() && parseInt(t.Month) === yesterday.month() + 1
   );
 
-  const { message: prayerMessage, style: messageStyle } = getCurrentPrayerMessage({
+  const { message: prayerMessage, style: messageStyle, ar } = getCurrentPrayerMessage({
     now,
     todayRow,
     yesterdayRow,
@@ -115,19 +115,26 @@ export default function EmbedScreen() {
             <tr className="border-t border-black/20">
               <th className="text-left py-1 w-1/6"></th>
               {prayers.map((key) => {
-                const label =
+                const enLabel =
                   key === "dhuhr" && isFriday
-                    ? settings.prayers?.jummah?.en || "Jummah"
-                    : settings.prayers?.[key]?.en || capitalize(key);
+                    ? settings.labels?.jummah || "Jum‘ah"
+                    : settings.labels?.[key] || capitalize(key);
+
+                const arLabel =
+                  key === "dhuhr" && isFriday
+                    ? settings.labelsArabic?.jummah || ""
+                    : settings.labelsArabic?.[key] || "";
+
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
                   <th
                     key={key}
-                    className={`w-1/6 px-1 py-1 font-semibold ${
+                    className={`w-1/6 px-1 py-1 font-semibold leading-tight ${
                       isActive ? "bg-green-200 text-black font-bold rounded" : ""
                     }`}
                   >
-                    {label}
+                    <div>{enLabel}</div>
+                    <div className="text-xs font-normal">{arLabel}</div>
                   </th>
                 );
               })}
@@ -172,7 +179,8 @@ export default function EmbedScreen() {
         {/* Current prayer message row */}
         {prayerMessage && (
           <div className={`mt-2 font-semibold text-center rounded p-2 ${messageStyle}`}>
-            {prayerMessage}
+            <div>{prayerMessage}</div>
+            {ar && <div className="text-lg sm:text-xl md:text-2xl font-normal mt-1">{ar}</div>}
           </div>
         )}
 
