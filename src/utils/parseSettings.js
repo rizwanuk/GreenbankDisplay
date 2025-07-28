@@ -2,8 +2,7 @@ export function parseSettings(rows) {
   const settingsObj = {
     meta: {},
     labels: {},
-    labelsArabic: {}, // ✅ Add this
-    arabic: {},
+    arabic: {},       // ✅ Arabic labels stored here
     prayers: {},
     themes: {},
     toggles: {},
@@ -27,10 +26,7 @@ export function parseSettings(rows) {
       if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
       settingsObj.prayers[key].ar = value;
 
-      if (!settingsObj.arabic) settingsObj.arabic = {};
-      settingsObj.arabic[key] = value;
-
-      settingsObj.labelsArabic[key] = value; // ✅ Add this line
+      settingsObj.arabic[key] = value;  // ✅ Accessible via settings.arabic[key]
     } else if (group === 'jummahtimes') {
       if (!settingsObj.timings.jummahTimes) {
         settingsObj.timings.jummahTimes = {};

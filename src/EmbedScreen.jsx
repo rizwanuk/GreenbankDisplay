@@ -122,8 +122,8 @@ export default function EmbedScreen() {
 
                 const arLabel =
                   key === "dhuhr" && isFriday
-                    ? settings.labelsArabic?.jummah || ""
-                    : settings.labelsArabic?.[key] || "";
+                    ? settings.arabic?.jummah || ""
+                    : settings.arabic?.[key] || "";
 
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
