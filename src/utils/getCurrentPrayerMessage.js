@@ -110,8 +110,12 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     }
   }
 
+  // Fallback: Nafl time
+  const naflLabel = labels.nafl || 'Nafl';
+  const naflAr = arabic.nafl || '';
   return {
-    message: `${labels.nafl || 'Nafl'} ${labels.prayers || 'prayers'} can be offered`,
-    style: 'bg-green-100 text-black',
+    message: `No active prayer time — ${naflLabel} can be offered`,
+    ar: naflAr,
+    style: 'bg-cyan-100 text-black',
   };
 }

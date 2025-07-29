@@ -79,7 +79,11 @@ export default function EmbedScreen() {
   };
 
   const getPrayerEnd = (key, idx) => {
-    if (key === "fajr") return moment(todayTimetable["Shouruq"], "HH:mm");
+  if (key === "fajr") {
+    const shouruqStr = todayTimetable["Shouruq"];
+    return moment(`${today.format("YYYY-MM-DD")} ${shouruqStr}`, "YYYY-MM-DD HH:mm");
+  }
+
     const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
