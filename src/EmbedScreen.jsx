@@ -88,7 +88,6 @@ export default function EmbedScreen() {
       const shouruqStr = todayTimetable["Shouruq"];
       return moment(`${today.format("YYYY-MM-DD")} ${shouruqStr}`, "YYYY-MM-DD HH:mm");
     }
-
     const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
@@ -106,46 +105,42 @@ export default function EmbedScreen() {
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
       <div className="w-full max-w-xl bg-gray-100 text-black rounded-xl shadow p-2">
-        <table className="w-full table-fixed text-center text-xs sm:text-sm md:text-sm lg:text-base">
+        <table className="w-full table-fixed text-center text-[0.625rem] sm:text-xs md:text-sm leading-snug">
           <thead>
-            <tr className="text-xs sm:text-sm">
-              <th className="text-left py-0.5" colSpan={6}>
+            <tr>
+              <th className="text-left py-[1px]" colSpan={6}>
                 <div className="flex justify-between flex-wrap gap-1">
-                  <span className="truncate font-poppins">
-                    {today.format("dddd, D MMMM YYYY")}
-                  </span>
+                  <span className="truncate font-poppins">{today.format("dddd, D MMMM YYYY")}</span>
                   <span className="truncate font-poppins">{hijriDateString} AH</span>
                 </div>
               </th>
             </tr>
-            <tr className="text-[0.6rem] text-right text-black/60">
-              <th className="text-right py-0.5" colSpan={6}>
+            <tr className="text-[0.55rem] text-right text-black/60">
+              <th className="text-right py-[1px]" colSpan={6}>
                 {lastUpdated && <span>Last updated: {lastUpdated}</span>}
               </th>
             </tr>
-            <tr className="border-t border-black/20">
-              <th className="text-left py-0.5 w-1/6"></th>
+            <tr className="border-t border-black/10">
+              <th className="text-left py-[1px] w-1/6"></th>
               {prayers.map((key) => {
                 const enLabel =
                   key === "dhuhr" && isFriday
                     ? settings.labels?.jummah || "Jum‘ah"
                     : settings.labels?.[key] || capitalize(key);
-
                 const arLabel =
                   key === "dhuhr" && isFriday
                     ? settings.arabic?.jummah || ""
                     : settings.arabic?.[key] || "";
-
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
                   <th
                     key={key}
-                    className={`w-1/6 px-1 py-0.5 font-semibold leading-tight ${
+                    className={`w-1/6 px-0.5 py-[1px] font-semibold ${
                       isActive ? "bg-green-200 text-black font-bold rounded" : ""
                     }`}
                   >
-                    <div>{enLabel}</div>
-                    <div className="text-[0.6rem] font-normal">{arLabel}</div>
+                    <div className="leading-snug">{enLabel}</div>
+                    <div className="text-[0.55rem] font-normal leading-tight">{arLabel}</div>
                   </th>
                 );
               })}
@@ -153,13 +148,13 @@ export default function EmbedScreen() {
           </thead>
           <tbody>
             <tr className="border-t border-black/10">
-              <td className="text-left py-0.5 font-medium">Begins</td>
+              <td className="text-left py-[1px] font-medium">Begins</td>
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
                   <td
                     key={key + "-adhan"}
-                    className={`py-0.5 ${
+                    className={`py-[1px] ${
                       isActive ? "bg-green-200 text-black font-semibold rounded" : ""
                     }`}
                   >
@@ -169,7 +164,7 @@ export default function EmbedScreen() {
               })}
             </tr>
             <tr className="border-t border-black/10">
-              <td className="text-left py-0.5 font-medium">Jama‘ah</td>
+              <td className="text-left py-[1px] font-medium">Jama‘ah</td>
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 const jamaahTime =
@@ -179,7 +174,7 @@ export default function EmbedScreen() {
                 return (
                   <td
                     key={key + "-iqamah"}
-                    className={`py-0.5 ${
+                    className={`py-[1px] ${
                       isActive ? "bg-green-200 text-black font-semibold rounded" : ""
                     }`}
                   >
@@ -191,23 +186,21 @@ export default function EmbedScreen() {
           </tbody>
         </table>
 
-        {/* Current prayer message row */}
         {prayerMessage && (
-          <div className={`mt-1 font-semibold text-center rounded p-1 ${messageStyle}`}>
-            <div>{prayerMessage}</div>
-            {ar && <div className="text-base sm:text-lg md:text-xl font-normal mt-0.5">{ar}</div>}
+          <div className={`mt-[2px] font-semibold text-center rounded p-1 ${messageStyle}`}>
+            <div className="text-[0.7rem] sm:text-sm">{prayerMessage}</div>
+            {ar && <div className="text-sm sm:text-base font-normal mt-[1px]">{ar}</div>}
           </div>
         )}
 
-        {/* Info row */}
-        <div className="pt-1 text-xs sm:text-sm text-black/90 px-2">
+        <div className="pt-[2px] text-[0.65rem] sm:text-sm text-black/90 px-2">
           {!prayerMessage && isMakroohNow ? (
-            <div className="bg-red-600 text-white font-semibold text-center rounded p-1">
+            <div className="bg-red-600 text-white font-semibold text-center rounded p-1 text-[0.65rem]">
               Avoid praying now ({makroohLabel})
             </div>
           ) : (
             <div className="flex justify-center flex-wrap gap-2 whitespace-nowrap text-center">
-              <span>Shouruq (Sunrise): {formatTime(todayTimetable["Shouruq"])}</span>
+              <span>Shouruq: {formatTime(todayTimetable["Shouruq"])}</span>
               <span>Jum‘ah: {formatTime(jummahMoment?.format("HH:mm"))}</span>
             </div>
           )}
