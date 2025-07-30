@@ -41,7 +41,7 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
 
   if (inMakrooh) {
     return {
-      message: '⚠ Makrooh: Prayers should not be prayed.',
+      message: '⚠ Makrooh: Prayers should not be offered at this time',
       style: 'bg-red-600 text-white',
     };
   }
@@ -50,9 +50,9 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     const label = labels.ishraq || 'Ishraq';
     const ar = arabic.ishraq || '';
     return {
-      message: `${label} — ${labels.current || 'Current'}`,
+      message: `Current: ${label}`,
       ar,
-      style: 'bg-white/70 text-black font-bold',
+      style: 'bg-zinc-200 text-black font-semibold',
     };
   }
 
@@ -70,9 +70,9 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
       const label = labels.isha || 'Esha';
       const ar = arabic.isha || '';
       return {
-        message: `${label} — ${labels.current || 'Current'}`,
+        message: `Current: ${label}`,
         ar,
-        style: 'bg-white/70 text-black font-bold',
+        style: 'bg-zinc-200 text-black font-semibold',
       };
     }
   }
@@ -97,20 +97,19 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
       return {
         message: `${label} Jama‘ah in progress`,
         ar,
-        style: 'bg-yellow-300 text-black',
+        style: 'bg-amber-400 text-black font-semibold',
       };
     }
 
     if (now.isSameOrAfter(start) && now.isBefore(nextStart)) {
       return {
-        message: `${label} — ${labels.current || 'Current'}`,
+        message: `Current: ${label}`,
         ar,
-        style: 'bg-white/70 text-black font-bold',
+        style: 'bg-zinc-200 text-black font-semibold',
       };
     }
   }
 
-  // Fallback: Nafl time
   const naflLabel = labels.nafl || 'Nafl';
   const naflAr = arabic.nafl || '';
   return {
