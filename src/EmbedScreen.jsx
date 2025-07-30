@@ -89,7 +89,7 @@ export default function EmbedScreen() {
       return moment(`${today.format("YYYY-MM-DD")} ${shouruqStr}`, "YYYY-MM-DD HH:mm");
     }
 
-    const nextKey = prayers[idx + 1];
+  const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
       return moment(`${today.format("YYYY-MM-DD")} ${nextStr}`, "YYYY-MM-DD HH:mm");
@@ -106,7 +106,7 @@ export default function EmbedScreen() {
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
       <div className="w-full max-w-xl bg-gray-100 text-black rounded-xl shadow p-2">
-        <table className="w-full table-fixed text-center text-xs sm:text-sm md:text-sm lg:text-base">
+        <table className="w-full table-fixed text-center text-sm sm:text-base">
           <thead>
             <tr className="text-xs sm:text-sm">
               <th className="text-left py-1" colSpan={6}>
@@ -144,8 +144,8 @@ export default function EmbedScreen() {
                       isActive ? "bg-green-200 text-black font-bold rounded" : ""
                     }`}
                   >
-                    <div>{enLabel}</div>
-                    <div className="text-[0.6rem] font-normal">{arLabel}</div>
+                    <div className="text-sm sm:text-base">{enLabel}</div>
+                    <div className="text-[0.7rem] sm:text-sm font-normal">{arLabel}</div>
                   </th>
                 );
               })}
@@ -153,13 +153,13 @@ export default function EmbedScreen() {
           </thead>
           <tbody>
             <tr className="border-t border-black/10">
-              <td className="text-left py-1 font-medium">Begins</td>
+              <td className="text-left py-1 font-medium text-sm sm:text-base">Begins</td>
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
                   <td
                     key={key + "-adhan"}
-                    className={`py-1 ${
+                    className={`py-1 text-sm sm:text-base ${
                       isActive ? "bg-green-200 text-black font-semibold rounded" : ""
                     }`}
                   >
@@ -169,7 +169,7 @@ export default function EmbedScreen() {
               })}
             </tr>
             <tr className="border-t border-black/10">
-              <td className="text-left py-1 font-medium">Jama‘ah</td>
+              <td className="text-left py-1 font-medium text-sm sm:text-base">Jama‘ah</td>
               {prayers.map((key) => {
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 const jamaahTime =
@@ -179,7 +179,7 @@ export default function EmbedScreen() {
                 return (
                   <td
                     key={key + "-iqamah"}
-                    className={`py-1 ${
+                    className={`py-1 text-sm sm:text-base ${
                       isActive ? "bg-green-200 text-black font-semibold rounded" : ""
                     }`}
                   >
