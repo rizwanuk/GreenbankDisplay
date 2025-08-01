@@ -9,7 +9,6 @@ import {
   useMakroohTimes,
 } from "./hooks/usePrayerHelpers";
 import { getCurrentPrayerMessage } from "./utils/getCurrentPrayerMessage";
-import FloatingMenu from "./Components/FloatingMenu";
 import moment from "moment-hijri";
 import "moment/locale/en-gb";
 
@@ -19,8 +18,6 @@ export default function EmbedScreen() {
   const timetable = usePrayerTimes();
   const rawSettings = useSettings();
   const [now, setNow] = useState(moment());
-  const [themeName, setThemeName] = useState("default");
-  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(moment()), 1000);
@@ -44,7 +41,6 @@ export default function EmbedScreen() {
 
   const settings = parseSettings(rawSettings);
   const timings = settings?.timings || {};
-  const theme = settings?.themes?.[themeName] || settings.themes?.default || {};
   const today = moment();
 
   const { hijriDateString } = useHijriDate(settings);
@@ -93,7 +89,7 @@ export default function EmbedScreen() {
       return moment(`${today.format("YYYY-MM-DD")} ${shouruqStr}`, "YYYY-MM-DD HH:mm");
     }
 
-    const nextKey = prayers[idx + 1];
+  const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
       return moment(`${today.format("YYYY-MM-DD")} ${nextStr}`, "YYYY-MM-DD HH:mm");
@@ -108,14 +104,7 @@ export default function EmbedScreen() {
   });
 
   return (
-    <div
-      className="font-sans flex flex-col items-center"
-      style={{
-        backgroundColor: theme.background || "#ffffff",
-        color: theme.text || "#000000",
-        zoom,
-      }}
-    >
+    <div className="bg-white text-black font-sans flex flex-col items-center">
       <div className="w-full max-w-xl bg-gray-100 text-black rounded-xl shadow p-2">
         <table className="w-full table-fixed text-center text-sm sm:text-base">
           <thead>
@@ -224,15 +213,6 @@ export default function EmbedScreen() {
           )}
         </div>
       </div>
-
-      {/* Floating Settings Menu */}
-      <FloatingMenu
-        themeName={themeName}
-        setThemeName={setThemeName}
-        zoom={zoom}
-        setZoom={setZoom}
-        themeOptions={Object.keys(settings.themes || {})}
-      />
     </div>
   );
 }
