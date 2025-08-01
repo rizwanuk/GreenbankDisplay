@@ -16,13 +16,16 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const prevLastUpdated = useRef(null);
 
-  // Zoom state and control
   const [zoom, setZoom] = useState(() => {
     const stored = localStorage.getItem("zoomLevel");
     return stored ? parseFloat(stored) : 1;
   });
   const [zoomBoxVisible, setZoomBoxVisible] = useState(false);
   const zoomTimeoutRef = useRef(null);
+
+  const [selectedTheme, setSelectedTheme] = useState(() => {
+    return localStorage.getItem("selectedTheme");
+  });
 
   useEffect(() => {
     localStorage.setItem("zoomLevel", zoom);
@@ -33,7 +36,7 @@ function App() {
     clearTimeout(zoomTimeoutRef.current);
     zoomTimeoutRef.current = setTimeout(() => {
       setZoomBoxVisible(false);
-    }, 10000); // Hide after 10s
+    }, 10000);
   };
 
   useEffect(() => {
@@ -60,15 +63,18 @@ function App() {
     if (row.Group === "toggles") acc[row.Key] = row.Value;
     return acc;
   }, {});
-  const currentTheme = toggles.theme || "Theme_1";
 
-  const themeHeader = extractTheme(`theme.${currentTheme}.header`);
-  const themeClock = extractTheme(`theme.${currentTheme}.clock`);
-  const themeDateCard = extractTheme(`theme.${currentTheme}.dateCard`);
-  const themeCurrentPrayer = extractTheme(`theme.${currentTheme}.currentPrayer`);
-  const themeUpcomingPrayer = extractTheme(`theme.${currentTheme}.upcomingPrayer`);
-  const themeNextPrayer = extractTheme(`theme.${currentTheme}.nextPrayer`);
-  const themeInfoCard = extractTheme(`theme.${currentTheme}.infoCard`);
+  // 🌗 Get theme: local override > Google Sheet
+  const defaultTheme = toggles.theme || "Theme_1";
+  const activeTheme = selectedTheme || defaultTheme;
+
+  const themeHeader = extractTheme(`theme.${activeTheme}.header`);
+  const themeClock = extractTheme(`theme.${activeTheme}.clock`);
+  const themeDateCard = extractTheme(`theme.${activeTheme}.dateCard`);
+  const themeCurrentPrayer = extractTheme(`theme.${activeTheme}.currentPrayer`);
+  const themeUpcomingPrayer = extractTheme(`theme.${activeTheme}.upcomingPrayer`);
+  const themeNextPrayer = extractTheme(`theme.${activeTheme}.nextPrayer`);
+  const themeInfoCard = extractTheme(`theme.${activeTheme}.infoCard`);
 
   const is24Hour = toggles.clock24Hours === "TRUE";
 
@@ -117,41 +123,38 @@ function App() {
     return acc;
   }, {});
 
-  // 🔁 Watch for Google Sheet updates (meta.lastUpdated)
+  // 🔁 Google Sheet auto-refresh
   useEffect(() => {
     const checkLastUpdated = () => {
       const metaRow = settings.find((row) => row.Group === "meta" && row.Key === "lastUpdated");
       if (!metaRow) return;
-
       const newTimestamp = metaRow.Value;
       if (prevLastUpdated.current && prevLastUpdated.current !== newTimestamp) {
         console.log("🔄 Detected change in Google Sheet. Reloading page...");
         window.location.reload();
       }
-
       prevLastUpdated.current = newTimestamp;
       setLastUpdated(newTimestamp);
     };
 
-    const interval = setInterval(checkLastUpdated, 60 * 1000); // every 1 minute
-    checkLastUpdated(); // initial check
-
+    const interval = setInterval(checkLastUpdated, 60000);
+    checkLastUpdated();
     return () => clearInterval(interval);
   }, [settings]);
 
+  // 🧠 Get all available theme names
+  const allThemes = Array.from(
+    new Set(settings
+      .filter((row) => row.Group.startsWith("theme."))
+      .map((row) => row.Group.split(".")[1])
+    )
+  );
+
   return (
     <div className="relative bg-black text-white min-h-screen overflow-auto">
-      {/* Zoom wrapper */}
-      <div
-        style={{
-          zoom: zoom,
-          width: "100%",
-          height: "100%",
-        }}
-      >
+      <div style={{ zoom: zoom, width: "100%", height: "100%" }}>
         <div className="flex flex-col">
           <Header mosque={mosque} theme={themeHeader} />
-
           <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
             <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
               <Clock settings={toggles} theme={themeClock} />
@@ -209,27 +212,26 @@ function App() {
             </div>
           </div>
 
-          {/* 🔄 Cache info (bottom-left) */}
           <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
             ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
           </div>
         </div>
       </div>
 
-      {/* 🔍 Zoom icon and control (outside zoomed content) */}
+      {/* ⚙️ Floating Controls (zoom + theme) */}
       <div className="absolute bottom-2 left-2 z-50">
         <button
           onClick={showZoomBox}
           className="bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition"
-          title="Zoom"
+          title="Settings"
         >
-          🔍
+          ⚙️
         </button>
 
         {zoomBoxVisible && (
-          <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-44 flex flex-col items-center">
+          <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-56 flex flex-col items-center">
             <div className="text-xs mb-2">Zoom: {Math.round(zoom * 100)}%</div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setZoom((z) => Math.min(z + 0.05, 1.5))}
                 className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
@@ -243,6 +245,23 @@ function App() {
                 ▼
               </button>
             </div>
+
+            <div className="text-xs mb-1">Theme</div>
+            <select
+              value={selectedTheme || defaultTheme}
+              onChange={(e) => {
+                const newTheme = e.target.value;
+                setSelectedTheme(newTheme);
+                localStorage.setItem("selectedTheme", newTheme);
+              }}
+              className="bg-white text-black px-2 py-1 rounded text-sm w-full"
+            >
+              {allThemes.map((theme) => (
+                <option key={theme} value={theme}>
+                  {theme}
+                </option>
+              ))}
+            </select>
           </div>
         )}
       </div>
