@@ -94,6 +94,7 @@ export default function CurrentPrayerCard({
           </div>
         </div>
 
+        {/* Show "Begins" and "Jama'ah" (no 'Until') when not Makrooh */}
         {!current.isMakrooh && current.start && current.jamaah && (
           <div className={`${theme?.timeRowSize || 'text-4xl md:text-6xl'} text-white/80 ${theme?.fontEng || 'font-rubik'}`}>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
