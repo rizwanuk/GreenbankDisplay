@@ -1,4 +1,5 @@
 import moment from 'moment-hijri';
+import { getTime as parseTime } from '../helpers/time'; // centralised "HH:mm" parser
 
 // 1. Hijri date with offset and custom month label
 export function useHijriDate(settings) {
@@ -43,41 +44,87 @@ export function useMakroohTimes(settings, now) {
   };
 }
 
-// 3. Jummah time logic (per-month logic, lowercase key fix)
+// 3. Jummah time logic — supports:
+// settings.timings.jummahTimes.{January/august}, settings.jummahTimes.{January/august},
+// and fixed strings settings.timings.jummah / settings.jummah / settings.jummahTime
 export function getJummahTime(settings, now) {
-  const monthName = now.format('MMMM').toLowerCase(); // ✅ lowercase to match settings
-  const jummahTimes = settings?.timings?.jummahTimes || {};
-  const timeStr = jummahTimes[monthName];
+  const t = settings?.timings || {};
+  const monthName = now.format('MMMM');        // e.g. "August"
+  const monthLower = monthName.toLowerCase();  // e.g. "august"
+
+  // Gather possible tables where the month-based times may live
+  const tables = [
+    t.jummahTimes,                 // settings.timings.jummahTimes
+    settings?.jummahTimes,         // settings.jummahTimes (root-level group)
+    t.JummahTimes,                 // tolerate different casing
+    settings?.JummahTimes,
+  ].filter(Boolean);
+
+  // Find the month's time string (case-insensitive key matching)
+  let timeStr = null;
+  for (const tbl of tables) {
+    if (typeof tbl !== 'object') continue;
+
+    if (tbl[monthName]) { timeStr = tbl[monthName]; break; }
+    const hit = Object.keys(tbl).find(k => k.toLowerCase() === monthLower);
+    if (hit) { timeStr = tbl[hit]; break; }
+  }
+
+  // Fixed value fallbacks (a single time for all months)
+  if (!timeStr) {
+    const fixedCandidates = [
+      t.jummah, t.jummahTime, t.Jummah,
+      settings?.jummah, settings?.jummahTime, settings?.Jummah,
+    ].filter(v => typeof v === 'string' && v.length);
+    timeStr = fixedCandidates[0] || null;
+  }
 
   if (!timeStr) {
     console.warn(`⚠️ Jummah time not found for ${monthName}`);
     return null;
   }
 
-  const jummahMoment = moment(`${now.format("YYYY-MM-DD")} ${timeStr}`, "YYYY-MM-DD HH:mm");
-  if (!jummahMoment.isValid()) {
-    console.warn('⚠️ Invalid Jummah time format:', timeStr);
-    return null;
+  // Parse common formats (your sheet uses "13:30")
+  const dateStr = now.format('YYYY-MM-DD');
+  const formats = [
+    'YYYY-MM-DD HH:mm',
+    'YYYY-MM-DD H:mm',
+    'YYYY-MM-DD h:mm A',
+    'YYYY-MM-DD hh:mm A',
+  ];
+
+  for (const f of formats) {
+    const m = moment(`${dateStr} ${timeStr}`, f, true);
+    if (m.isValid()) return m;
   }
 
-  return jummahMoment;
+  console.warn('⚠️ Invalid Jummah time format:', timeStr);
+  return null;
 }
 
 // 4. Get today's timetable row
 export function getTodayTimetable(timetable, now) {
   return timetable.find(
     (t) =>
-      parseInt(t.Day) === now.date() &&
-      parseInt(t.Month) === now.month() + 1
+      Number(t.Day) === now.date() &&
+      Number(t.Month) === now.month() + 1
   );
 }
 
 // 5. Time resolver
+// NOTE: Keeps the same exported name/signature to avoid breaking imports.
+// Uses centralised parseTime() and maps internal "sunrise" -> sheet "Shouruq".
 export function getTime({ prayerKey, type, timetable, settings, now }) {
   const isFriday = now.format('dddd') === 'Friday';
-  const timetableKey = isFriday && prayerKey === 'dhuhr' ? "Jum'ah" : capitalize(prayerKey);
-  const todayRow = getTodayTimetable(timetable, now);
 
+  // Map internal keys to sheet labels where needed
+  const timetableKey = (() => {
+    if (isFriday && prayerKey === 'dhuhr') return "Jum'ah";
+    if (prayerKey === 'sunrise') return 'Shouruq'; // 🔁 internal "sunrise" uses sheet column "Shouruq"
+    return capitalize(prayerKey);
+  })();
+
+  const todayRow = getTodayTimetable(timetable, now);
   if (!todayRow) return null;
 
   if (prayerKey === 'dhuhr' && type.toLowerCase() === 'iqamah' && isFriday) {
@@ -85,14 +132,18 @@ export function getTime({ prayerKey, type, timetable, settings, now }) {
   }
 
   const fullKey = `${timetableKey} ${type}`;
-  const raw = Object.keys(todayRow).find(k => k.toLowerCase() === fullKey.toLowerCase());
-  return raw
-    ? moment(todayRow[raw], 'HH:mm').set({
-        year: now.year(),
-        month: now.month(),
-        date: now.date(),
-      })
-    : null;
+  const raw = Object.keys(todayRow).find((k) => k.toLowerCase() === fullKey.toLowerCase());
+  if (!raw) return null;
+
+  // Parse time using shared helper, then set today's date parts
+  const base = parseTime(todayRow, raw); // moment('HH:mm')
+  if (!base || !base.isValid()) return null;
+
+  return base.set({
+    year: now.year(),
+    month: now.month(),
+    date: now.date(),
+  });
 }
 
 // 6. Arabic label resolver
@@ -102,12 +153,12 @@ export function getArabicLabel(key, arabicLabels) {
 
 // 7. English label resolver
 export function getLabel(key, labels) {
-  return labels?.[key?.toLowerCase()] || capitalize(key);
+  return labels?.[key?.toLowerCase()] || capitalize(key || '');
 }
 
 // 8. Capitalizer (exported)
-export function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+export function capitalize(str = '') {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
 }
 
 // 9. Exported Makrooh time getter (NEW)

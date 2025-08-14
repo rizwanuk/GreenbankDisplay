@@ -1,46 +1,30 @@
+// src/helpers/buildPrayerTimeline.js
+import { PRAYERS } from "../constants/prayers";
+
+/**
+ * Build a flat timeline the rest of the app expects.
+ * We keep identical shapes/keys to avoid any behaviour change:
+ *  - { key, adhanKey, jamaahKey, source }
+ *  - today entries come from PRAYERS
+ *  - we still append the special "fajr_tomorrow" row at the end
+ */
 export function buildPrayerTimeline({ today, yesterday, tomorrow, settingsMap }) {
-  return [
-    {
-      key: "fajr",
-      adhanKey: "Fajr Adhan",
-      jamaahKey: "Fajr Iqamah",
-      source: "today",
-    },
-    {
-      key: "sunrise",
-      adhanKey: "Shouruq",
-      jamaahKey: "Shouruq", // no jamaah, same as adhan
-      source: "today",
-    },
-    {
-      key: "dhuhr",
-      adhanKey: "Dhuhr Adhan",
-      jamaahKey: "Dhuhr Iqamah",
-      source: "today",
-    },
-    {
-      key: "asr",
-      adhanKey: "Asr Adhan",
-      jamaahKey: "Asr Iqamah",
-      source: "today",
-    },
-    {
-      key: "maghrib",
-      adhanKey: "Maghrib Adhan",
-      jamaahKey: "Maghrib Iqamah",
-      source: "today",
-    },
-    {
-      key: "isha",
-      adhanKey: "Isha Adhan",
-      jamaahKey: "Isha Iqamah",
-      source: "today",
-    },
-    {
-      key: "fajr_tomorrow",
-      adhanKey: "Fajr Adhan",
-      jamaahKey: "Fajr Iqamah",
-      source: "tomorrow",
-    },
-  ];
+  // Map the canonical PRAYERS list to today's entries
+  const todayEntries = PRAYERS.map(p => ({
+    key: p.key,
+    adhanKey: p.adhanKey,
+    // keep property name "jamaahKey" to match existing consumers
+    jamaahKey: p.iqamahKey,
+    source: "today",
+  }));
+
+  // Preserve the extra "fajr_tomorrow" row exactly as before
+  const fajrTomorrow = {
+    key: "fajr_tomorrow",
+    adhanKey: "Fajr Adhan",
+    jamaahKey: "Fajr Iqamah",
+    source: "tomorrow",
+  };
+
+  return [...todayEntries, fajrTomorrow];
 }

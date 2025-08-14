@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import moment from "moment";
 import {
   buildSettingsMap,
-  getLabels,
   findTodayRow,
   prepareTimetableWithDates,
 } from "../utils/helpers";
+import { getEnglishLabels, getArabicLabels } from "../utils/labels";
 
-// Updated theme extractor inside this file
+// Extract the active theme group from settingsMap
 function getFullTheme(settingsMap) {
   const currentTheme = settingsMap["toggles.theme"] || "Theme_1";
 
@@ -35,23 +35,20 @@ function getFullTheme(settingsMap) {
 }
 
 export default function usePrayerData(settings, timetable) {
+  // Flatten settings to a map once
   const settingsMap = useMemo(() => {
     if (!settings || settings.length === 0) return null;
     return buildSettingsMap(settings);
   }, [settings]);
 
+  // Add YYYY-MM-DD to each timetable row once
   const timetableWithDates = useMemo(() => {
     if (!timetable || timetable.length === 0) return [];
-    const processed = prepareTimetableWithDates(timetable);
-    console.log("🛠 usePrayerData timetable sample:", processed[0]);
-    console.log("🔎 Dates in timetable:", processed.map((r) => r.Date));
-    console.log("📆 Looking for date:", moment().format("YYYY-MM-DD"));
-    return processed;
+    return prepareTimetableWithDates(timetable);
   }, [timetable]);
 
-  const todayRow = useMemo(() => {
-    return findTodayRow(timetableWithDates);
-  }, [timetableWithDates]);
+  // Locate key rows relative to "today"
+  const todayRow = useMemo(() => findTodayRow(timetableWithDates), [timetableWithDates]);
 
   const yesterdayRow = useMemo(() => {
     const date = moment().subtract(1, "day").format("YYYY-MM-DD");
@@ -65,17 +62,11 @@ export default function usePrayerData(settings, timetable) {
 
   const isFriday = moment().format("dddd") === "Friday";
 
-  const theme = useMemo(() => {
-    return settingsMap ? getFullTheme(settingsMap) : {};
-  }, [settingsMap]);
+  // Theme + labels derived once from settingsMap
+  const theme = useMemo(() => (settingsMap ? getFullTheme(settingsMap) : {}), [settingsMap]);
 
-  const labels = useMemo(() => {
-    return settingsMap ? getLabels(settingsMap, "english") : {};
-  }, [settingsMap]);
-
-  const arabicLabels = useMemo(() => {
-    return settingsMap ? getLabels(settingsMap, "arabic") : {};
-  }, [settingsMap]);
+  const labels = useMemo(() => (settingsMap ? getEnglishLabels(settingsMap) : {}), [settingsMap]);
+  const arabicLabels = useMemo(() => (settingsMap ? getArabicLabels(settingsMap) : {}), [settingsMap]);
 
   const mosque = useMemo(() => {
     if (!settingsMap) return {};
@@ -87,7 +78,7 @@ export default function usePrayerData(settings, timetable) {
     };
   }, [settingsMap]);
 
-  // 🆕 Sheet lastUpdated time detection
+  // Sheet lastUpdated time (UTC) and age in minutes
   const lastUpdated = useMemo(() => {
     const raw = settingsMap?.["meta.lastUpdated"];
     return raw ? moment.utc(raw) : null;
@@ -95,12 +86,12 @@ export default function usePrayerData(settings, timetable) {
 
   const lastUpdatedAgeMinutes = useMemo(() => {
     if (!lastUpdated) return null;
-    return moment().diff(lastUpdated, "minutes"); // local vs UTC
+    return moment().diff(lastUpdated, "minutes");
   }, [lastUpdated]);
 
   const needsRefresh = useMemo(() => {
     if (lastUpdatedAgeMinutes == null) return false;
-    return lastUpdatedAgeMinutes > 30; // can change this threshold
+    return lastUpdatedAgeMinutes > 30; // threshold unchanged
   }, [lastUpdatedAgeMinutes]);
 
   return {

@@ -1,45 +1,49 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 import useSettings from "./hooks/useSettings";
 import { parseSettings } from "./utils/parseSettings";
 import {
   useHijriDate,
-  getTime,
   getJummahTime,
   useMakroohTimes,
+  capitalize,              // ⬅️ centralised
 } from "./hooks/usePrayerHelpers";
 import { getCurrentPrayerMessage } from "./utils/getCurrentPrayerMessage";
+import { getEnglishLabels, getArabicLabels } from "./utils/labels";
+import { PRAYERS } from "./constants/prayers";
 import moment from "moment-hijri";
 import "moment/locale/en-gb";
+import useNow from "./hooks/useNow";
 
 moment.locale("en-gb");
 
 export default function EmbedScreen() {
   const timetable = usePrayerTimes();
   const rawSettings = useSettings();
-  const [now, setNow] = useState(moment());
+  const now = useNow(1000); // ⏱️ shared tick
 
-  useEffect(() => {
-    const interval = setInterval(() => setNow(moment()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") setNow(moment());
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, []);
-
+  // Keep the periodic full reload
   useEffect(() => {
     const fullReload = setInterval(() => window.location.reload(), 30 * 60 * 1000);
     return () => clearInterval(fullReload);
   }, []);
 
+  // Build settings and label maps with useMemo ABOVE any early returns
+  const settings = useMemo(
+    () => (rawSettings ? parseSettings(rawSettings) : null),
+    [rawSettings]
+  );
+  const L = useMemo(() => getEnglishLabels(settings), [settings]);
+  const A = useMemo(() => getArabicLabels(settings), [settings]);
+
+  // Only prayers that have Iqamah (excludes Shouruq)
+  const prayers = useMemo(
+    () => PRAYERS.filter((p) => /Iqamah$/i.test(p.iqamahKey)).map((p) => p.key),
+    []
+  );
+
   if (!timetable || !rawSettings) return <div className="text-black p-4">Loading...</div>;
 
-  const settings = parseSettings(rawSettings);
   const timings = settings?.timings || {};
   const today = moment();
 
@@ -66,7 +70,6 @@ export default function EmbedScreen() {
     ? moment.utc(lastUpdatedRaw).local().format("D MMM YYYY, h:mm A")
     : "";
 
-  const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
   const todayTimetable = todayRow;
 
   if (!todayTimetable) return <div className="text-black p-4">Today's prayer times not found.</div>;
@@ -74,7 +77,6 @@ export default function EmbedScreen() {
   const isFriday = today.format("dddd") === "Friday";
   const jummahMoment = getJummahTime(settings, now);
 
-  const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
@@ -89,7 +91,7 @@ export default function EmbedScreen() {
       return moment(`${today.format("YYYY-MM-DD")} ${shouruqStr}`, "YYYY-MM-DD HH:mm");
     }
 
-  const nextKey = prayers[idx + 1];
+    const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
       return moment(`${today.format("YYYY-MM-DD")} ${nextStr}`, "YYYY-MM-DD HH:mm");
@@ -128,13 +130,13 @@ export default function EmbedScreen() {
               {prayers.map((key) => {
                 const enLabel =
                   key === "dhuhr" && isFriday
-                    ? settings.labels?.jummah || "Jum‘ah"
-                    : settings.labels?.[key] || capitalize(key);
+                    ? L.jummah || "Jum‘ah"
+                    : L[key] || capitalize(key);
 
                 const arLabel =
                   key === "dhuhr" && isFriday
-                    ? settings.arabic?.jummah || ""
-                    : settings.arabic?.[key] || "";
+                    ? A.jummah || ""
+                    : A[key] || "";
 
                 const isActive = !isMakroohNow && key === activePrayerKey;
                 return (
@@ -191,11 +193,17 @@ export default function EmbedScreen() {
           </tbody>
         </table>
 
-        {/* Current prayer message row */}
+        {/* Current prayer message row (single line) */}
         {prayerMessage && (
           <div className={`mt-1 font-semibold text-center rounded p-1 ${messageStyle}`}>
-            <div>{prayerMessage}</div>
-            {ar && <div className="text-base sm:text-lg md:text-xl font-normal mt-0.5">{ar}</div>}
+            <div className="inline-flex items-baseline justify-center gap-2 whitespace-nowrap">
+              <span>{prayerMessage}</span>
+              {ar && (
+                <span className="text-base sm:text-lg md:text-xl font-normal">
+                  {ar}
+                </span>
+              )}
+            </div>
           </div>
         )}
 

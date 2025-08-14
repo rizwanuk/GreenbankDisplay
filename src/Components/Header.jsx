@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function Header({ mosque = {}, theme = {} }) {
+function Header({ mosque = {}, theme = {} }) {
   const fontEng = theme.fontEng || "font-sans";
   const fontAra = theme.fontAra || "font-sans";
 
@@ -53,3 +53,8 @@ export default function Header({ mosque = {}, theme = {} }) {
     </header>
   );
 }
+
+const areEqual = (prev, next) =>
+  prev.mosque === next.mosque && prev.theme === next.theme;
+
+export default memo(Header, areEqual);

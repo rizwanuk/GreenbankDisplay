@@ -1,11 +1,23 @@
 import moment from "moment";
 
 // Build a key-value map from settings
+// - stores both plain keys (Key) and namespaced keys (Group.Key)
 export function buildSettingsMap(settings) {
   const map = {};
   settings.forEach((row) => {
-    if (row.Key && row.Value) {
-      map[row.Key.trim()] = row.Value.trim();
+    const group = (row.Group || "").trim();
+    const key = (row.Key || "").trim();
+    const value =
+      row.Value !== undefined && row.Value !== null ? String(row.Value).trim() : "";
+
+    if (!key || value === "") return;
+
+    // legacy/plain access (e.g., "clock24Hours")
+    map[key] = value;
+
+    // namespaced access (e.g., "theme.Theme_1.header.bgColor")
+    if (group) {
+      map[`${group}.${key}`] = value;
     }
   });
   return map;

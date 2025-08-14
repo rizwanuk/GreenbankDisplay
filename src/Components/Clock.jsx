@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { memo, useEffect, useState } from "react";
 import moment from "moment";
 
-export default function Clock({ settings = {}, theme = {} }) {
+function Clock({ settings = {}, theme = {} }) {
   const [now, setNow] = useState(moment());
 
   useEffect(() => {
@@ -35,16 +35,11 @@ export default function Clock({ settings = {}, theme = {} }) {
       `}
     >
       <div className="flex justify-center items-baseline whitespace-nowrap overflow-hidden w-full">
-        <span
-          className={`${fontFamily} ${fontSize} font-bold leading-none tracking-tight`}
-        >
+        <span className={`${fontFamily} ${fontSize} font-bold leading-none tracking-tight`}>
           {timeDisplay}
         </span>
         {!is24Hour && (
-          <span
-            className={`${amPmSize} ml-2 font-bold opacity-80`}
-            style={{ lineHeight: 1 }}
-          >
+          <span className={`${amPmSize} ml-2 font-bold opacity-80`} style={{ lineHeight: 1 }}>
             {ampm}
           </span>
         )}
@@ -52,3 +47,10 @@ export default function Clock({ settings = {}, theme = {} }) {
     </div>
   );
 }
+
+const areEqual = (p, n) =>
+  p.theme === n.theme &&
+  p.settings?.clock24Hours === n.settings?.clock24Hours &&
+  p.settings?.ampmLowercase === n.settings?.ampmLowercase;
+
+export default memo(Clock, areEqual);

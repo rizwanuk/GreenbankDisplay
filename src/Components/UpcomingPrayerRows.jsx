@@ -1,28 +1,12 @@
-import React from "react";
+import React, { memo } from "react";
 import moment from "moment";
 import { buildPrayerTimeline } from "../helpers/getCurrentPrayer";
-import {
-  getJummahTime,
-  getArabicLabel,
-  getLabel,
-} from "../hooks/usePrayerHelpers";
+import { getJummahTime, getArabicLabel, getLabel } from "../hooks/usePrayerHelpers";
+import useNow from "../hooks/useNow";
+import formatWithSmallAmPm from "../helpers/formatWithSmallAmPm";
 
-// Helper to format time with small AM/PM
-const formatWithSmallAmPm = (time, is24Hour) => {
-  if (!moment.isMoment(time) || !time.isValid()) return "--:--";
-  if (is24Hour) return time.format("HH:mm");
-
-  const [main, ampm] = time.format("h:mm A").split(" ");
-  return (
-    <>
-      {main}
-      <sup className="text-lg md:text-2xl lg:text-3xl ml-1">{ampm.toLowerCase()}</sup>
-    </>
-  );
-};
-
-export default function UpcomingPrayerRows({
-  now,
+function UpcomingPrayerRows({
+  now: nowProp,               // optional; ignored if not provided
   todayRow,
   tomorrowRow,
   yesterdayRow,
@@ -32,7 +16,11 @@ export default function UpcomingPrayerRows({
   settingsMap = {},
   numberToShow = 6,
   theme = {},
+  is24Hour,                   // optional prop from parent
 }) {
+  const tickNow = useNow(1000);
+  const now = nowProp ?? tickNow; // shared clock by default
+
   if (!todayRow || !tomorrowRow || !yesterdayRow) return null;
 
   const fullTimeline =
@@ -43,7 +31,8 @@ export default function UpcomingPrayerRows({
       settingsMap,
     }) || [];
 
-  const is24 = settingsMap["clock24Hours"] === "TRUE";
+  // Prefer explicit prop if provided; otherwise fall back to sheet toggle
+  const is24 = typeof is24Hour === "boolean" ? is24Hour : settingsMap["clock24Hours"] === "TRUE";
 
   const upcoming = fullTimeline
     .filter((p) => now.isBefore(p.start) && p.name !== "Ishraq")
@@ -113,11 +102,22 @@ export default function UpcomingPrayerRows({
             {getArabicLabel(p.lookupKey || p.name, arabicLabels)}
           </div>
           <div className="text-center">{formatWithSmallAmPm(p.start, is24)}</div>
-          <div className="text-right">
-            {p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}
-          </div>
+          <div className="text-right">{p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}</div>
         </div>
       ))}
     </div>
   );
 }
+
+const areEqual = (p, n) =>
+  p.theme === n.theme &&
+  p.is24Hour === n.is24Hour &&
+  p.numberToShow === n.numberToShow &&
+  p.labels === n.labels &&
+  p.arabicLabels === n.arabicLabels &&
+  p.settingsMap === n.settingsMap &&
+  p.todayRow === n.todayRow &&
+  p.tomorrowRow === n.tomorrowRow &&
+  p.yesterdayRow === n.yesterdayRow;
+
+export default memo(UpcomingPrayerRows, areEqual);
