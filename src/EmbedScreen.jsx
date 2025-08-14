@@ -6,14 +6,14 @@ import {
   useHijriDate,
   getJummahTime,
   useMakroohTimes,
-  capitalize,              // ⬅️ centralised
+  capitalize,
 } from "./hooks/usePrayerHelpers";
-import { getCurrentPrayerMessage } from "./utils/getCurrentPrayerMessage";
 import { getEnglishLabels, getArabicLabels } from "./utils/labels";
 import { PRAYERS } from "./constants/prayers";
 import moment from "moment-hijri";
 import "moment/locale/en-gb";
 import useNow from "./hooks/useNow";
+import { getCurrentPrayerState } from "./utils/getCurrentPrayerState";
 
 moment.locale("en-gb");
 
@@ -28,7 +28,6 @@ export default function EmbedScreen() {
     return () => clearInterval(fullReload);
   }, []);
 
-  // Build settings and label maps with useMemo ABOVE any early returns
   const settings = useMemo(
     () => (rawSettings ? parseSettings(rawSettings) : null),
     [rawSettings]
@@ -44,11 +43,9 @@ export default function EmbedScreen() {
 
   if (!timetable || !rawSettings) return <div className="text-black p-4">Loading...</div>;
 
-  const timings = settings?.timings || {};
   const today = moment();
-
   const { hijriDateString } = useHijriDate(settings);
-  const { isMakroohNow, label: makroohLabel } = useMakroohTimes(settings, now);
+  const { label: makroohLabel } = useMakroohTimes(settings, now);
 
   const todayRow = timetable.find(
     (t) => parseInt(t.Day) === now.date() && parseInt(t.Month) === now.month() + 1
@@ -58,12 +55,33 @@ export default function EmbedScreen() {
     (t) => parseInt(t.Day) === yesterday.date() && parseInt(t.Month) === yesterday.month() + 1
   );
 
-  const { message: prayerMessage, style: messageStyle, ar } = getCurrentPrayerMessage({
+  // 🔒 Single source of truth — same logic as CurrentPrayerCard
+  const current = getCurrentPrayerState({
     now,
     todayRow,
     yesterdayRow,
     settings,
+    labels: L,
+    arabicLabels: A,
   });
+
+  // Build message + style
+  let prayerMessage = "";
+  let messageStyle = "";
+  if (current.isMakrooh) {
+    prayerMessage = "⚠ Makrooh time — please avoid praying";
+    messageStyle = "bg-red-600 text-white";
+  } else if (current.inJamaah) {
+    prayerMessage = `${current.label} — Jama‘ah in progress`;
+    messageStyle = "bg-green-600 text-white";
+  } else if (current.key === "nafl") {
+    prayerMessage = `Nafl prayers can be offered`;
+    messageStyle = "bg-cyan-600 text-white";
+  } else if (current.key !== "none" && current.label) {
+    prayerMessage = `${current.label} — Current`;
+    messageStyle = "bg-cyan-600 text-white";
+  }
+  const ar = current.arabic || "";
 
   const lastUpdatedRaw = settings?.meta?.lastupdated;
   const lastUpdated = lastUpdatedRaw
@@ -71,7 +89,6 @@ export default function EmbedScreen() {
     : "";
 
   const todayTimetable = todayRow;
-
   if (!todayTimetable) return <div className="text-black p-4">Today's prayer times not found.</div>;
 
   const isFriday = today.format("dddd") === "Friday";
@@ -90,7 +107,6 @@ export default function EmbedScreen() {
       const shouruqStr = todayTimetable["Shouruq"];
       return moment(`${today.format("YYYY-MM-DD")} ${shouruqStr}`, "YYYY-MM-DD HH:mm");
     }
-
     const nextKey = prayers[idx + 1];
     if (nextKey) {
       const nextStr = todayTimetable[`${capitalize(nextKey)} Adhan`];
@@ -99,10 +115,12 @@ export default function EmbedScreen() {
     return moment(today).endOf("day");
   };
 
+  // Table highlight respects makrooh
+  const isMakroohNow = current.isMakrooh;
   const activePrayerKey = prayers.find((key, idx) => {
     const start = getPrayerStart(key);
     const end = getPrayerEnd(key, idx);
-    return now.isSameOrAfter(start) && now.isBefore(end);
+    return !isMakroohNow && now.isSameOrAfter(start) && now.isBefore(end);
   });
 
   return (
