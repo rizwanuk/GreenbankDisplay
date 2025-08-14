@@ -24,8 +24,9 @@ export default function SlideshowCurrentPrayerCardInner({
 
   const fontSizeClass = "text-[clamp(1rem,2vw,2rem)]";
 
-  // 🔽 Theme overrides for smaller layout
+  // 🔽 Theme overrides for smaller layout — set name:'slideshow' so the pill shows
   const slideshowTheme = {
+    name: "slideshow",
     ...theme,
     nameSize: "text-4xl sm:text-5xl md:text-6xl",
     nameSizeArabic: "text-3xl sm:text-4xl md:text-5xl",
@@ -38,7 +39,7 @@ export default function SlideshowCurrentPrayerCardInner({
   return (
     <div className={`w-full text-center ${fontSizeClass}`}>
       <CurrentPrayerCard
-        now={now}
+        // no need to pass `now` — the card ticks internally
         todayRow={todayRow}
         yesterdayRow={yesterdayRow}
         settingsMap={settingsMap}
