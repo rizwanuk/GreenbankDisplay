@@ -78,14 +78,13 @@ function UpcomingPrayerRows({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      const isSameDayAsToday = p.start.isSame(effectiveNow, "day");
-      const isFriday = effectiveNow.format("dddd") === "Friday";
+      // ✅ Use the prayer's own date to determine Friday/Jum'ah
+      const isFridayForPrayer = p.start.format("dddd") === "Friday";
 
-      // Jummah label/time override on Fridays
-      if (isFriday && isSameDayAsToday && lookupKey === "dhuhr") {
-        name = "Jummah";
-        lookupKey = "jummah"; // Use correct key for Jummah
-        const jummahMoment = getJummahTime(settingsMap, effectiveNow);
+      if (isFridayForPrayer && lookupKey === "dhuhr") {
+        name = "Jummah";           // display name (labels will still come from sheet)
+        lookupKey = "jummah";      // ensure label/Arabic lookup uses Jummah key
+        const jummahMoment = getJummahTime(settingsMap, p.start); // pass the prayer's day
         if (jummahMoment?.isValid()) jamaah = jummahMoment;
       }
 
