@@ -19,3 +19,6 @@ npm-debug.log*
 
 # Optional: Ignore env/config files
 .env
+
+# Ignore reserved device file on Windows
+NUL
