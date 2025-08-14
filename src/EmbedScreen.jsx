@@ -20,7 +20,7 @@ moment.locale("en-gb");
 export default function EmbedScreen() {
   const timetable = usePrayerTimes();
   const rawSettings = useSettings();
-  const now = useNow(1000); // ⏱️ shared tick
+  const rawNow = useNow(1000); // ⏱️ shared tick
 
   // Keep the periodic full reload
   useEffect(() => {
@@ -32,6 +32,42 @@ export default function EmbedScreen() {
     () => (rawSettings ? parseSettings(rawSettings) : null),
     [rawSettings]
   );
+
+  // 🔓 Robust fake time override (accepts H:mm, HH:mm, H.mm, HH.mm; trims & normalizes Unicode)
+  const now = useMemo(() => {
+    const rawEnabled = settings?.["toggles.fakeTimeEnabled"];
+    const enabled =
+      (typeof rawEnabled === "string"
+        ? rawEnabled.trim().toLowerCase()
+        : String(!!rawEnabled)) === "true";
+    const rawTime = (settings?.["toggles.fakeTime"] ?? "").toString().trim();
+    if (enabled && rawTime) {
+      const normalized = rawTime.replace(/[：﹕︓]/g, ":").replace(/[．。]/g, ".");
+      const fmtDate = rawNow.format("YYYY-MM-DD");
+      const m = moment(
+        `${fmtDate} ${normalized}`,
+        [
+          "YYYY-MM-DD HH:mm",
+          "YYYY-MM-DD H:mm",
+          "YYYY-MM-DD HH.mm",
+          "YYYY-MM-DD H.mm",
+        ],
+        true
+      );
+      if (m.isValid()) return m;
+
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[EmbedScreen] Invalid toggles.fakeTime value:",
+        rawTime,
+        "(after normalize:",
+        normalized,
+        ")"
+      );
+    }
+    return rawNow;
+  }, [rawNow, settings]);
+
   const L = useMemo(() => getEnglishLabels(settings), [settings]);
   const A = useMemo(() => getArabicLabels(settings), [settings]);
 
@@ -43,7 +79,7 @@ export default function EmbedScreen() {
 
   if (!timetable || !rawSettings) return <div className="text-black p-4">Loading...</div>;
 
-  const today = moment();
+  const today = now.clone();
   const { hijriDateString } = useHijriDate(settings);
   const { label: makroohLabel } = useMakroohTimes(settings, now);
 
@@ -65,23 +101,32 @@ export default function EmbedScreen() {
     arabicLabels: A,
   });
 
-  // Build message + style
-  let prayerMessage = "";
+  // Build message + style (Arabic appears directly after English label)
   let messageStyle = "";
+  let prayerMessage = ""; // used for Makrooh/Nafl
+  let structured = null;  // { label, ar, suffix }
+
   if (current.isMakrooh) {
     prayerMessage = "⚠ Makrooh time — please avoid praying";
     messageStyle = "bg-red-600 text-white";
   } else if (current.inJamaah) {
-    prayerMessage = `${current.label} — Jama‘ah in progress`;
+    structured = {
+      label: current.label,
+      ar: current.arabic || "",
+      suffix: "— Jama‘ah in progress",
+    };
     messageStyle = "bg-green-600 text-white";
   } else if (current.key === "nafl") {
-    prayerMessage = `Nafl prayers can be offered`;
+    prayerMessage = "Nafl prayers can be offered";
     messageStyle = "bg-cyan-600 text-white";
   } else if (current.key !== "none" && current.label) {
-    prayerMessage = `${current.label} — Current`;
+    structured = {
+      label: current.label,
+      ar: current.arabic || "",
+      suffix: "— Current",
+    };
     messageStyle = "bg-cyan-600 text-white";
   }
-  const ar = current.arabic || "";
 
   const lastUpdatedRaw = settings?.meta?.lastupdated;
   const lastUpdated = lastUpdatedRaw
@@ -211,15 +256,22 @@ export default function EmbedScreen() {
           </tbody>
         </table>
 
-        {/* Current prayer message row (single line) */}
-        {prayerMessage && (
+        {/* Current prayer message row (Arabic directly after English label) */}
+        {(structured || prayerMessage) && (
           <div className={`mt-1 font-semibold text-center rounded p-1 ${messageStyle}`}>
             <div className="inline-flex items-baseline justify-center gap-2 whitespace-nowrap">
-              <span>{prayerMessage}</span>
-              {ar && (
-                <span className="text-base sm:text-lg md:text-xl font-normal">
-                  {ar}
-                </span>
+              {structured ? (
+                <>
+                  <span>{structured.label}</span>
+                  {structured.ar && (
+                    <span className="text-base sm:text-lg md:text-xl font-normal">
+                      {structured.ar}
+                    </span>
+                  )}
+                  <span>{structured.suffix}</span>
+                </>
+              ) : (
+                <span>{prayerMessage}</span>
               )}
             </div>
           </div>
@@ -227,7 +279,7 @@ export default function EmbedScreen() {
 
         {/* Info row */}
         <div className="pt-1 text-xs sm:text-sm text-black/90 px-2">
-          {!prayerMessage && isMakroohNow ? (
+          {!prayerMessage && current.isMakrooh ? (
             <div className="bg-red-600 text-white font-semibold text-center rounded p-1">
               Avoid praying now ({makroohLabel})
             </div>

@@ -8,6 +8,15 @@ export default function SlideshowCurrentPrayerCardInner({
   settingsMap,
   theme = {},
 }) {
+  // Friendly guard to avoid empty gaps while data loads
+  if (!todayRow || !settingsMap) {
+    return (
+      <div className="w-full p-4 text-center rounded-xl bg-white/10 text-white">
+        Times are loading…
+      </div>
+    );
+  }
+
   const labels = Object.fromEntries(
     Object.entries(settingsMap)
       .filter(([key]) => key.startsWith("labels."))

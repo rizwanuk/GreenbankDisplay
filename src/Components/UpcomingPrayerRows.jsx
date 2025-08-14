@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import moment from "moment-hijri";
 import { buildPrayerTimeline } from "../helpers/getCurrentPrayer";
 import { getJummahTime, getArabicLabel, getLabel } from "../hooks/usePrayerHelpers";
@@ -19,7 +19,43 @@ function UpcomingPrayerRows({
   is24Hour,                   // optional prop from parent
 }) {
   const tickNow = useNow(1000);
-  const now = nowProp ?? tickNow; // shared clock by default
+
+  // 🔓 Robust fake time override (same as Card/Embed/Next)
+  const effectiveNow = useMemo(() => {
+    if (nowProp) return nowProp; // explicit wins
+    const rawEnabled = settingsMap?.["toggles.fakeTimeEnabled"];
+    const enabled =
+      (typeof rawEnabled === "string"
+        ? rawEnabled.trim().toLowerCase()
+        : String(!!rawEnabled)) === "true";
+    const rawTime = (settingsMap?.["toggles.fakeTime"] ?? "").toString().trim();
+    if (enabled && rawTime) {
+      const normalized = rawTime
+        .replace(/[：﹕︓]/g, ":")
+        .replace(/[．。]/g, ".");
+      const fmtDate = tickNow.format("YYYY-MM-DD");
+      const m = moment(
+        `${fmtDate} ${normalized}`,
+        [
+          "YYYY-MM-DD HH:mm",
+          "YYYY-MM-DD H:mm",
+          "YYYY-MM-DD HH.mm",
+          "YYYY-MM-DD H.mm",
+        ],
+        true
+      );
+      if (m.isValid()) return m;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[UpcomingPrayerRows] Invalid toggles.fakeTime:",
+        rawTime,
+        "(normalized:",
+        normalized,
+        ")"
+      );
+    }
+    return tickNow;
+  }, [nowProp, tickNow, settingsMap]);
 
   if (!todayRow || !tomorrowRow || !yesterdayRow) return null;
 
@@ -35,19 +71,21 @@ function UpcomingPrayerRows({
   const is24 = typeof is24Hour === "boolean" ? is24Hour : settingsMap["clock24Hours"] === "TRUE";
 
   const upcoming = fullTimeline
-    .filter((p) => now.isBefore(p.start) && p.name !== "Ishraq")
+    // ⚠️ strictly after now; and skip Ishraq in the list
+    .filter((p) => effectiveNow.isBefore(p.start) && p.name !== "Ishraq")
     .map((p) => {
       let name = p.name;
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      const isSameDayAsToday = p.start.isSame(now, "day");
-      const isFriday = now.format("dddd") === "Friday";
+      const isSameDayAsToday = p.start.isSame(effectiveNow, "day");
+      const isFriday = effectiveNow.format("dddd") === "Friday";
 
+      // Jummah label/time override on Fridays
       if (isFriday && isSameDayAsToday && lookupKey === "dhuhr") {
         name = "Jummah";
         lookupKey = "jummah"; // Use correct key for Jummah
-        const jummahMoment = getJummahTime(settingsMap, now);
+        const jummahMoment = getJummahTime(settingsMap, effectiveNow);
         if (jummahMoment?.isValid()) jamaah = jummahMoment;
       }
 
@@ -58,6 +96,7 @@ function UpcomingPrayerRows({
         lookupKey,
       };
     })
+    .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, numberToShow);
 
   return (

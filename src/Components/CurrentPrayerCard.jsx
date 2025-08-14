@@ -41,17 +41,44 @@ export default function CurrentPrayerCard({
     return () => clearInterval(t);
   }, []);
 
-  if (!todayRow || !settingsMap) return null;
+  // Friendly loading placeholder instead of returning null
+  if (!todayRow || !settingsMap) {
+    return (
+      <div className={`rounded-xl px-4 py-6 text-center ${theme?.bgColor || 'bg-white/5'} ${theme?.textColor || 'text-white'}`}>
+        Times are loading…
+      </div>
+    );
+  }
+
+  // 🔓 Fake time override from settings (no hooks here to avoid order issues)
+  const fakeEnabled = String(settingsMap['toggles.fakeTimeEnabled'] ?? 'false').toLowerCase() === 'true';
+  const fakeTimeStr = settingsMap['toggles.fakeTime']; // e.g. "01:25"
+  let effectiveNow = now;
+  if (fakeEnabled && fakeTimeStr) {
+    const frozen = moment(`${now.format('YYYY-MM-DD')} ${fakeTimeStr}`, 'YYYY-MM-DD HH:mm', true);
+    if (frozen.isValid()) {
+      effectiveNow = frozen; // freeze at fake time (today's date)
+    }
+  }
 
   // 🔒 Single source of truth (same logic used by Embed)
   const current = getCurrentPrayerState({
-    now,
+    now: effectiveNow,
     todayRow,
     yesterdayRow,
     settings: settingsMap,
     labels,
     arabicLabels,
   });
+
+  // If helper can't determine a state, show a neutral message
+  if (!current || current.key === 'none') {
+    return (
+      <div className={`rounded-xl px-4 py-6 text-center ${theme?.bgColor || 'bg-white/5'} ${theme?.textColor || 'text-white'}`}>
+        Prayer times unavailable
+      </div>
+    );
+  }
 
   if (current.inJamaah) {
     return <JamaahBanner label={current.label} arabic={current.arabic} theme={theme} />;

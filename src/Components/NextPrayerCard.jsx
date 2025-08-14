@@ -11,20 +11,65 @@ function NextPrayerCard({
   settingsMap,
   theme,
 }) {
-  const now = useNow(1000); // shared ticking clock
+  const tickNow = useNow(1000); // shared ticking clock
   const [countdown, setCountdown] = useState("");
   const [nextLabel, setNextLabel] = useState("");
   const [nextArabic, setNextArabic] = useState("");
   const [inProgress, setInProgress] = useState(false);
 
-  const highlightMinutes = parseInt(settingsMap["timings.jamaahHighlightDuration"] || "5", 10);
-  const ishraqOffset     = parseInt(settingsMap["timings.ishraqAfterSunrise"] || "10", 10);
-  const ishraqDuration   = parseInt(settingsMap["timings.ishraqDuration"] || "30", 10);
-  const jummahTimeStr    = settingsMap[`timings.jummah.${now.month() + 1}`];
+  // 🔓 Robust fake time override (same as Card/Embed)
+  const now = useMemo(() => {
+    const rawEnabled = settingsMap?.["toggles.fakeTimeEnabled"];
+    const enabled =
+      (typeof rawEnabled === "string"
+        ? rawEnabled.trim().toLowerCase()
+        : String(!!rawEnabled)) === "true";
+    const rawTime = (settingsMap?.["toggles.fakeTime"] ?? "").toString().trim();
+    if (enabled && rawTime) {
+      const normalized = rawTime
+        .replace(/[：﹕︓]/g, ":")
+        .replace(/[．。]/g, ".");
+      const fmtDate = tickNow.format("YYYY-MM-DD");
+      const m = moment(
+        `${fmtDate} ${normalized}`,
+        [
+          "YYYY-MM-DD HH:mm",
+          "YYYY-MM-DD H:mm",
+          "YYYY-MM-DD HH.mm",
+          "YYYY-MM-DD H.mm",
+        ],
+        true
+      );
+      if (m.isValid()) return m;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[NextPrayerCard] Invalid toggles.fakeTime:",
+        rawTime,
+        "(normalized:",
+        normalized,
+        ")"
+      );
+    }
+    return tickNow;
+  }, [tickNow, settingsMap]);
+
+  const highlightMinutes = parseInt(
+    settingsMap["timings.jamaahHighlightDuration"] || "5",
+    10
+  );
+  const ishraqOffset = parseInt(
+    settingsMap["timings.ishraqAfterSunrise"] || "10",
+    10
+  );
+  const ishraqDuration = parseInt(
+    settingsMap["timings.ishraqDuration"] || "30",
+    10
+  );
+  const jummahTimeStr = settingsMap?.[`timings.jummah.${now.month() + 1}`];
 
   const is24 = settingsMap["clock24Hours"] === "TRUE";
 
-  const toMomentToday = (timeStr, base) =>
+  const toMomentOn = (timeStr, base) =>
     timeStr
       ? moment(timeStr, "HH:mm").set({
           year: base.year(),
@@ -40,19 +85,18 @@ function NextPrayerCard({
     const tomorrow = now.clone().add(1, "day");
 
     const build = (label, row, baseDate, override) => {
-      const startStr  = row[`${label} Adhan`] || row[label];
+      const startStr = row[`${label} Adhan`] || row[label];
       const jamaahStr = override?.jamaah ?? row[`${label} Iqamah`];
-
       if (!startStr) return null;
 
-      const start  = toMomentToday(startStr, baseDate);
-      const jamaah = jamaahStr ? toMomentToday(jamaahStr, baseDate) : null;
-
+      const start = toMomentOn(startStr, baseDate);
+      const jamaah = jamaahStr ? toMomentOn(jamaahStr, baseDate) : null;
       const key = label.toLowerCase();
+
       return {
         key,
-        label: override?.label ?? labels[key],
-        arabic: override?.arabic ?? arabicLabels[key],
+        label: override?.label ?? labels?.[key],
+        arabic: override?.arabic ?? arabicLabels?.[key],
         start,
         jamaah,
       };
@@ -60,18 +104,20 @@ function NextPrayerCard({
 
     const items = [];
 
+    // Fajr (today)
     const fajrToday = build("Fajr", todayRow, today);
     if (fajrToday) items.push(fajrToday);
 
+    // Dhuhr / Jummah (today)
     if (isFriday) {
       const jummahOverride = {
-        label: labels.jummah || "Jum‘ah",
-        arabic: arabicLabels.jummah || "",
+        label: labels?.jummah || "Jum‘ah",
+        arabic: arabicLabels?.jummah || "",
         jamaah: jummahTimeStr || null,
       };
       const j = build("Dhuhr", todayRow, today, jummahOverride);
       if (j && j.jamaah == null && jummahTimeStr) {
-        j.jamaah = toMomentToday(jummahTimeStr, today);
+        j.jamaah = toMomentOn(jummahTimeStr, today);
       }
       if (j) items.push(j);
     } else {
@@ -79,27 +125,33 @@ function NextPrayerCard({
       if (dhuhr) items.push(dhuhr);
     }
 
+    // Asr, Maghrib, Isha (today)
     ["Asr", "Maghrib", "Isha"].forEach((name) => {
       const x = build(name, todayRow, today);
       if (x) items.push(x);
     });
 
+    // Fajr (tomorrow)
     const fajrTomorrow = build("Fajr", tomorrowRow, tomorrow);
     if (fajrTomorrow) items.push(fajrTomorrow);
 
+    // Optional Ishraq window (we include it as informational;
+    // remove this block if you never want Ishraq in "Next")
     const sunriseRaw = todayRow["Shouruq"];
     if (sunriseRaw) {
-      const sunrise = toMomentToday(sunriseRaw, today);
-      const ishraqStart = sunrise.clone().add(ishraqOffset, "minutes");
-      const ishraqEnd = ishraqStart.clone().add(ishraqDuration, "minutes");
-      items.push({
-        key: "ishraq",
-        label: labels.ishraq || "Ishraq",
-        arabic: arabicLabels.ishraq || "",
-        start: ishraqStart,
-        jamaah: ishraqStart,
-        end: ishraqEnd,
-      });
+      const sunrise = toMomentOn(sunriseRaw, today);
+      if (sunrise?.isValid()) {
+        const ishraqStart = sunrise.clone().add(ishraqOffset, "minutes");
+        const ishraqEnd = ishraqStart.clone().add(ishraqDuration, "minutes");
+        items.push({
+          key: "ishraq",
+          label: labels?.ishraq || "Ishraq",
+          arabic: arabicLabels?.ishraq || "",
+          start: ishraqStart,
+          jamaah: ishraqStart,
+          end: ishraqEnd,
+        });
+      }
     }
 
     return items.filter((p) => p.start && p.start.isValid());
@@ -124,8 +176,9 @@ function NextPrayerCard({
       return;
     }
 
+    // ⚠️ Strictly AFTER now (no isSameOrBefore) so we never duplicate "current"
     const upcoming = [...list]
-      .filter((p) => now.isSameOrBefore(p.start))
+      .filter((p) => now.isBefore(p.start))
       .sort((a, b) => a.start.diff(b.start))[0];
 
     if (!upcoming) {
@@ -144,12 +197,21 @@ function NextPrayerCard({
       ? highlightStart.clone().add(highlightMinutes, "minutes")
       : null;
     const duringJamaah =
-      highlightStart && highlightEnd && now.isSameOrAfter(highlightStart) && now.isBefore(highlightEnd);
+      highlightStart &&
+      highlightEnd &&
+      now.isSameOrAfter(highlightStart) &&
+      now.isBefore(highlightEnd);
 
     setInProgress(Boolean(duringJamaah));
 
-    const target = now.isBefore(upcoming.start) ? upcoming.start : (upcoming.jamaah || upcoming.start);
-    const prefix = now.isBefore(upcoming.start) ? "Begins in" : (upcoming.jamaah ? "Jama‘ah in" : "Begins in");
+    const target = now.isBefore(upcoming.start)
+      ? upcoming.start
+      : upcoming.jamaah || upcoming.start;
+    const prefix = now.isBefore(upcoming.start)
+      ? "Begins in"
+      : upcoming.jamaah
+      ? "Jama‘ah in"
+      : "Begins in";
 
     const diff = moment.duration(target.diff(now));
     const seconds = Math.max(0, Math.floor(diff.asSeconds()));
@@ -173,7 +235,9 @@ function NextPrayerCard({
     setCountdown(display);
   }, [list, now, highlightMinutes]);
 
-  const cardBg = inProgress ? theme?.jamaahColor || "bg-green-700" : theme?.bgColor || "bg-white/5";
+  const cardBg = inProgress
+    ? theme?.jamaahColor || "bg-green-700"
+    : theme?.bgColor || "bg-white/5";
   const nameClass = `${theme?.nameSize || "text-6xl sm:text-7xl md:text-8xl"} ${
     theme?.fontEng || "font-rubik"
   } font-semibold flex-shrink-0`;
