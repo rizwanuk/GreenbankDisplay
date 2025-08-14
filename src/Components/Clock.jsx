@@ -1,7 +1,7 @@
-import React, { memo, useEffect, useState } from "react";
-import moment from "moment";
+import React, { useEffect, useState } from "react";
+import moment from "moment-hijri";
 
-function Clock({ settings = {}, theme = {} }) {
+export default function Clock({ settings = {}, theme = {} }) {
   const [now, setNow] = useState(moment());
 
   useEffect(() => {
@@ -47,10 +47,3 @@ function Clock({ settings = {}, theme = {} }) {
     </div>
   );
 }
-
-const areEqual = (p, n) =>
-  p.theme === n.theme &&
-  p.settings?.clock24Hours === n.settings?.clock24Hours &&
-  p.settings?.ampmLowercase === n.settings?.ampmLowercase;
-
-export default memo(Clock, areEqual);

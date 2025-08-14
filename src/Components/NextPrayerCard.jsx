@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, useState } from "react";
-import moment from "moment";
+import moment from "moment-hijri";
 import useNow from "../hooks/useNow";
 
 function NextPrayerCard({

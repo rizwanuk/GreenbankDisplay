@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import moment from "moment";
+import moment from "moment-hijri";          // ✅ use the same instance everywhere
+moment.locale("en-gb");                     // ✅ set locale once
+
 import Header from "./Components/Header";
 import Clock from "./Components/Clock";
 import DateCard from "./Components/DateCard";

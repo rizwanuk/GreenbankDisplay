@@ -1,4 +1,4 @@
-import moment from 'moment';
+import moment from 'moment-hijri';
 import { getJummahTime } from '../hooks/usePrayerHelpers';
 import { getEnglishLabels, getArabicLabels } from './labels';
 import { getTime as parseTime } from '../helpers/time';

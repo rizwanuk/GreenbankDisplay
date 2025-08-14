@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import moment from "moment";
+import moment from "moment-hijri";
 import { buildPrayerTimeline } from "../helpers/getCurrentPrayer";
 import { getJummahTime, getArabicLabel, getLabel } from "../hooks/usePrayerHelpers";
 import useNow from "../hooks/useNow";

@@ -1,94 +1,71 @@
-import React, { memo, useEffect, useMemo, useState } from "react";
-import moment from "moment";
+import React, { useEffect, useState } from "react";
+import moment from "moment-hijri";
 import useNow from "../hooks/useNow";
 
-function InfoCard({ settings, settingsMap, theme }) {
-  const now = useNow(1000); // 1s tick for timely overrides/rotation
+export default function InfoCard({ settings, settingsMap, theme }) {
+  const now = useNow(1000);
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [visibleMessage, setVisibleMessage] = useState("");
   const [isInOverridePeriod, setIsInOverridePeriod] = useState(false);
 
-  // Theme prefix for this card (backward compatible)
   const themePrefix = theme?.name
     ? `theme.${theme.name}.infoCard.`
     : "theme.default.infoCard.";
 
   const rotateInterval =
     parseInt(settingsMap?.[`${themePrefix}rotateInterval`] || "10", 10) * 1000;
-
   const overrideMessage = settingsMap?.[`${themePrefix}overrideMessage`] || "";
   const overrideDurationMs =
     parseInt(settingsMap?.[`${themePrefix}overrideDuration`] || "300", 10) * 1000;
 
-  // Active messages from settings (respect time windows)
-  const activeMessages = useMemo(() => {
-    return settings
-      .filter((row) => row.Group === "infoCardMessages")
-      .map((row) => {
-        try {
-          const parsed = JSON.parse(row.Value);
-          return {
-            message: parsed.message,
-            start: moment(parsed.start),
-            end: moment(parsed.end),
-          };
-        } catch {
-          return null;
-        }
-      })
-      .filter((msg) => msg && now.isSameOrAfter(msg.start) && now.isBefore(msg.end));
-  }, [settings, now]);
+  const activeMessages = (settings || [])
+    .filter((row) => row.Group === "infoCardMessages")
+    .map((row) => {
+      try {
+        const parsed = JSON.parse(row.Value);
+        return {
+          message: parsed.message,
+          start: moment(parsed.start),
+          end: moment(parsed.end),
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((msg) => msg && now.isSameOrAfter(msg.start) && now.isBefore(msg.end));
 
-  // Helper to read a keyed HH:mm time as today’s moment
-  const toTodayMoment = (raw) =>
-    raw
-      ? moment(raw, "HH:mm").set({
-          year: now.year(),
-          month: now.month(),
-          date: now.date(),
-        })
-      : null;
+  const getTime = (key) => {
+    const raw =
+      settingsMap?.[key] ||
+      settingsMap?.[key?.toLowerCase?.()] ||
+      settingsMap?.[key?.replace?.("Iqamah", "Iqama")] ||
+      null;
 
-  // Detect if we’re inside any Jama‘ah override window
+    if (!raw) return null;
+
+    return moment(raw, "HH:mm").set({
+      year: now.year(),
+      month: now.month(),
+      date: now.date(),
+    });
+  };
+
   useEffect(() => {
-    const fajr = toTodayMoment(
-      settingsMap?.["Fajr Iqamah"] ||
-        settingsMap?.["fajr iqamah"] ||
-        settingsMap?.["Fajr Iqama"]
-    );
-    const dhuhr = toTodayMoment(
-      settingsMap?.["Dhuhr Iqamah"] ||
-        settingsMap?.["dhuhr iqamah"] ||
-        settingsMap?.["Dhuhr Iqama"]
-    );
-    const asr = toTodayMoment(
-      settingsMap?.["Asr Iqamah"] ||
-        settingsMap?.["asr iqamah"] ||
-        settingsMap?.["Asr Iqama"]
-    );
-    const maghrib = toTodayMoment(
-      settingsMap?.["Maghrib Iqamah"] ||
-        settingsMap?.["maghrib iqamah"] ||
-        settingsMap?.["Maghrib Iqama"]
-    );
-    const isha = toTodayMoment(
-      settingsMap?.["Isha Iqamah"] ||
-        settingsMap?.["isha iqamah"] ||
-        settingsMap?.["Isha Iqama"]
-    );
+    const jamaahTimes = [
+      getTime("Fajr Iqamah"),
+      getTime("Dhuhr Iqamah"),
+      getTime("Asr Iqamah"),
+      getTime("Maghrib Iqamah"),
+      getTime("Isha Iqamah"),
+    ].filter(Boolean);
 
-    const windows = [fajr, dhuhr, asr, maghrib, isha]
-      .filter(Boolean)
-      .map((t) => ({ start: t, end: t.clone().add(overrideDurationMs, "ms") }));
-
-    const inOverride = windows.some(
-      ({ start, end }) => now.isSameOrAfter(start) && now.isBefore(end)
+    const inOverride = jamaahTimes.some(
+      (time) => now.isSameOrAfter(time) && now.isBefore(time.clone().add(overrideDurationMs, "ms"))
     );
 
     setIsInOverridePeriod(inOverride);
   }, [now, settingsMap, overrideDurationMs]);
 
-  // Rotate messages or show override
   useEffect(() => {
     if (isInOverridePeriod || activeMessages.length === 0) {
       setVisibleMessage(overrideMessage || "");
@@ -97,12 +74,12 @@ function InfoCard({ settings, settingsMap, theme }) {
 
     setVisibleMessage(activeMessages[currentMessageIndex]?.message || "");
 
-    const interval = setInterval(() => {
+    const id = setInterval(() => {
       setCurrentMessageIndex((prev) => (prev + 1) % activeMessages.length);
     }, rotateInterval);
 
-    return () => clearInterval(interval);
-  }, [currentMessageIndex, rotateInterval, isInOverridePeriod, activeMessages, overrideMessage]);
+    return () => clearInterval(id);
+  }, [currentMessageIndex, rotateInterval, isInOverridePeriod, activeMessages.length, overrideMessage]);
 
   if (!visibleMessage) return null;
 
@@ -128,10 +105,3 @@ function InfoCard({ settings, settingsMap, theme }) {
     </div>
   );
 }
-
-const areEqual = (p, n) =>
-  p.theme === n.theme &&
-  p.settingsMap === n.settingsMap &&
-  p.settings === n.settings;
-
-export default memo(InfoCard, areEqual);

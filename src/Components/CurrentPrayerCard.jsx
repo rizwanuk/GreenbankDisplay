@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, memo } from 'react';
-import moment from 'moment';
+import moment from 'moment-hijri';
 import formatWithSmallAmPm from '../helpers/formatWithSmallAmPm';
 import { getJummahTime } from '../hooks/usePrayerHelpers';
 import { getTime as parseTime } from '../helpers/time';
