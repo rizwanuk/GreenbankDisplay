@@ -1,155 +1,253 @@
 'use client';
 
-import React, { useMemo, memo } from 'react';
-import moment from 'moment-hijri';
+import React, { useEffect, useState } from 'react';
+import moment from 'moment';
 import formatWithSmallAmPm from '../helpers/formatWithSmallAmPm';
 import { getJummahTime } from '../hooks/usePrayerHelpers';
-import { getTime as parseTime } from '../helpers/time';
-import { getEnglishLabels, getArabicLabels } from '../utils/labels';
-import useNow from '../hooks/useNow';
 
-function CurrentPrayerCard({
+// ---------- Small helpers ----------
+const isTime = (m) => !!m && moment.isMoment(m) && m.isValid();
+const safeInt = (v, def = 0) => {
+  const n = parseInt(v ?? '', 10);
+  return Number.isFinite(n) && n >= 0 ? n : def;
+};
+const parseOn = (dateStr, timeStr) => {
+  if (!dateStr || !timeStr) return null;
+  const m = moment(`${dateStr} ${timeStr}`, 'YYYY-MM-DD HH:mm', true);
+  return m.isValid() ? m : null;
+};
+// -----------------------------------
+
+export default function CurrentPrayerCard({
   theme = {},
-  labels,
-  arabicLabels,
+  labels = {},
+  arabicLabels = {},
   is24Hour,
   todayRow,
   yesterdayRow,
   settingsMap,
 }) {
-  const now = useNow(1000); // shared 1s tick
+  const [now, setNow] = useState(moment());
+  const DEBUG = false; // flip to true if you ever need to debug on-screen decisions
 
-  const derivedLabels = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
-  const derivedArabic = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
-  const L = labels ?? derivedLabels;
-  const A = arabicLabels ?? derivedArabic;
+  useEffect(() => {
+    const timer = setInterval(() => setNow(moment()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (!todayRow || !settingsMap) return null;
 
-  const getTime = (row, key) => parseTime(row, key);
+  // ---- Dates to bind times to
+  const todayStr = now.format('YYYY-MM-DD');
+  const yestStr  = now.clone().subtract(1, 'day').format('YYYY-MM-DD');
 
-  const fajrStart = getTime(todayRow, 'Fajr Adhan');
-  const fajrJamaah = getTime(todayRow, 'Fajr Iqamah');
-  const sunrise = getTime(todayRow, 'Shouruq');
-  const dhuhrStart = getTime(todayRow, 'Dhuhr Adhan');
-  const dhuhrJamaah = getTime(todayRow, 'Dhuhr Iqamah');
-  const asrStart = getTime(todayRow, 'Asr Adhan');
-  const asrJamaah = getTime(todayRow, 'Asr Iqamah');
-  const maghribStart = getTime(todayRow, 'Maghrib Adhan');
-  const maghribJamaah = getTime(todayRow, 'Maghrib Iqamah');
-  const ishaStart = getTime(todayRow, 'Isha Adhan');
-  const ishaJamaah = getTime(todayRow, 'Isha Iqamah');
+  // ---- Helpers pinned to date (never parse plain "HH:mm" without a date)
+  const getToday = (key) => parseOn(todayStr, todayRow?.[key]);
+  const getYest  = (key) => parseOn(yestStr,  yesterdayRow?.[key]);
 
-  const ishraqStart = sunrise?.clone().add(parseInt(settingsMap['timings.ishraqAfterSunrise'] || '10', 10), 'minutes');
-  const ishraqEnd = ishraqStart?.clone().add(parseInt(settingsMap['timings.ishraqDuration'] || '30', 10), 'minutes');
+  // ---- Timetable (all dated)
+  const fajrStart      = getToday('Fajr Adhan');
+  const fajrJamaah     = getToday('Fajr Iqamah');
+  const sunrise        = getToday('Shouruq');
+  const dhuhrStart     = getToday('Dhuhr Adhan');
+  const dhuhrJamaah    = getToday('Dhuhr Iqamah');
+  const asrStart       = getToday('Asr Adhan');
+  const asrJamaah      = getToday('Asr Iqamah');
+  const maghribStart   = getToday('Maghrib Adhan');
+  const maghribJamaah  = getToday('Maghrib Iqamah');
+  const ishaStart      = getToday('Isha Adhan');
+  const ishaJamaah     = getToday('Isha Iqamah');
 
-  const makroohBeforeDhuhr = dhuhrStart?.clone().subtract(parseInt(settingsMap['timings.makroohBeforeZuhr'] || '5', 10), 'minutes');
-  const makroohBeforeMaghrib = maghribStart?.clone().subtract(parseInt(settingsMap['timings.makroohBeforeMaghrib'] || '10', 10), 'minutes');
+  const eshaFromYesterday       = getYest('Isha Adhan');
+  const eshaJamaahFromYesterday = getYest('Isha Iqamah');
 
-  const eshaFromYesterday = getTime(yesterdayRow, 'Isha Adhan');
-  const eshaJamaahFromYesterday = getTime(yesterdayRow, 'Isha Iqamah');
+  // ---- Settings (keys per your Google Sheet)
+  const jamaahDurationMin       = safeInt(settingsMap['timings.jamaahHighlightDuration'], 5);
+  const makroohAfterSunriseMin  = safeInt(settingsMap['timings.makroohAfterSunrise'], 10);
+  const showIshraqMin           = safeInt(settingsMap['timings.showIshraq'], 30);
+  const makroohBeforeZuhrMin    = safeInt(settingsMap['timings.makroohBeforeZuhr'], 10);
+  const makroohBeforeMaghribMin = safeInt(settingsMap['timings.makroohBeforeMaghrib'], 10);
 
-  const jamaahDuration = parseInt(settingsMap['timings.jamaahHighlightDuration'] || '5', 10);
+  // Optional feature: cut Isha at midnight (kept OFF by default to avoid surprises)
+  const midnightCutoff = !!settingsMap?.['toggles.midnightCutoff']; // set to true in Sheet to enable
+
+  // ---- Derived windows with ordering guards
+  const ishraqStart = (isTime(sunrise))
+    ? sunrise.clone().add(makroohAfterSunriseMin, 'minutes')
+    : null;
+
+  const ishraqEnd = (isTime(ishraqStart) && showIshraqMin > 0)
+    ? ishraqStart.clone().add(showIshraqMin, 'minutes')
+    : null;
+
+  const makroohBeforeDhuhr = (isTime(dhuhrStart) && makroohBeforeZuhrMin > 0)
+    ? dhuhrStart.clone().subtract(makroohBeforeZuhrMin, 'minutes')
+    : null;
+
+  const makroohBeforeMaghrib = (isTime(maghribStart) && makroohBeforeMaghribMin > 0)
+    ? maghribStart.clone().subtract(makroohBeforeMaghribMin, 'minutes')
+    : null;
+
+  // Midnight cut-off support (optional)
+  const endOfDay = now.clone().endOf('day'); // 23:59:59
   const isFriday = now.format('dddd') === 'Friday';
+  const jummahTime = getJummahTime(settingsMap, now); // should already be dated
 
-  const jummahTime = getJummahTime(settingsMap, now);
-
+  // ---- Selection logic (kept same flow; just added guards)
   let key = null;
   let label = null;
   let arabic = null;
   let start = null;
   let jamaah = null;
 
-  if (now.isBefore(fajrStart)) {
-    key = 'isha';
-    label = L?.[key];
-    arabic = A?.[key];
-    start = eshaFromYesterday;
-    jamaah = eshaJamaahFromYesterday;
-  } else if (now.isBefore(fajrJamaah)) {
+  if (isTime(fajrStart) && now.isBefore(fajrStart)) {
+    // After midnight until Fajr starts → Isha from yesterday
+    // If midnightCutoff is ON, show nothing between 00:00–Fajr (no current prayer)
+    if (midnightCutoff && now.isSameOrAfter(now.clone().startOf('day'))) {
+      key = 'nafl'; // neutral state; no banner/time row
+      label = `Nafl ${arabicLabels?.nafl || 'نافلة'} prayers can be offered`;
+      arabic = null;
+      start = null;
+      jamaah = null;
+    } else {
+      key = 'isha';
+      label = labels?.[key];
+      arabic = arabicLabels?.[key];
+      start = eshaFromYesterday;
+      jamaah = eshaJamaahFromYesterday;
+    }
+
+  } else if (isTime(fajrJamaah) && now.isBefore(fajrJamaah)) {
     key = 'fajr';
-    label = L?.[key];
-    arabic = A?.[key];
+    label = labels?.[key];
+    arabic = arabicLabels?.[key];
     start = fajrStart;
     jamaah = fajrJamaah;
-  } else if (now.isSameOrAfter(fajrJamaah) && now.isBefore(fajrJamaah.clone().add(jamaahDuration, 'minutes'))) {
-    return <JamaahBanner label={L?.fajr} arabic={A?.fajr} theme={theme} />;
-  } else if (now.isBefore(sunrise)) {
+
+  } else if (isTime(fajrJamaah) && now.isSameOrAfter(fajrJamaah) && now.isBefore(fajrJamaah.clone().add(jamaahDurationMin, 'minutes'))) {
+    return <JamaahBanner label={labels?.fajr} arabic={arabicLabels?.fajr} theme={theme} />;
+
+  } else if (isTime(sunrise) && now.isBefore(sunrise)) {
     key = 'fajr';
-    label = L?.[key];
-    arabic = A?.[key];
+    label = labels?.[key];
+    arabic = arabicLabels?.[key];
     start = fajrStart;
     jamaah = fajrJamaah;
-  } else if (now.isSameOrAfter(sunrise) && now.isBefore(ishraqStart)) {
+
+  } else if (isTime(sunrise) && isTime(ishraqStart) && makroohAfterSunriseMin > 0 && ishraqStart.isAfter(sunrise) && now.isSameOrAfter(sunrise) && now.isBefore(ishraqStart)) {
     key = 'makrooh';
-    label = `Makrooh ${A?.makrooh || 'مكروه'} time — please avoid praying`;
+    label = `Makrooh ${arabicLabels?.makrooh || 'مكروه'} time — please avoid praying`;
     arabic = null;
-  } else if (now.isBefore(ishraqEnd)) {
+
+  } else if (isTime(ishraqStart) && isTime(ishraqEnd) && ishraqEnd.isAfter(ishraqStart) && now.isSameOrAfter(ishraqStart) && now.isBefore(ishraqEnd)) {
     key = 'ishraq';
-    label = `Ishraq ${A?.ishraq || 'اشراق'}`;
+    label = `Ishraq ${arabicLabels?.ishraq || 'اشراق'}`;
     arabic = null;
-  } else if (now.isBefore(makroohBeforeDhuhr)) {
+
+  } else if (isTime(makroohBeforeDhuhr) && now.isBefore(makroohBeforeDhuhr)) {
     key = 'nafl';
-    label = `Nafl ${A?.nafl || 'نافلة'} prayers can be offered`;
+    label = `Nafl ${arabicLabels?.nafl || 'نافلة'} prayers can be offered`;
     arabic = null;
-  } else if (now.isSameOrAfter(makroohBeforeDhuhr) && now.isBefore(dhuhrStart)) {
+
+  } else if (isTime(makroohBeforeDhuhr) && isTime(dhuhrStart) && dhuhrStart.isAfter(makroohBeforeDhuhr) && now.isSameOrAfter(makroohBeforeDhuhr) && now.isBefore(dhuhrStart)) {
     key = 'makrooh';
-    label = `Makrooh ${A?.makrooh || 'مكروه'} time — please avoid praying`;
+    label = `Makrooh ${arabicLabels?.makrooh || 'مكروه'} time — please avoid praying`;
     arabic = null;
-  } else if (now.isBefore(dhuhrJamaah)) {
+
+  } else if (isTime(dhuhrJamaah) && now.isBefore(dhuhrJamaah)) {
     key = 'dhuhr';
-    label = isFriday ? L?.jummah || 'Jummah' : L?.[key];
-    arabic = isFriday ? A?.jummah : A?.[key];
+    label = isFriday ? (labels?.jummah || 'Jum‘ah') : labels?.[key];
+    arabic = isFriday ? arabicLabels?.jummah : arabicLabels?.[key];
     start = dhuhrStart;
-    jamaah = isFriday && jummahTime ? jummahTime : dhuhrJamaah;
-  } else if (now.isSameOrAfter(dhuhrJamaah) && now.isBefore(dhuhrJamaah.clone().add(jamaahDuration, 'minutes'))) {
+    jamaah = (isFriday && isTime(jummahTime)) ? jummahTime : dhuhrJamaah;
+
+  } else if (isTime(dhuhrJamaah) && now.isSameOrAfter(dhuhrJamaah) && now.isBefore(dhuhrJamaah.clone().add(jamaahDurationMin, 'minutes'))) {
     return (
       <JamaahBanner
-        label={isFriday ? L?.jummah : L?.dhuhr}
-        arabic={isFriday ? A?.jummah : A?.dhuhr}
+        label={isFriday ? (labels?.jummah || 'Jum‘ah') : labels?.dhuhr}
+        arabic={isFriday ? arabicLabels?.jummah : arabicLabels?.dhuhr}
         theme={theme}
       />
     );
-  } else if (now.isBefore(asrStart)) {
+
+  } else if (isTime(asrStart) && now.isBefore(asrStart)) {
     key = 'dhuhr';
-    label = isFriday ? L?.jummah || 'Jummah' : L?.[key];
-    arabic = isFriday ? A?.jummah : A?.[key];
+    label = isFriday ? (labels?.jummah || 'Jum‘ah') : labels?.[key];
+    arabic = isFriday ? arabicLabels?.jummah : arabicLabels?.[key];
     start = dhuhrStart;
-    jamaah = isFriday && jummahTime ? jummahTime : dhuhrJamaah;
-  } else if (now.isBefore(asrJamaah)) {
+    jamaah = (isFriday && isTime(jummahTime)) ? jummahTime : dhuhrJamaah;
+
+  } else if (isTime(asrJamaah) && now.isBefore(asrJamaah)) {
     key = 'asr';
-    label = L?.[key];
-    arabic = A?.[key];
+    label = labels?.[key];
+    arabic = arabicLabels?.[key];
     start = asrStart;
     jamaah = asrJamaah;
-  } else if (now.isSameOrAfter(asrJamaah) && now.isBefore(asrJamaah.clone().add(jamaahDuration, 'minutes'))) {
-    return <JamaahBanner label={L?.asr} arabic={A?.asr} theme={theme} />;
-  } else if (now.isSameOrAfter(makroohBeforeMaghrib) && now.isBefore(maghribStart)) {
+
+  } else if (isTime(asrJamaah) && now.isSameOrAfter(asrJamaah) && now.isBefore(asrJamaah.clone().add(jamaahDurationMin, 'minutes'))) {
+    return <JamaahBanner label={labels?.asr} arabic={arabicLabels?.asr} theme={theme} />;
+
+  } else if (isTime(makroohBeforeMaghrib) && isTime(maghribStart) && maghribStart.isAfter(makroohBeforeMaghrib) && now.isSameOrAfter(makroohBeforeMaghrib) && now.isBefore(maghribStart)) {
     key = 'makrooh';
-    label = `Makrooh ${A?.makrooh || 'مكروه'} time — please avoid praying`;
+    label = `Makrooh ${arabicLabels?.makrooh || 'مكروه'} time — please avoid praying`;
     arabic = null;
-  } else if (now.isBefore(maghribStart)) {
+
+  } else if (isTime(maghribStart) && now.isBefore(maghribStart)) {
     key = 'asr';
-    label = L?.[key];
-    arabic = A?.[key];
+    label = labels?.[key];
+    arabic = arabicLabels?.[key];
     start = asrStart;
     jamaah = asrJamaah;
-  } else if (now.isSameOrAfter(maghribJamaah) && now.isBefore(maghribJamaah.clone().add(jamaahDuration, 'minutes'))) {
-    return <JamaahBanner label={L?.maghrib} arabic={A?.maghrib} theme={theme} />;
-  } else if (now.isBefore(ishaStart)) {
+
+  } else if (isTime(maghribJamaah) && now.isSameOrAfter(maghribJamaah) && now.isBefore(maghribJamaah.clone().add(jamaahDurationMin, 'minutes'))) {
+    return <JamaahBanner label={labels?.maghrib} arabic={arabicLabels?.maghrib} theme={theme} />;
+
+  } else if (isTime(ishaStart) && now.isBefore(ishaStart)) {
     key = 'maghrib';
-    label = L?.[key];
-    arabic = A?.[key];
+    label = labels?.[key];
+    arabic = arabicLabels?.[key];
     start = maghribStart;
     jamaah = maghribJamaah;
-  } else if (now.isSameOrAfter(ishaJamaah) && now.isBefore(ishaJamaah.clone().add(jamaahDuration, 'minutes'))) {
-    return <JamaahBanner label={L?.isha} arabic={A?.isha} theme={theme} />;
+
+  } else if (isTime(ishaJamaah) && now.isSameOrAfter(ishaJamaah) && now.isBefore(ishaJamaah.clone().add(jamaahDurationMin, 'minutes'))) {
+    return <JamaahBanner label={labels?.isha} arabic={arabicLabels?.isha} theme={theme} />;
+
   } else {
-    key = 'isha';
-    label = L?.[key];
-    arabic = A?.[key];
-    start = ishaStart;
-    jamaah = ishaJamaah;
+    // Isha current (optionally clamp at midnight if enabled)
+    const afterMidnight = now.isSameOrAfter(now.clone().startOf('day'));
+    if (midnightCutoff && afterMidnight && isTime(fajrStart) && now.isBefore(fajrStart)) {
+      key = 'nafl';
+      label = `Nafl ${arabicLabels?.nafl || 'نافلة'} prayers can be offered`;
+      arabic = null;
+      start = null;
+      jamaah = null;
+    } else {
+      key = 'isha';
+      label = labels?.[key];
+      arabic = arabicLabels?.[key];
+      start = ishaStart;
+      jamaah = ishaJamaah;
+    }
+  }
+
+  if (DEBUG) {
+    // Minimal, helpful snapshot
+    // eslint-disable-next-line no-console
+    console.table([
+      {k:'now', v: now.format('YYYY-MM-DD HH:mm')},
+      {k:'sunrise', v: sunrise?.format('YYYY-MM-DD HH:mm')},
+      {k:'ishraqStart', v: ishraqStart?.format('YYYY-MM-DD HH:mm')},
+      {k:'ishraqEnd', v: ishraqEnd?.format('YYYY-MM-DD HH:mm')},
+      {k:'makBeforeZuhr', v: makroohBeforeDhuhr?.format('YYYY-MM-DD HH:mm')},
+      {k:'makBeforeMaghrib', v: makroohBeforeMaghrib?.format('YYYY-MM-DD HH:mm')},
+      {k:'fajrStart', v: fajrStart?.format('YYYY-MM-DD HH:mm')},
+      {k:'dhuhrStart', v: dhuhrStart?.format('YYYY-MM-DD HH:mm')},
+      {k:'asrStart', v: asrStart?.format('YYYY-MM-DD HH:mm')},
+      {k:'maghribStart', v: maghribStart?.format('YYYY-MM-DD HH:mm')},
+      {k:'ishaStart', v: ishaStart?.format('YYYY-MM-DD HH:mm')},
+      {k:'state', v: key},
+      {k:'label', v: label},
+    ]);
   }
 
   const bgClass =
@@ -161,7 +259,6 @@ function CurrentPrayerCard({
     <div className={`rounded-xl px-4 py-4 mb-4 text-center ${bgClass} h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex items-center justify-center`}>
       <div className={`flex flex-col items-center justify-center w-full ${theme?.textColor || 'text-white'} gap-4`}>
         <div className="flex flex-col items-center justify-center w-full gap-2">
-
           {theme?.name === 'slideshow' && key !== 'makrooh' && (
             <span className={`px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 ${theme?.badges?.current || 'bg-white/10 text-white'}`}>
               Current
@@ -187,7 +284,8 @@ function CurrentPrayerCard({
             )}
           </div>
         </div>
-        {start && jamaah && (
+
+        {key !== 'makrooh' && isTime(start) && isTime(jamaah) && (
           <div className={`${theme?.timeRowSize || 'text-4xl md:text-6xl'} text-white/80 ${theme?.fontEng || 'font-rubik'}`}>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
               <div>Begins: {formatWithSmallAmPm(start, is24Hour)}</div>
@@ -219,14 +317,3 @@ function JamaahBanner({ label, arabic, theme = {} }) {
     </div>
   );
 }
-
-const areEqual = (p, n) =>
-  p.theme === n.theme &&
-  p.is24Hour === n.is24Hour &&
-  p.labels === n.labels &&
-  p.arabicLabels === n.arabicLabels &&
-  p.settingsMap === n.settingsMap &&
-  p.todayRow === n.todayRow &&
-  p.yesterdayRow === n.yesterdayRow;
-
-export default memo(CurrentPrayerCard, areEqual);
