@@ -14,6 +14,7 @@ import moment from "moment-hijri";
 import "moment/locale/en-gb";
 import useNow from "./hooks/useNow";
 import { getCurrentPrayerState } from "./utils/getCurrentPrayerState";
+import applyJummahOverride from "./helpers/applyJummahOverride";
 
 moment.locale("en-gb");
 
@@ -33,7 +34,7 @@ export default function EmbedScreen() {
     [rawSettings]
   );
 
-  // 🔓 Robust fake time override (accepts H:mm, HH:mm, H.mm, HH.mm; trims & normalizes Unicode)
+  // 🔓 Robust fake time override
   const now = useMemo(() => {
     const rawEnabled = settings?.["toggles.fakeTimeEnabled"];
     const enabled =
@@ -101,6 +102,25 @@ export default function EmbedScreen() {
     arabicLabels: A,
   });
 
+  // ✅ Apply Jum'ah override for the current prayer (based on its own date)
+  let displayLabel = current?.label || "";
+  let displayArabic = current?.arabic || "";
+  let displayJamaah = current?.jamaah || null;
+
+  if (current && current.key && current.start) {
+    const currentItem = {
+      lookupKey: (current.key || "").toLowerCase(),
+      name: current.key,
+      start: current.start,
+      jamaah: current.jamaah,
+    };
+    const fixed = applyJummahOverride(currentItem, settings);
+    const lk = (fixed.lookupKey || current.key || "").toLowerCase();
+    displayLabel = L?.[lk] ?? displayLabel;
+    displayArabic = A?.[lk] ?? displayArabic;
+    displayJamaah = fixed.jamaah || displayJamaah;
+  }
+
   // Build message + style (Arabic appears directly after English label)
   let messageStyle = "";
   let prayerMessage = ""; // used for Makrooh/Nafl
@@ -111,18 +131,18 @@ export default function EmbedScreen() {
     messageStyle = "bg-red-600 text-white";
   } else if (current.inJamaah) {
     structured = {
-      label: current.label,
-      ar: current.arabic || "",
+      label: displayLabel,
+      ar: displayArabic || "",
       suffix: "— Jama‘ah in progress",
     };
     messageStyle = "bg-green-600 text-white";
   } else if (current.key === "nafl") {
     prayerMessage = "Nafl prayers can be offered";
     messageStyle = "bg-cyan-600 text-white";
-  } else if (current.key !== "none" && current.label) {
+  } else if (current.key !== "none" && displayLabel) {
     structured = {
-      label: current.label,
-      ar: current.arabic || "",
+      label: displayLabel,
+      ar: displayArabic || "",
       suffix: "— Current",
     };
     messageStyle = "bg-cyan-600 text-white";
@@ -137,7 +157,7 @@ export default function EmbedScreen() {
   if (!todayTimetable) return <div className="text-black p-4">Today's prayer times not found.</div>;
 
   const isFriday = today.format("dddd") === "Friday";
-  const jummahMoment = getJummahTime(settings, now);
+  const jummahMoment = getJummahTime(settings, today); // ← use today's date, not 'now'
 
   const formatTime = (timeStr) =>
     timeStr && timeStr.includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import moment from 'moment';
 import formatWithSmallAmPm from '../helpers/formatWithSmallAmPm';
 import { getCurrentPrayerState } from '../utils/getCurrentPrayerState';
+import applyJummahOverride from '../helpers/applyJummahOverride';
 
 function JamaahBanner({ label, arabic, theme = {} }) {
   return (
@@ -80,8 +81,28 @@ export default function CurrentPrayerCard({
     );
   }
 
+  // ✅ Apply Jum'ah override based on the current prayer's *own* date
+  // Build a minimal item that the helper understands.
+  const currentItem = {
+    lookupKey: (current.key || '').toLowerCase(), // e.g. 'dhuhr'
+    name: current.key,                             // not used for display after override
+    start: current.start,                          // moment
+    jamaah: current.jamaah,                        // moment (may be replaced)
+  };
+
+  const fixed = applyJummahOverride(currentItem, settingsMap);
+
+  // Re-resolve labels AFTER override so we pull 'jummah' strings when needed.
+  const displayKey = (fixed.lookupKey || current.key || '').toLowerCase();
+  const displayLabel = labels?.[displayKey] ?? current.label;
+  const displayArabic = arabicLabels?.[displayKey] ?? current.arabic;
+
+  // Use possibly updated jama‘ah time from the override
+  const displayStart = current.start;
+  const displayJamaah = fixed.jamaah || current.jamaah;
+
   if (current.inJamaah) {
-    return <JamaahBanner label={current.label} arabic={current.arabic} theme={theme} />;
+    return <JamaahBanner label={displayLabel} arabic={displayArabic} theme={theme} />;
   }
 
   const bgClass =
@@ -106,11 +127,11 @@ export default function CurrentPrayerCard({
                   : theme?.nameSize || 'text-6xl sm:text-7xl md:text-8xl'
               } ${theme?.fontEng || 'font-rubik'} font-semibold`}
             >
-              {current.label}
+              {displayLabel}
             </span>
-            {current.arabic && (
+            {displayArabic && (
               <span className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${theme?.fontAra || 'font-arabic'}`}>
-                {current.arabic}
+                {displayArabic}
               </span>
             )}
             {theme?.name !== 'slideshow' && !current.isMakrooh && (
@@ -122,11 +143,11 @@ export default function CurrentPrayerCard({
         </div>
 
         {/* Show "Begins" and "Jama'ah" (no 'Until') when not Makrooh */}
-        {!current.isMakrooh && current.start && current.jamaah && (
+        {!current.isMakrooh && displayStart && (displayJamaah || displayStart) && (
           <div className={`${theme?.timeRowSize || 'text-4xl md:text-6xl'} text-white/80 ${theme?.fontEng || 'font-rubik'}`}>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
-              <div>Begins: {formatWithSmallAmPm(current.start, is24Hour)}</div>
-              <div>| Jama’ah: {formatWithSmallAmPm(current.jamaah, is24Hour)}</div>
+              <div>Begins: {formatWithSmallAmPm(displayStart, is24Hour)}</div>
+              {displayJamaah && <div>| Jama’ah: {formatWithSmallAmPm(displayJamaah, is24Hour)}</div>}
             </div>
           </div>
         )}

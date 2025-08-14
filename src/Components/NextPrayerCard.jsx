@@ -1,11 +1,11 @@
 import React, { memo, useEffect, useMemo, useState } from "react";
 import moment from "moment-hijri";
 import useNow from "../hooks/useNow";
+import applyJummahOverride from "../helpers/applyJummahOverride";
 
 function NextPrayerCard({
   todayRow,
   tomorrowRow,
-  isFriday,
   labels,
   arabicLabels,
   settingsMap,
@@ -57,6 +57,7 @@ function NextPrayerCard({
     settingsMap["timings.jamaahHighlightDuration"] || "5",
     10
   );
+
   const ishraqOffset = parseInt(
     settingsMap["timings.ishraqAfterSunrise"] || "10",
     10
@@ -65,8 +66,8 @@ function NextPrayerCard({
     settingsMap["timings.ishraqDuration"] || "30",
     10
   );
-  const jummahTimeStr = settingsMap?.[`timings.jummah.${now.month() + 1}`];
 
+  // Sheet setting; not used in this card’s render but may be useful later
   const is24 = settingsMap["clock24Hours"] === "TRUE";
 
   const toMomentOn = (timeStr, base) =>
@@ -84,9 +85,9 @@ function NextPrayerCard({
     const today = now.clone();
     const tomorrow = now.clone().add(1, "day");
 
-    const build = (label, row, baseDate, override) => {
+    const build = (label, row, baseDate) => {
       const startStr = row[`${label} Adhan`] || row[label];
-      const jamaahStr = override?.jamaah ?? row[`${label} Iqamah`];
+      const jamaahStr = row[`${label} Iqamah`];
       if (!startStr) return null;
 
       const start = toMomentOn(startStr, baseDate);
@@ -94,9 +95,9 @@ function NextPrayerCard({
       const key = label.toLowerCase();
 
       return {
-        key,
-        label: override?.label ?? labels?.[key],
-        arabic: override?.arabic ?? arabicLabels?.[key],
+        key,           // e.g. 'fajr', 'dhuhr', ...
+        name: label,   // keep original for clarity
+        lookupKey: key,
         start,
         jamaah,
       };
@@ -104,39 +105,17 @@ function NextPrayerCard({
 
     const items = [];
 
-    // Fajr (today)
-    const fajrToday = build("Fajr", todayRow, today);
-    if (fajrToday) items.push(fajrToday);
-
-    // Dhuhr / Jummah (today)
-    if (isFriday) {
-      const jummahOverride = {
-        label: labels?.jummah || "Jum‘ah",
-        arabic: arabicLabels?.jummah || "",
-        jamaah: jummahTimeStr || null,
-      };
-      const j = build("Dhuhr", todayRow, today, jummahOverride);
-      if (j && j.jamaah == null && jummahTimeStr) {
-        j.jamaah = toMomentOn(jummahTimeStr, today);
-      }
-      if (j) items.push(j);
-    } else {
-      const dhuhr = build("Dhuhr", todayRow, today);
-      if (dhuhr) items.push(dhuhr);
-    }
-
-    // Asr, Maghrib, Isha (today)
-    ["Asr", "Maghrib", "Isha"].forEach((name) => {
+    // Today: Fajr, Dhuhr, Asr, Maghrib, Isha
+    ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].forEach((name) => {
       const x = build(name, todayRow, today);
       if (x) items.push(x);
     });
 
-    // Fajr (tomorrow)
+    // Tomorrow: Fajr (so Next can roll into tomorrow)
     const fajrTomorrow = build("Fajr", tomorrowRow, tomorrow);
     if (fajrTomorrow) items.push(fajrTomorrow);
 
-    // Optional Ishraq window (we include it as informational;
-    // remove this block if you never want Ishraq in "Next")
+    // Optional Ishraq window (informational)
     const sunriseRaw = todayRow["Shouruq"];
     if (sunriseRaw) {
       const sunrise = toMomentOn(sunriseRaw, today);
@@ -145,8 +124,8 @@ function NextPrayerCard({
         const ishraqEnd = ishraqStart.clone().add(ishraqDuration, "minutes");
         items.push({
           key: "ishraq",
-          label: labels?.ishraq || "Ishraq",
-          arabic: arabicLabels?.ishraq || "",
+          name: "Ishraq",
+          lookupKey: "ishraq",
           start: ishraqStart,
           jamaah: ishraqStart,
           end: ishraqEnd,
@@ -154,17 +133,30 @@ function NextPrayerCard({
       }
     }
 
-    return items.filter((p) => p.start && p.start.isValid());
+    // ✅ Apply Jum'ah override based on each item's own date
+    const withJummah = items
+      .filter((p) => p.start && p.start.isValid())
+      .map((p) => applyJummahOverride(p, settingsMap))
+      // After override, resolve display labels (English + Arabic) from maps
+      .map((p) => {
+        const lk = (p.lookupKey || p.key || "").toLowerCase();
+        return {
+          ...p,
+          label: labels?.[lk] ?? labels?.[p.key] ?? p.name,
+          arabic: arabicLabels?.[lk] ?? arabicLabels?.[p.key] ?? "",
+        };
+      });
+
+    return withJummah;
   }, [
     todayRow,
     tomorrowRow,
     now,
-    isFriday,
     labels,
     arabicLabels,
     ishraqOffset,
     ishraqDuration,
-    jummahTimeStr,
+    settingsMap,
   ]);
 
   useEffect(() => {
@@ -272,7 +264,6 @@ function NextPrayerCard({
 
 const areEqual = (p, n) =>
   p.theme === n.theme &&
-  p.isFriday === n.isFriday &&
   p.labels === n.labels &&
   p.arabicLabels === n.arabicLabels &&
   p.settingsMap === n.settingsMap &&
