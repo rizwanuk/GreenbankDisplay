@@ -82,20 +82,21 @@ export default function CurrentPrayerCard({
   }
 
   // ✅ Apply Jum'ah override based on the current prayer's *own* date
-  // Build a minimal item that the helper understands.
   const currentItem = {
     lookupKey: (current.key || '').toLowerCase(), // e.g. 'dhuhr'
-    name: current.key,                             // not used for display after override
-    start: current.start,                          // moment
-    jamaah: current.jamaah,                        // moment (may be replaced)
+    name: current.key,
+    start: current.start,
+    jamaah: current.jamaah,
   };
 
   const fixed = applyJummahOverride(currentItem, settingsMap);
 
   // Re-resolve labels AFTER override so we pull 'jummah' strings when needed.
   const displayKey = (fixed.lookupKey || current.key || '').toLowerCase();
-  const displayLabel = labels?.[displayKey] ?? current.label;
-  const displayArabic = arabicLabels?.[displayKey] ?? current.arabic;
+
+  // Prefer dynamic state message/arabic; fall back to sheet labels.
+  const displayLabel = current.label || labels?.[displayKey];
+  const displayArabic = current.arabic ?? arabicLabels?.[displayKey];
 
   // Use possibly updated jama‘ah time from the override
   const displayStart = current.start;
@@ -129,11 +130,14 @@ export default function CurrentPrayerCard({
             >
               {displayLabel}
             </span>
-            {displayArabic && (
+
+            {/* Only show separate Arabic if it's not already part of the label */}
+            {displayArabic && !(displayLabel || '').includes(displayArabic) && (
               <span className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${theme?.fontAra || 'font-arabic'}`}>
                 {displayArabic}
               </span>
             )}
+
             {theme?.name !== 'slideshow' && !current.isMakrooh && (
               <span className={`ml-2 px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 ${theme?.badges?.current || 'bg-white/10 text-white'}`}>
                 Current
