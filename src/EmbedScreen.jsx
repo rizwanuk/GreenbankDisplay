@@ -116,6 +116,7 @@ export default function EmbedScreen() {
     };
     const fixed = applyJummahOverride(currentItem, settings);
     const lk = (fixed.lookupKey || current.key || "").toLowerCase();
+    // For normal prayers, prefer sheet labels; for special states current.label/ar may already be a sentence
     displayLabel = L?.[lk] ?? displayLabel;
     displayArabic = A?.[lk] ?? displayArabic;
     displayJamaah = fixed.jamaah || displayJamaah;
@@ -137,7 +138,11 @@ export default function EmbedScreen() {
     };
     messageStyle = "bg-green-600 text-white";
   } else if (current.key === "nafl") {
-    prayerMessage = "Nafl prayers can be offered";
+    // ✅ Prefer dynamic state message (which may already include Arabic)
+    // Fallback to "Nafl {Arabic} prayers can be offered"
+    const naflAr = (current.arabic || displayArabic || A?.nafl || "").trim();
+    const fallback = `${displayLabel || "Nafl"}${naflAr ? ` ${naflAr}` : ""} prayers can be offered`;
+    prayerMessage = current.label || fallback;
     messageStyle = "bg-cyan-600 text-white";
   } else if (current.key !== "none" && displayLabel) {
     structured = {
