@@ -1,58 +1,48 @@
-export const config = { runtime: 'nodejs20' };
+// api/met/[...met].js
+export const config = { runtime: "nodejs" }; // ✅ valid values: "nodejs" or "edge"
 
-// Catch-all proxy: /api/met/<...path>?query -> https://datahub.metoffice.gov.uk/<...path>?query
 export default async function handler(req, res) {
   try {
-    const segs = Array.isArray(req.query.met) ? req.query.met : (req.query.met ? [req.query.met] : []);
-    const restPath = segs.join('/');
+    const segs = Array.isArray(req.query.met) ? req.query.met : [];
+    const search = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
 
-    // Build upstream URL
-    const upstream = new URL(`https://datahub.metoffice.gov.uk/${restPath}`);
-    // Copy all query params except our catch-all param "met"
-    for (const [k, v] of Object.entries(req.query)) {
-      if (k === 'met') continue;
-      if (Array.isArray(v)) v.forEach(val => upstream.searchParams.append(k, val));
-      else upstream.searchParams.set(k, v);
+    // Use the Data Hub host (does not 302 to OAuth when apikey is present)
+    const upstreamUrl = `https://data.hub.api.metoffice.gov.uk/${segs.join("/")}${search}`;
+
+    // Read key: prefer server env, fall back to header or query (for local tests)
+    const apiKey =
+      process.env.METOFFICE_API_KEY ||
+      req.headers["x-metoffice-key"] ||
+      req.query.apikey;
+
+    if (!apiKey) {
+      res.status(400).json({ error: "Missing API key" });
+      return;
     }
 
-    const upstreamRes = await fetch(upstream.toString(), {
-      method: req.method,
+    const upstream = await fetch(upstreamUrl, {
       headers: {
-        accept: 'application/json',
-        // server-side (do NOT prefix with VITE_)
-        apikey: process.env.METOFFICE_API_KEY || '',
+        accept: "application/json",
+        apikey: apiKey,
       },
-      redirect: 'manual', // surface redirects as errors
+      // keepalive not necessary here; node runtime handles it
     });
 
-    // Surface upstream redirects clearly (prevents HTML login pages)
-    if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-      const loc = upstreamRes.headers.get('location') || '';
-      return res.status(502).json({
-        error: { code: 'upstream_redirect', message: 'Upstream sent a redirect', location: loc },
-      });
+    const ctype = upstream.headers.get("content-type") || "";
+    const status = upstream.status;
+
+    // Pass through JSON when possible; otherwise return plain text for easier debugging
+    if (ctype.includes("application/json")) {
+      const data = await upstream.json();
+      res.status(status).setHeader("content-type", "application/json").send(JSON.stringify(data));
+    } else {
+      const text = await upstream.text();
+      res
+        .status(status)
+        .setHeader("content-type", "text/plain; charset=utf-8")
+        .send(text);
     }
-
-    const ctype = upstreamRes.headers.get('content-type') || '';
-    const textBody = await upstreamRes.text();
-
-    if (!ctype.toLowerCase().includes('application/json')) {
-      return res.status(upstreamRes.status || 502).json({
-        error: {
-          code: 'bad_content_type',
-          message: 'Upstream did not return JSON (likely HTML/redirect)',
-          upstreamStatus: upstreamRes.status,
-          bodySnippet: textBody.slice(0, 300),
-        },
-      });
-    }
-
-    // Pass JSON through unchanged
-    res.setHeader('content-type', 'application/json');
-    res.status(upstreamRes.status).send(textBody);
-  } catch (err) {
-    res.status(500).json({
-      error: { code: 'proxy_error', message: err?.message || String(err) },
-    });
+  } catch (e) {
+    res.status(502).json({ error: "Upstream fetch failed", details: String(e?.message || e) });
   }
 }
