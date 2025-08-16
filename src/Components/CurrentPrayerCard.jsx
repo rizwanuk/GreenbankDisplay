@@ -6,7 +6,14 @@ import formatWithSmallAmPm from '../helpers/formatWithSmallAmPm';
 import { getCurrentPrayerState } from '../utils/getCurrentPrayerState';
 import applyJummahOverride from '../helpers/applyJummahOverride';
 
+// ✅ Only accept a valid Tailwind font class from the Sheet; otherwise fall back
+function resolveArabicFont(theme) {
+  const raw = theme?.fontAra;
+  return raw && /^font-/.test(raw) ? raw : 'font-arabic';
+}
+
 function JamaahBanner({ label, arabic, theme = {} }) {
+  const arabicFont = resolveArabicFont(theme);
   return (
     <div className={`rounded-xl px-6 py-6 text-center shadow ${theme?.jamaahColor || 'bg-green-700'} ${theme?.textColor || 'text-white'}`}>
       <div className="flex items-center gap-4 justify-center mb-2">
@@ -14,7 +21,11 @@ function JamaahBanner({ label, arabic, theme = {} }) {
           {label}
         </span>
         {arabic && (
-          <span className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${theme?.fontAra || 'font-arabic'}`}>
+          <span
+            className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${arabicFont}`}
+            lang="ar"
+            dir="rtl"
+          >
             {arabic}
           </span>
         )}
@@ -42,7 +53,6 @@ export default function CurrentPrayerCard({
     return () => clearInterval(t);
   }, []);
 
-  // Friendly loading placeholder instead of returning null
   if (!todayRow || !settingsMap) {
     return (
       <div className={`rounded-xl px-4 py-6 text-center ${theme?.bgColor || 'bg-white/5'} ${theme?.textColor || 'text-white'}`}>
@@ -51,18 +61,16 @@ export default function CurrentPrayerCard({
     );
   }
 
-  // 🔓 Fake time override from settings (no hooks here to avoid order issues)
   const fakeEnabled = String(settingsMap['toggles.fakeTimeEnabled'] ?? 'false').toLowerCase() === 'true';
   const fakeTimeStr = settingsMap['toggles.fakeTime']; // e.g. "01:25"
   let effectiveNow = now;
   if (fakeEnabled && fakeTimeStr) {
     const frozen = moment(`${now.format('YYYY-MM-DD')} ${fakeTimeStr}`, 'YYYY-MM-DD HH:mm', true);
     if (frozen.isValid()) {
-      effectiveNow = frozen; // freeze at fake time (today's date)
+      effectiveNow = frozen;
     }
   }
 
-  // 🔒 Single source of truth (same logic used by Embed)
   const current = getCurrentPrayerState({
     now: effectiveNow,
     todayRow,
@@ -72,7 +80,6 @@ export default function CurrentPrayerCard({
     arabicLabels,
   });
 
-  // If helper can't determine a state, show a neutral message
   if (!current || current.key === 'none') {
     return (
       <div className={`rounded-xl px-4 py-6 text-center ${theme?.bgColor || 'bg-white/5'} ${theme?.textColor || 'text-white'}`}>
@@ -81,24 +88,19 @@ export default function CurrentPrayerCard({
     );
   }
 
-  // ✅ Apply Jum'ah override based on the current prayer's *own* date
   const currentItem = {
-    lookupKey: (current.key || '').toLowerCase(), // e.g. 'dhuhr'
+    lookupKey: (current.key || '').toLowerCase(),
     name: current.key,
     start: current.start,
     jamaah: current.jamaah,
   };
 
   const fixed = applyJummahOverride(currentItem, settingsMap);
-
-  // Re-resolve labels AFTER override so we pull 'jummah' strings when needed.
   const displayKey = (fixed.lookupKey || current.key || '').toLowerCase();
 
-  // Prefer dynamic state message/arabic; fall back to sheet labels.
   const displayLabel = current.label || labels?.[displayKey];
   const displayArabic = current.arabic ?? arabicLabels?.[displayKey];
 
-  // Use possibly updated jama‘ah time from the override
   const displayStart = current.start;
   const displayJamaah = fixed.jamaah || current.jamaah;
 
@@ -110,6 +112,8 @@ export default function CurrentPrayerCard({
     current.isMakrooh
       ? theme?.makroohColor || 'bg-red-700/80'
       : theme?.bgColor || 'bg-white/5';
+
+  const arabicFont = resolveArabicFont(theme);
 
   return (
     <div className={`rounded-xl px-4 py-4 mb-4 text-center ${bgClass} h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex items-center justify-center`}>
@@ -131,9 +135,12 @@ export default function CurrentPrayerCard({
               {displayLabel}
             </span>
 
-            {/* Only show separate Arabic if it's not already part of the label */}
             {displayArabic && !(displayLabel || '').includes(displayArabic) && (
-              <span className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${theme?.fontAra || 'font-arabic'}`}>
+              <span
+                className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} ${arabicFont}`}
+                lang="ar"
+                dir="rtl"
+              >
                 {displayArabic}
               </span>
             )}
@@ -146,7 +153,6 @@ export default function CurrentPrayerCard({
           </div>
         </div>
 
-        {/* Show "Begins" and "Jama'ah" (no 'Until') when not Makrooh */}
         {!current.isMakrooh && displayStart && (displayJamaah || displayStart) && (
           <div className={`${theme?.timeRowSize || 'text-4xl md:text-6xl'} text-white/80 ${theme?.fontEng || 'font-rubik'}`}>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
