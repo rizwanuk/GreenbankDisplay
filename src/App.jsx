@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import moment from "moment-hijri";          // ✅ use the same instance everywhere
-moment.locale("en-gb");                     // ✅ set locale once
+import moment from "moment-hijri";
+moment.locale("en-gb");
 
 import Header from "./Components/Header";
 import Clock from "./Components/Clock";
@@ -13,9 +13,11 @@ import useSettings from "./hooks/useSettings";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 import AppErrorBoundary from "./Components/AppErrorBoundary";
 
-// ✅ new: centralised helpers
 import { buildSettingsMap, getTheme } from "./utils/helpers";
 import { getEnglishLabels, getArabicLabels } from "./utils/labels";
+
+// ✅ Weather
+import WeatherCardUnified from "./Components/WeatherCardUnified";
 
 function App() {
   const settings = useSettings();
@@ -23,7 +25,7 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const prevLastUpdated = useRef(null);
 
-  // --- UI state (unchanged) ---
+  // --- UI state ---
   const [zoom, setZoom] = useState(() => {
     const stored = localStorage.getItem("zoomLevel");
     return stored ? parseFloat(stored) : 1;
@@ -32,19 +34,39 @@ function App() {
   const zoomTimeoutRef = useRef(null);
   const [selectedTheme, setSelectedTheme] = useState(() => localStorage.getItem("selectedTheme"));
 
-  useEffect(() => {
-    localStorage.setItem("zoomLevel", zoom);
-  }, [zoom]);
+  // 🌤️ Weather UI state (new)
+  const [showWeather, setShowWeather] = useState(() => {
+    const v = localStorage.getItem("ui.showWeather");
+    return v === null ? true : v === "true";
+  });
+  const [weatherMode, setWeatherMode] = useState(() => {
+    // 'now' | '3h' | 'today' (fallback to 3h)
+    return localStorage.getItem("ui.weatherMode") || "3h";
+  });
+
+  useEffect(() => localStorage.setItem("zoomLevel", zoom), [zoom]);
+  useEffect(() => localStorage.setItem("ui.showWeather", String(showWeather)), [showWeather]);
+  useEffect(() => localStorage.setItem("ui.weatherMode", weatherMode), [weatherMode]);
 
   const showZoomBox = () => {
     setZoomBoxVisible(true);
     clearTimeout(zoomTimeoutRef.current);
     zoomTimeoutRef.current = setTimeout(() => setZoomBoxVisible(false), 10000);
   };
-
   useEffect(() => () => clearTimeout(zoomTimeoutRef.current), []);
 
-  // --- Static mosque details (unchanged) ---
+  // 🔒 Clear legacy local weather creds/coords (but keep our new UI prefs)
+  useEffect(() => {
+    try {
+      localStorage.removeItem("ui.weatherLat");
+      localStorage.removeItem("ui.weatherLon");
+      localStorage.removeItem("ui.weatherPostcode");
+      localStorage.removeItem("ui.metofficeApiKey");
+      // DO NOT remove ui.weatherMode / ui.showWeather — we use them now
+    } catch {}
+  }, []);
+
+  // --- Static mosque details ---
   const mosque = {
     name: "Greenbank Masjid",
     address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
@@ -52,25 +74,22 @@ function App() {
     logoUrl: "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
   };
 
-  // === NEW: Build settingsMap once, then derive everything from it ===
+  // Build settingsMap once
   const settingsMap = useMemo(
-    () => (settings && settings.length ? buildSettingsMap(settings) : {}),
+    () => (Array.isArray(settings) && settings.length ? buildSettingsMap(settings) : {}),
     [settings]
   );
 
   // Theme selection: sheet default, optionally overridden by local UI selector
   const defaultTheme = settingsMap["toggles.theme"] || "Theme_1";
   const activeTheme = selectedTheme || defaultTheme;
-
-  // Pass the override into theme derivation without mutating the original map
   const mapWithThemeOverride = useMemo(
     () => ({ ...settingsMap, "toggles.theme": activeTheme }),
     [settingsMap, activeTheme]
   );
-
   const themeAll = useMemo(() => getTheme(mapWithThemeOverride), [mapWithThemeOverride]);
 
-  // Shorthand theme groups
+  // Shorthand
   const themeHeader = themeAll.header || {};
   const themeClock = themeAll.clock || {};
   const themeDateCard = themeAll.dateCard || {};
@@ -78,40 +97,45 @@ function App() {
   const themeUpcomingPrayer = themeAll.upcomingPrayer || {};
   const themeNextPrayer = themeAll.nextPrayer || {};
   const themeInfoCard = themeAll.infoCard || {};
+  const themeWeather = themeAll.weatherCard || {};
 
-  // Toggles (from settingsMap)
+  // Toggles
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
   const islamicOffset = parseInt(settingsMap["islamicCalendar.offset"] || 0, 10);
 
-  // Labels (from settingsMap)
+  // Labels
   const L = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const A = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
-  // Hijri months (use label keys so Google Sheet overrides still apply)
+  // Hijri months
   const hijriMonthKeys = [
     "muharram","safar","rabiAwal","rabiThani","jumadaAwal","jumadaThani",
     "rajab","shaban","ramadan","shawwal","dhulQadah","dhulHijjah"
   ];
   const islamicMonths = hijriMonthKeys.map((key) => L[key] || key.charAt(0).toUpperCase() + key.slice(1));
 
-  // Timetable row lookups (unchanged logic)
+  // Timetable accessors
+  const getRow = (m) =>
+    Array.isArray(timetable)
+      ? timetable.find(
+          (r) => parseInt(r?.Day, 10) === m.date() && parseInt(r?.Month, 10) === m.month() + 1
+        )
+      : undefined;
+
   const today = moment();
   const tomorrow = moment().add(1, "day");
   const yesterday = moment().subtract(1, "day");
-
-  const getRow = (m) =>
-    timetable.find(
-      (r) => parseInt(r.Day, 10) === m.date() && parseInt(r.Month, 10) === m.month() + 1
-    );
 
   const todayRow = getRow(today);
   const tomorrowRow = getRow(tomorrow);
   const yesterdayRow = getRow(yesterday);
 
-  // 🔁 Google Sheet auto-refresh (unchanged)
+  // 🔁 Google Sheet auto-refresh
   useEffect(() => {
+    if (!Array.isArray(settings)) return;
+
     const checkLastUpdated = () => {
-      const metaRow = settings.find((row) => row.Group === "meta" && row.Key === "lastUpdated");
+      const metaRow = settings.find((row) => row?.Group === "meta" && row?.Key === "lastUpdated");
       if (!metaRow) return;
       const newTimestamp = metaRow.Value;
       if (prevLastUpdated.current && prevLastUpdated.current !== newTimestamp) {
@@ -127,16 +151,16 @@ function App() {
     return () => clearInterval(interval);
   }, [settings]);
 
-  // 🧠 Theme list for selector (unchanged)
-  const allThemes = Array.from(
-    new Set(
-      settings
-        .filter((row) => row.Group.startsWith("theme."))
-        .map((row) => row.Group.split(".")[1])
-    )
-  );
+  // Theme list for selector
+  const allThemes = useMemo(() => {
+    const rows = Array.isArray(settings) ? settings : [];
+    const names = rows
+      .filter((row) => row && typeof row.Group === "string" && row.Group.startsWith("theme."))
+      .map((row) => row.Group.split(".")[1])
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  }, [settings]);
 
-  // 😎 number of upcoming rows from sheet (fallback to 6)
   const numberUpcoming = parseInt(settingsMap["toggles.numberUpcomingPrayers"] || "6", 10);
 
   return (
@@ -148,7 +172,6 @@ function App() {
 
             <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
               <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
-                {/* pass only the scalars Clock needs (helps comparator) */}
                 <Clock
                   settings={{
                     clock24Hours: settingsMap["toggles.clock24Hours"],
@@ -170,9 +193,19 @@ function App() {
                   settingsMap={settingsMap}
                   theme={themeNextPrayer}
                 />
+
+                {/* 🌤️ Weather card — hide or set mode from local UI */}
+                {showWeather && (
+                  <WeatherCardUnified
+                    settings={settingsMap}
+                    theme={themeWeather}
+                    mode={weatherMode}   // 'now' | '3h' | 'today'
+                  />
+                )}
+
                 <InfoCard
-                  settings={settings}        // still the raw list for messages JSON
-                  settingsMap={settingsMap}  // fast key-value lookups
+                  settings={settings}
+                  settingsMap={settingsMap}
                   theme={themeInfoCard}
                 />
               </div>
@@ -213,7 +246,7 @@ function App() {
           </div>
         </div>
 
-        {/* ⚙️ Floating Controls (zoom + theme) */}
+        {/* ⚙️ Floating Controls (zoom + theme + weather) */}
         <div className="absolute bottom-2 left-2 z-50">
           <button
             onClick={showZoomBox}
@@ -224,39 +257,80 @@ function App() {
           </button>
 
           {zoomBoxVisible && (
-            <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-56 flex flex-col items-center">
-              <div className="text-xs mb-2">Zoom: {Math.round(zoom * 100)}%</div>
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setZoom((z) => Math.min(z + 0.05, 1.5))}
-                  className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
-                >
-                  ▲
-                </button>
-                <button
-                  onClick={() => setZoom((z) => Math.max(z - 0.05, 0.5))}
-                  className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
-                >
-                  ▼
-                </button>
+            <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-64 flex flex-col gap-3">
+              {/* Zoom */}
+              <div className="flex flex-col items-center">
+                <div className="text-xs mb-2">Zoom: {Math.round(zoom * 100)}%</div>
+                <div className="flex gap-2 mb-1">
+                  <button
+                    onClick={() => setZoom((z) => Math.min(z + 0.05, 1.5))}
+                    className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => setZoom((z) => Math.max(z - 0.05, 0.5))}
+                    className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
+                  >
+                    ▼
+                  </button>
+                </div>
               </div>
 
-              <div className="text-xs mb-1">Theme</div>
-              <select
-                value={activeTheme}
-                onChange={(e) => {
-                  const newTheme = e.target.value;
-                  setSelectedTheme(newTheme);
-                  localStorage.setItem("selectedTheme", newTheme);
-                }}
-                className="bg-white text-black px-2 py-1 rounded text-sm w-full"
-              >
-                {allThemes.map((theme) => (
-                  <option key={theme} value={theme}>
-                    {theme}
-                  </option>
-                ))}
-              </select>
+              {/* Theme */}
+              <div>
+                <div className="text-xs mb-1">Theme</div>
+                <select
+                  value={activeTheme}
+                  onChange={(e) => {
+                    const newTheme = e.target.value;
+                    setSelectedTheme(newTheme);
+                    localStorage.setItem("selectedTheme", newTheme);
+                  }}
+                  className="bg-white text-black px-2 py-1 rounded text-sm w-full"
+                >
+                  {Array.isArray(allThemes) &&
+                    allThemes.map((theme) => (
+                      <option key={theme} value={theme}>
+                        {theme}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Weather (new) */}
+              <div className="border-t border-white/10 pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs">Show weather card</label>
+                  <input
+                    type="checkbox"
+                    checked={showWeather}
+                    onChange={(e) => setShowWeather(e.target.checked)}
+                  />
+                </div>
+
+                <div className="mt-2">
+                  <div className="text-xs mb-1">Weather mode</div>
+                  <select
+                    value={showWeather ? weatherMode : "off"}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "off") {
+                        setShowWeather(false);
+                      } else {
+                        setShowWeather(true);
+                        setWeatherMode(v);
+                      }
+                    }}
+                    className="bg-white text-black px-2 py-1 rounded text-sm w-full"
+                  >
+                    <option value="now">Hourly (now)</option>
+                    <option value="3h">Next 3 hours</option>
+                    <option value="today">Today</option>
+                    <option value="off">Hidden</option>
+                  </select>
+                </div>
+              </div>
             </div>
           )}
         </div>

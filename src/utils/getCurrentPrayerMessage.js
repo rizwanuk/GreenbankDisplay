@@ -122,11 +122,15 @@ export function getCurrentPrayerMessage({ now, todayRow, yesterdayRow, settings 
     }
   }
 
+  // --- Nafl fallback (no active prayer) ---
   const naflLabel = labels.nafl || 'Nafl';
-  const naflAr = arabic.nafl || '';
+  // Default Arabic to 'نفل' if not provided in settings, so the message always shows Arabic.
+  const naflAr = arabic.nafl || 'نفل';
+  const naflText = `${naflLabel} ${naflAr}`;
+
   return {
-    message: `No active prayer time — ${naflLabel} can be offered`,
-    ar: naflAr,
+    message: `No active prayer time — ${naflText} can be offered`,
+    ar: naflAr, // kept for callers that render Arabic separately
     style: 'bg-cyan-100 text-black',
   };
 }

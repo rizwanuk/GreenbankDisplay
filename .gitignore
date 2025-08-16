@@ -22,3 +22,12 @@ npm-debug.log*
 
 # Ignore reserved device file on Windows
 NUL
+# Dependencies & builds
+node_modules/
+dist/
+.vite/
+
+# Local env files (keep secrets out of Git)
+.env
+.env.*
+!.env.example
