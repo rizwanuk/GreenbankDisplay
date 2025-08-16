@@ -4,12 +4,7 @@ import { buildPrayerTimeline } from "../helpers/getCurrentPrayer";
 import { getJummahTime, getArabicLabel, getLabel } from "../hooks/usePrayerHelpers";
 import useNow from "../hooks/useNow";
 import formatWithSmallAmPm from "../helpers/formatWithSmallAmPm";
-
-// ✅ Only accept a valid Tailwind font class from the Sheet; otherwise fall back
-function resolveArabicFont(theme) {
-  const raw = theme?.fontAra;
-  return raw && /^font-/.test(raw) ? raw : 'font-arabic';
-}
+import { toFontVars } from "../utils/fontMap";
 
 function UpcomingPrayerRows({
   now: nowProp,
@@ -80,16 +75,14 @@ function UpcomingPrayerRows({
     .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, numberToShow);
 
-  const arabicFont = resolveArabicFont(theme);
-
   return (
     <div
+      style={toFontVars(theme)}
       className={`
         mt-6
         max-h-full overflow-hidden
         ${theme.bgColor || "bg-white/5"}
         ${theme.textColor || "text-white"}
-        ${theme.fontEng || "font-rubik"}
         rounded-2xl
         backdrop-blur-md
         border border-white/10
@@ -100,7 +93,7 @@ function UpcomingPrayerRows({
       `}
     >
       <div
-        className={`grid grid-cols-2 sm:grid-cols-4 font-semibold text-white/80 px-4 pb-2 ${
+        className={`grid grid-cols-2 sm:grid-cols-4 font-eng font-semibold text-white/80 px-4 pb-2 ${
           theme.headerSize || "text-xl sm:text-2xl md:text-3xl"
         }`}
       >
@@ -117,21 +110,20 @@ function UpcomingPrayerRows({
             theme.rowSize || "text-[clamp(1.5rem,2.5vw,3rem)]"
           } leading-tight`}
         >
-          <div className="truncate font-bold whitespace-nowrap overflow-visible text-ellipsis">
+          <div className="truncate font-eng font-bold whitespace-nowrap overflow-visible text-ellipsis">
             {getLabel(p.lookupKey || p.name, labels)}
           </div>
 
-          {/* Arabic column — Sheet-driven font; only valid Tailwind class or fallback */}
           <div
-            className={`${arabicFont} opacity-90 sm:text-center`}
+            className="font-arabic opacity-90 sm:text-center"
             lang="ar"
             dir="rtl"
           >
             {getArabicLabel(p.lookupKey || p.name, arabicLabels)}
           </div>
 
-          <div className="text-center">{formatWithSmallAmPm(p.start, is24)}</div>
-          <div className="text-right">{p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}</div>
+          <div className="text-center font-eng">{formatWithSmallAmPm(p.start, is24)}</div>
+          <div className="text-right font-eng">{p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}</div>
         </div>
       ))}
     </div>

@@ -70,6 +70,54 @@
   font-display: swap;
 }
 
+/* Cairo (prefer variable; fall back to statics) */
+@font-face {
+  font-family: 'Cairo';
+  src: url('/fonts/Cairo-VariableFont_slnt,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@supports not (font-variation-settings: normal) {
+  @font-face { font-family: 'Cairo'; src: url('/fonts/Cairo-Regular.ttf')  format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Cairo'; src: url('/fonts/Cairo-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Cairo'; src: url('/fonts/Cairo-Bold.ttf')     format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+}
+
+/* Tajawal (static weights) */
+@font-face {
+  font-family: 'Tajawal';
+  src: url('/fonts/Tajawal-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Tajawal';
+  src: url('/fonts/Tajawal-Medium.ttf') format('truetype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Tajawal';
+  src: url('/fonts/Tajawal-Bold.ttf') format('truetype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* Readex Pro (prefer variable; fall back to statics) */
+@font-face {
+  font-family: 'Readex Pro';
+  src: url('/fonts/ReadexPro-VariableFont_HEXP,wght.ttf') format('truetype');
+  font-weight: 200 700; /* ExtraLight..Bold */
+  font-style: normal;
+  font-display: swap;
+}
+@supports not (font-variation-settings: normal) {
+  @font-face { font-family: 'Readex Pro'; src: url('/fonts/ReadexPro-ExtraLight.ttf') format('truetype'); font-weight: 200; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Readex Pro'; src: url('/fonts/ReadexPro-Light.ttf')      format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Readex Pro'; src: url('/fonts/ReadexPro-Regular.ttf')    format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Readex Pro'; src: url('/fonts/ReadexPro-Medium.ttf')     format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Readex Pro'; src: url('/fonts/ReadexPro-SemiBold.ttf')   format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Readex Pro'; src: url('/fonts/ReadexPro-Bold.ttf')       format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+}
+
 /* ──────────────────────────────────────────────────────────────
    2) TAILWIND
    ────────────────────────────────────────────────────────────── */
@@ -77,8 +125,25 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Force Amiri whenever className="font-arabic" is present */
-.font-arabic { font-family: 'Amiri', serif !important; }
+/* ──────────────────────────────────────────────────────────────
+   3) FONT VARIABLES + STABLE UTILITIES
+   - Defaults keep current behaviour (Poppins for Latin, Amiri for Arabic)
+   - Components can override per-card via inline CSS variables
+   ────────────────────────────────────────────────────────────── */
 
-/* Optional: default Latin UI font */
-html { font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans'; }
+:root {
+  --font-eng: 'Poppins', sans-serif;
+  --font-ar:  'Amiri', serif;
+}
+
+/* Stable utility class names; Tailwind doesn’t need to see dynamic classes */
+@layer utilities {
+  .font-eng    { font-family: var(--font-eng) !important; }
+  .font-arabic { font-family: var(--font-ar)  !important; }
+}
+
+/* Language hint helps shaping; also respects the variable */
+:where([lang="ar"]) { font-family: var(--font-ar) !important; }
+
+/* Optional: default Latin UI font (kept as-is, but via var for consistency) */
+html { font-family: var(--font-eng), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans'; }

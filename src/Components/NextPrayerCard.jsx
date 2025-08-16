@@ -2,12 +2,7 @@ import React, { memo, useEffect, useMemo, useState } from "react";
 import moment from "moment-hijri";
 import useNow from "../hooks/useNow";
 import applyJummahOverride from "../helpers/applyJummahOverride";
-
-// ✅ Only accept a valid Tailwind font class from the Sheet; otherwise fall back
-function resolveArabicFont(theme) {
-  const raw = theme?.fontAra;
-  return raw && /^font-/.test(raw) ? raw : 'font-arabic';
-}
+import { toFontVars } from "../utils/fontMap";
 
 function NextPrayerCard({
   todayRow,
@@ -47,7 +42,6 @@ function NextPrayerCard({
   const highlightMinutes = parseInt(settingsMap["timings.jamaahHighlightDuration"] || "5", 10);
   const ishraqOffset = parseInt(settingsMap["timings.ishraqAfterSunrise"] || "10", 10);
   const ishraqDuration = parseInt(settingsMap["timings.ishraqDuration"] || "30", 10);
-  const is24 = settingsMap["clock24Hours"] === "TRUE";
 
   const toMomentOn = (timeStr, base) =>
     timeStr
@@ -172,12 +166,11 @@ function NextPrayerCard({
   }, [list, now, highlightMinutes]);
 
   const cardBg = inProgress ? theme?.jamaahColor || "bg-green-700" : theme?.bgColor || "bg-white/5";
-  const nameClass = `${theme?.nameSize || "text-6xl sm:text-7xl md:text-8xl"} ${theme?.fontEng || "font-rubik"} font-semibold flex-shrink-0`;
-  const arabicFont = resolveArabicFont(theme);
-  const nameArClass = `${theme?.nameSizeArabic || "text-5xl sm:text-6xl md:text-7xl"} ${arabicFont} flex-shrink-0`;
+  const nameClass = `${theme?.nameSize || "text-6xl sm:text-7xl md:text-8xl"} font-eng font-semibold flex-shrink-0`;
+  const nameArClass = `${theme?.nameSizeArabic || "text-5xl sm:text-6xl md:text-7xl"} font-arabic flex-shrink-0`;
 
   return (
-    <div className={`w-full px-4 py-6 text-center rounded-xl ${cardBg}`}>
+    <div style={toFontVars(theme)} className={`w-full px-4 py-6 text-center rounded-xl ${cardBg}`}>
       <div className="flex items-center gap-4 flex-wrap justify-center mb-4">
         {nextLabel && <span className={nameClass}>{nextLabel}</span>}
         {nextArabic && (
@@ -194,7 +187,7 @@ function NextPrayerCard({
         </span>
       </div>
 
-      <div className={`${theme?.countdownSize || "text-3xl md:text-5xl"} ${theme?.textColor || "text-white/80"} ${theme?.fontEng || "font-rubik"}`}>
+      <div className={`${theme?.countdownSize || "text-3xl md:text-5xl"} ${theme?.textColor || "text-white/80"} font-eng`}>
         {countdown}
       </div>
     </div>
