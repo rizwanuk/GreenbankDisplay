@@ -8,8 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist",
-    "postinstall": "chmod +x node_modules/.bin/vite"
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "dayjs": "^1.11.9",
@@ -27,5 +26,8 @@
     "postcss": "^8.4.24",
     "tailwindcss": "^3.4.1",
     "vite": "4.3.5"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
