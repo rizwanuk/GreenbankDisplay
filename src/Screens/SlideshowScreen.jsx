@@ -1,146 +1,204 @@
-import React, { useEffect, useRef, useState } from "react";
+// src/Screens/SlideshowScreen.jsx
+
+// Ensure Tailwind CSS is bundled for this route
+import "../index.css";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import moment from "moment";
+
+// ✅ NOTE: all of these come from src/Components/…
 import Header from "../Components/Header";
 import SlideshowClock from "../Components/slideshow/SlideshowClock";
 import SlideshowDateCard from "../Components/slideshow/SlideshowDateCard";
 import SlideshowCurrentPrayerCard from "../Components/slideshow/SlideshowCurrentPrayerCard";
 import SlideshowUpcomingPrayerRows from "../Components/slideshow/SlideshowUpcomingPrayerRows";
 import SlideshowPanel from "../Components/SlideshowPanel";
+
 import useSettings from "../hooks/useSettings";
 import usePrayerTimes from "../hooks/usePrayerTimes";
 
+/* ---------------- helpers ---------------- */
+
+function buildSettingsMap(rows) {
+  const map = {};
+  (rows || []).forEach((row) => {
+    const g = (row?.Group || "").trim();
+    const k = (row?.Key || "").trim();
+    const v = row?.Value != null ? String(row.Value).trim() : "";
+    if (!k || v === "") return;
+    map[k] = v; // plain
+    if (g) map[`${g}.${k}`] = v; // namespaced
+  });
+  return map;
+}
+
+function readGroup(map, prefix) {
+  const out = {};
+  const pfx = prefix.endsWith(".") ? prefix : prefix + ".";
+  for (const [k, v] of Object.entries(map || {})) {
+    if (k.startsWith(pfx)) out[k.slice(pfx.length)] = v;
+  }
+  return out;
+}
+
+// "Poppins" -> "font-poppins", "Amiri" -> "font-arabic"
+function normaliseFontToken(v) {
+  if (!v) return v;
+  const s = String(v).trim().toLowerCase();
+  if (s.startsWith("font-")) return s;
+  const map = {
+    rubik: "font-rubik",
+    inter: "font-inter",
+    cairo: "font-cairo",
+    lalezar: "font-lalezar",
+    poppins: "font-poppins",
+    amiri: "font-arabic",
+    arabic: "font-arabic",
+  };
+  return map[s] || s;
+}
+function withNormalisedFonts(obj) {
+  if (!obj) return obj;
+  const out = { ...obj };
+  if (out.fontEng) out.fontEng = normaliseFontToken(out.fontEng);
+  if (out.fontAra) out.fontAra = normaliseFontToken(out.fontAra);
+  return out;
+}
+
+/* ---------------- component ---------------- */
+
 export default function SlideshowScreen() {
-  const now = moment();
   const settings = useSettings();
   const timetable = usePrayerTimes();
 
+  // Static mosque details
   const mosque = {
     name: "Greenbank Masjid",
     address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
     webpage: "greenbankbristol.org",
-    logoUrl: "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
+    logoUrl:
+      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
   };
 
-  const extractTheme = (group) =>
-    settings
-      .filter((row) => row.Group === group)
-      .reduce((acc, row) => {
-        acc[row.Key] = row.Value;
-        return acc;
-      }, {});
+  const settingsMap = useMemo(() => buildSettingsMap(settings), [settings]);
 
-  const toggles = settings.reduce((acc, row) => {
-    if (row.Group === "toggles") acc[row.Key] = row.Value;
-    return acc;
-  }, {});
+  // Theme selection (shared with main app via localStorage)
+  const defaultTheme = settingsMap["toggles.theme"] || "Theme_1";
+  const [selectedTheme, setSelectedTheme] = useState(
+    () => localStorage.getItem("selectedTheme") || null
+  );
+  const activeTheme = selectedTheme || defaultTheme;
 
-  const [localTheme, setLocalTheme] = useState(() => localStorage.getItem("themeOverride") || null);
-  const defaultTheme = toggles.theme || "Theme_1";
-  const currentTheme = localTheme || defaultTheme;
+  // All theme names for selector
+  const allThemes = useMemo(() => {
+    const rows = Array.isArray(settings) ? settings : [];
+    const names = rows
+      .filter((r) => r?.Group && r.Group.startsWith("theme."))
+      .map((r) => r.Group.split(".")[1])
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  }, [settings]);
 
-  const allThemes = [...new Set(settings.filter(r => r.Group.startsWith("theme.")).map(r => r.Group.split(".")[1]))];
+  const base = `theme.${activeTheme}`;
 
-  const handleThemeChange = (e) => {
-    const selected = e.target.value;
-    setLocalTheme(selected);
-    localStorage.setItem("themeOverride", selected);
-  };
+  // Slideshow theme groups (with font normalisation)
+  const themeHeader = withNormalisedFonts(readGroup(settingsMap, `${base}.header`));
+  const themeClock = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshowClock`)
+  );
+  const themeDateCard = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshowDateCard`)
+  );
+  const themeCurrentPrayer = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshowCurrentPrayer`)
+  );
+  const themeUpcomingPrayer = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshowUpcomingPrayer`)
+  );
+  const themeSlideshow = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshow`)
+  );
 
-  const themeHeader = extractTheme(`theme.${currentTheme}.header`);
-  const themeClock = extractTheme(`theme.${currentTheme}.slideshowClock`);
-  const themeDateCard = extractTheme(`theme.${currentTheme}.slideshowDateCard`);
-  const themeCurrentPrayer = extractTheme(`theme.${currentTheme}.slideshowCurrentPrayer`);
-  const themeUpcomingPrayer = extractTheme(`theme.${currentTheme}.slideshowUpcomingPrayer`);
-  const themeSlideshow = extractTheme(`theme.${currentTheme}.slideshow`);
+  // Labels (EN + AR)
+  const labels = useMemo(() => {
+    const out = {};
+    for (const [k, v] of Object.entries(settingsMap)) {
+      if (k.startsWith("labels.")) out[k.replace("labels.", "")] = v;
+    }
+    return out;
+  }, [settingsMap]);
 
-  const settingsMap = settings.reduce((acc, row) => {
-    acc[`${row.Group}.${row.Key}`] = row.Value;
-    acc[row.Key] = row.Value;
-    return acc;
-  }, {});
+  const arabicLabels = useMemo(() => {
+    const out = {};
+    for (const [k, v] of Object.entries(settingsMap)) {
+      if (k.startsWith("labels.arabic."))
+        out[k.replace("labels.arabic.", "")] = v;
+    }
+    return out;
+  }, [settingsMap]);
 
-  const labelMap = settings
-    .filter((row) => row.Group === "labels")
-    .reduce((acc, row) => {
-      acc[row.Key] = row.Value;
-      return acc;
-    }, {});
-  const arabicLabelMap = settings
-    .filter((row) => row.Group === "labels.arabic")
-    .reduce((acc, row) => {
-      acc[row.Key] = row.Value;
-      return acc;
-    }, {});
+  // Timetable helpers
+  const getRow = (m) =>
+    Array.isArray(timetable)
+      ? timetable.find(
+          (r) =>
+            parseInt(r?.Day, 10) === m.date() &&
+            parseInt(r?.Month, 10) === m.month() + 1
+        )
+      : undefined;
 
+  const now = moment();
   const today = moment();
   const yesterday = moment().subtract(1, "day");
   const tomorrow = moment().add(1, "day");
-
-  const getRow = (m) =>
-    timetable.find(
-      (r) =>
-        parseInt(r.Day, 10) === m.date() &&
-        parseInt(r.Month, 10) === m.month() + 1
-    );
 
   const todayRow = getRow(today);
   const yesterdayRow = getRow(yesterday);
   const tomorrowRow = getRow(tomorrow);
 
-  const is24Hour = toggles.clock24Hours === "TRUE";
+  const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
 
-  const [_, forceUpdate] = useState(0);
+  // Auto-reload when Google Sheet changes
   const lastUpdatedRef = useRef(null);
-
   useEffect(() => {
-    const interval = setInterval(() => {
-      const currentUpdated = settingsMap["meta.lastUpdated"];
-      if (!lastUpdatedRef.current) {
-        lastUpdatedRef.current = currentUpdated;
-      } else if (lastUpdatedRef.current !== currentUpdated) {
-        console.log("🔄 Google Sheet has changed, reloading page.");
+    const id = setInterval(() => {
+      const current = settingsMap["meta.lastUpdated"];
+      if (!lastUpdatedRef.current) lastUpdatedRef.current = current;
+      else if (current && current !== lastUpdatedRef.current) {
         window.location.reload();
-      } else {
-        console.log("✅ No change in Google Sheet data.");
       }
     }, 60000);
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, [settingsMap]);
 
+  // Zoom controls (same behaviour as main app)
   const [zoom, setZoom] = useState(() => {
     const stored = localStorage.getItem("zoomLevel");
     return stored ? parseFloat(stored) : 1;
   });
   const [zoomBoxVisible, setZoomBoxVisible] = useState(false);
   const zoomTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    localStorage.setItem("zoomLevel", zoom);
-  }, [zoom]);
-
+  useEffect(() => localStorage.setItem("zoomLevel", zoom), [zoom]);
   const showZoomBox = () => {
     setZoomBoxVisible(true);
     clearTimeout(zoomTimeoutRef.current);
-    zoomTimeoutRef.current = setTimeout(() => {
-      setZoomBoxVisible(false);
-    }, 10000);
+    zoomTimeoutRef.current = setTimeout(() => setZoomBoxVisible(false), 10000);
   };
-
-  useEffect(() => {
-    return () => clearTimeout(zoomTimeoutRef.current);
-  }, []);
+  useEffect(() => () => clearTimeout(zoomTimeoutRef.current), []);
 
   return (
     <div className="relative w-screen h-screen bg-black text-white overflow-auto">
-      <div
-        style={{ zoom: zoom, width: "100%", height: "100%" }}
-      >
+      <div style={{ zoom, width: "100%", height: "100%" }}>
         <div className="w-screen h-screen flex flex-col">
+          {/* Header */}
           <div className="shrink-0">
             <Header mosque={mosque} theme={themeHeader} />
           </div>
+
+          {/* Main content */}
           <div className="flex flex-grow overflow-hidden p-4 gap-4">
-            <div className="w-[30%] flex flex-col items-stretch gap-4 overflow-hidden min-h-0">
+            {/* Left column */}
+            <div className="w-full lg:w-[30%] flex flex-col items-stretch gap-4 overflow-hidden min-h-0">
               <SlideshowClock now={now} theme={themeClock} settingsMap={settingsMap} />
               <SlideshowDateCard now={now} theme={themeDateCard} settingsMap={settingsMap} />
               <SlideshowCurrentPrayerCard
@@ -149,8 +207,8 @@ export default function SlideshowScreen() {
                 todayRow={todayRow}
                 yesterdayRow={yesterdayRow}
                 settingsMap={settingsMap}
-                labels={labelMap}
-                arabicLabels={arabicLabelMap}
+                labels={labels}
+                arabicLabels={arabicLabels}
                 is24Hour={is24Hour}
               />
               <SlideshowUpcomingPrayerRows
@@ -161,12 +219,14 @@ export default function SlideshowScreen() {
                 tomorrowRow={tomorrowRow}
                 settingsMap={settingsMap}
                 theme={themeUpcomingPrayer}
-                labels={labelMap}
-                arabicLabels={arabicLabelMap}
+                labels={labels}
+                arabicLabels={arabicLabels}
                 is24Hour={is24Hour}
               />
             </div>
-            <div className="w-[70%] overflow-hidden">
+
+            {/* Right column */}
+            <div className="hidden lg:block w-[70%] overflow-hidden">
               <SlideshowPanel
                 settings={settings}
                 now={now}
@@ -175,6 +235,8 @@ export default function SlideshowScreen() {
               />
             </div>
           </div>
+
+          {/* Footer tick */}
           <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-2">
             <span className="text-green-400">●</span>
             <span>Last updated: {now.format("HH:mm:ss")}</span>
@@ -182,7 +244,7 @@ export default function SlideshowScreen() {
         </div>
       </div>
 
-      {/* Combined Zoom and Theme Settings Box */}
+      {/* Floating controls */}
       <div className="absolute bottom-2 left-2 z-50">
         <button
           onClick={showZoomBox}
@@ -213,13 +275,17 @@ export default function SlideshowScreen() {
             <div>
               <label className="block mb-1">Theme:</label>
               <select
-                value={currentTheme}
-                onChange={handleThemeChange}
+                value={activeTheme}
+                onChange={(e) => {
+                  const t = e.target.value;
+                  setSelectedTheme(t);
+                  localStorage.setItem("selectedTheme", t);
+                }}
                 className="bg-black text-white border border-white p-1 w-full"
               >
-                {allThemes.map((theme) => (
-                  <option key={theme} value={theme}>
-                    {theme}
+                {allThemes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
                   </option>
                 ))}
               </select>

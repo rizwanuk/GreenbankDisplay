@@ -34,13 +34,12 @@ function App() {
   const zoomTimeoutRef = useRef(null);
   const [selectedTheme, setSelectedTheme] = useState(() => localStorage.getItem("selectedTheme"));
 
-  // 🌤️ Weather UI state (new)
+  // 🌤️ Weather UI state
   const [showWeather, setShowWeather] = useState(() => {
     const v = localStorage.getItem("ui.showWeather");
     return v === null ? true : v === "true";
   });
   const [weatherMode, setWeatherMode] = useState(() => {
-    // 'now' | '3h' | 'today' (fallback to 3h)
     return localStorage.getItem("ui.weatherMode") || "3h";
   });
 
@@ -55,14 +54,13 @@ function App() {
   };
   useEffect(() => () => clearTimeout(zoomTimeoutRef.current), []);
 
-  // 🔒 Clear legacy local weather creds/coords (but keep our new UI prefs)
+  // 🔒 Clear legacy local weather creds/coords
   useEffect(() => {
     try {
       localStorage.removeItem("ui.weatherLat");
       localStorage.removeItem("ui.weatherLon");
       localStorage.removeItem("ui.weatherPostcode");
       localStorage.removeItem("ui.metofficeApiKey");
-      // DO NOT remove ui.weatherMode / ui.showWeather — we use them now
     } catch {}
   }, []);
 
@@ -80,7 +78,7 @@ function App() {
     [settings]
   );
 
-  // Theme selection: sheet default, optionally overridden by local UI selector
+  // Theme selection
   const defaultTheme = settingsMap["toggles.theme"] || "Theme_1";
   const activeTheme = selectedTheme || defaultTheme;
   const mapWithThemeOverride = useMemo(
@@ -97,7 +95,7 @@ function App() {
   const themeUpcomingPrayer = themeAll.upcomingPrayer || {};
   const themeNextPrayer = themeAll.nextPrayer || {};
   const themeInfoCard = themeAll.infoCard || {};
-  const themeWeather = themeAll.weatherCard || {};
+  const themeWeather = themeAll.weatherCard || {}; // ✅ added
 
   // Toggles
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
@@ -194,12 +192,12 @@ function App() {
                   theme={themeNextPrayer}
                 />
 
-                {/* 🌤️ Weather card — hide or set mode from local UI */}
+                {/* 🌤️ Weather card — now uses themeWeather from Google Sheet */}
                 {showWeather && (
                   <WeatherCardUnified
                     settings={settingsMap}
                     theme={themeWeather}
-                    mode={weatherMode}   // 'now' | '3h' | 'today'
+                    mode={weatherMode}
                   />
                 )}
 
@@ -246,7 +244,7 @@ function App() {
           </div>
         </div>
 
-        {/* ⚙️ Floating Controls (zoom + theme + weather) */}
+        {/* ⚙️ Floating Controls */}
         <div className="absolute bottom-2 left-2 z-50">
           <button
             onClick={showZoomBox}
@@ -298,7 +296,7 @@ function App() {
                 </select>
               </div>
 
-              {/* Weather (new) */}
+              {/* Weather */}
               <div className="border-t border-white/10 pt-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs">Show weather card</label>
@@ -325,8 +323,9 @@ function App() {
                     className="bg-white text-black px-2 py-1 rounded text-sm w-full"
                   >
                     <option value="now">Hourly (now)</option>
-                    <option value="3h">Next 3 hours</option>
+                    <option value="3h">Next 3 periods</option>
                     <option value="today">Today</option>
+                    <option value="24h">Next 24 hours</option>
                     <option value="off">Hidden</option>
                   </select>
                 </div>
