@@ -1,5 +1,16 @@
 {
-  "rewrites": [
-    { "source": "/met/(.*)", "destination": "/api/met/$1" }
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "routes": [
+    { "handle": "filesystem" },
+
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+
+    { "src": "/embed", "dest": "/embed.html" },
+
+    { "src": "/slideshow", "dest": "/index.html" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
