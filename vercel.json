@@ -1,11 +1,13 @@
+cat > vercel.json <<'JSON'
 {
   "framework": "vite",
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "build": {
-    "env": {
-      "NODE_VERSION": "20"
-    }
-  }
+  "build": { "env": { "NODE_VERSION": "20" } },
+  "functions": { "api/**.js": { "runtime": "nodejs20.x" } },
+  "rewrites": [
+    { "source": "/met/(.*)", "destination": "/api/met/$1" }
+  ]
 }
+JSON
