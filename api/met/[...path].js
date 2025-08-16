@@ -1,57 +1,52 @@
-/**
- * Vercel serverless proxy for Met Office.
- * Usage from client: GET /met/sitespecific/v0/point/{hourly|three-hourly}?latitude=..&longitude=..
- * This function injects the server-side API key and returns JSON.
- */
-const ALLOWED_PREFIXES = [
-  'sitespecific/v0/point/hourly',
-  'sitespecific/v0/point/three-hourly',
-  'sitespecific/v0/point/daily'
-];
-
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
-    if (req.method !== 'GET') {
-      res.statusCode = 405;
-      res.setHeader('Allow', 'GET');
-      return res.end('Method Not Allowed');
+    // 1) Work out the upstream URL
+    //    Dynamic route gives us req.query.path (an array)
+    const segs = Array.isArray(req.query.path) ? req.query.path : [req.query.path].filter(Boolean);
+    const restPath = segs.join('/');
+
+    const upstream = new URL(`https://datahub.metoffice.gov.uk/${restPath}`);
+
+    // copy query params except our catch-all param
+    for (const [k, v] of Object.entries(req.query)) {
+      if (k === 'path') continue;
+      if (Array.isArray(v)) v.forEach((val) => upstream.searchParams.append(k, val));
+      else upstream.searchParams.set(k, v);
     }
 
-    const path = (req.query.path || []).join('/');
-    if (!path) {
-      res.statusCode = 400;
-      return res.end('Missing path');
-    }
-    if (!ALLOWED_PREFIXES.some(p => path.startsWith(p))) {
-      res.statusCode = 400;
-      return res.end('Invalid path');
-    }
+    // 2) Choose API key: header wins, else env var
+    const key =
+      req.headers['x-metoffice-key'] ||
+      process.env.METOFFICE_API_KEY ||
+      process.env.VITE_METOFFICE_API_KEY;
 
-    const API_KEY = process.env.METOFFICE_API_KEY;
-    if (!API_KEY) {
-      res.statusCode = 500;
-      return res.end('Server missing METOFFICE_API_KEY');
-    }
+    const headers = { accept: 'application/json' };
+    if (key) headers['apikey'] = key;
 
-    const url = new URL(req.url, 'http://localhost'); // for search params
-    const upstream = `https://datahub.metoffice.gov.uk/${path}${url.search || ''}`;
-
-    const upstreamRes = await fetch(upstream, {
-      headers: {
-        'accept': 'application/json',
-        'apikey': API_KEY
-      }
+    // 3) Forward the request (GET only is fine for this API)
+    const upstreamRes = await fetch(upstream.toString(), {
+      method: 'GET',
+      headers,
+      redirect: 'manual', // prevent HTML login redirects
     });
 
-    const contentType = upstreamRes.headers.get('content-type') || 'application/json';
-    res.statusCode = upstreamRes.status;
-    res.setHeader('content-type', contentType);
-    res.setHeader('cache-control', upstreamRes.headers.get('cache-control') || 'public, max-age=300');
+    // Block auth redirects (they return HTML)
+    if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
+      const loc = upstreamRes.headers.get('location') || '';
+      return res.status(502).json({ error: { code: 'upstream_redirect', location: loc } });
+    }
 
-    const buf = Buffer.from(await upstreamRes.arrayBuffer());
-    return res.end(buf);
+    // 4) Pipe through JSON (or raw) back to the client
+    const contentType = upstreamRes.headers.get('content-type') || 'application/octet-stream';
+    const bodyBuf = Buffer.from(await upstreamRes.arrayBuffer());
+
+    res.status(upstreamRes.status);
+    res.setHeader('content-type', contentType);
+    res.setHeader('content-length', String(bodyBuf.length));
+    // A little cache is fine; tweak if you like
+    res.setHeader('cache-control', 's-maxage=300, stale-while-revalidate=60');
+    res.send(bodyBuf);
   } catch (err) {
-    res.statusCode = 502;
-    return res.end(`Proxy error: ${err.message}`);
+    res.status(500).json({ error: { message: 'proxy_error', detail: String(err?.message || err) } });
   }
-};
+}
