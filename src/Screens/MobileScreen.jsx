@@ -1,11 +1,11 @@
 // src/Screens/MobileScreen.jsx
 import "../index.css";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
 
-// Mobile-only compact cards (no changes to shared desktop cards)
+// Mobile-only compact cards
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 
@@ -40,22 +40,20 @@ const CardHeader = ({ title, meta }) => (
   </div>
 );
 
+// Centered chip with soft gradient rules either side
 const DayDivider = ({ children }) => (
-  <div className="relative px-3 my-1.5">
-    <div className="border-t border-white/10" />
-    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center">
-      <span className="px-2 py-[3px] text-[11px] rounded-full bg-white/10 border border-white/15">
-        {children}
-      </span>
-    </div>
+  <div className="flex items-center gap-3 px-3 my-1.5">
+    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+    <span className="px-2 py-[3px] text-[11px] rounded-full bg-white/10 border border-white/15 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+      {children}
+    </span>
+    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
   </div>
 );
 
 const UpcomingHeaderRow = () => (
   <div className={`${GRID} text-[11px] uppercase px-3 py-1.5`}>
-    {/* Name header stays sans + slight tracking */}
     <div className="font-sans tracking-wide opacity-70">Salah</div>
-    {/* Time headers: keep tracking normal so centering matches numbers */}
     <div className="justify-self-center tabular-nums tracking-normal opacity-70">Start</div>
     <div className="justify-self-end tabular-nums tracking-normal opacity-70">Jam’ah</div>
   </div>
@@ -250,6 +248,13 @@ function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 })
 
 /* ============================= Component ============================= */
 export default function MobileScreen() {
+  // Heartbeat to refresh UI regularly (every 30s)
+  const [hb, setHb] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setHb((h) => h + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const timetable = usePrayerTimes();
   const settingsRows = useSettings();
 
@@ -258,13 +263,22 @@ export default function MobileScreen() {
   const arabic = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
   // reference midnights so we stamp times on the correct day
-  const now = new Date();
-  const refToday = new Date(now);
-  refToday.setHours(0, 0, 0, 0);
-  const refTomorrow = new Date(refToday);
-  refTomorrow.setDate(refToday.getDate() + 1);
-  const refYesterday = new Date(refToday);
-  refYesterday.setDate(refToday.getDate() - 1);
+  const now = useMemo(() => new Date(), [hb]);
+  const refToday = useMemo(() => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [now]);
+  const refTomorrow = useMemo(() => {
+    const d = new Date(refToday);
+    d.setDate(refToday.getDate() + 1);
+    return d;
+  }, [refToday]);
+  const refYesterday = useMemo(() => {
+    const d = new Date(refToday);
+    d.setDate(refToday.getDate() - 1);
+    return d;
+  }, [refToday]);
 
   // timetable rows
   const todayRow = useMemo(() => findRowForDate(timetable, refToday), [timetable, refToday]);
@@ -317,10 +331,11 @@ export default function MobileScreen() {
     // desktop phone-frame; mobile is full width
     <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
-        <header className="sticky top-0 z-10 bg-[#0b0f1a]/90 backdrop-blur px-4 py-3 border-b border-white/10">
+        {/* Non-sticky header */}
+        <div className="px-4 py-3 border-b border-white/10 bg-[#0b0f1a]">
           <div className="text-lg font-semibold truncate">Greenbank Display</div>
           <div className="text-xs opacity-75">Mobile view</div>
-        </header>
+        </div>
 
         <main className="px-4 py-4 space-y-3">
           {/* Date */}
@@ -345,7 +360,7 @@ export default function MobileScreen() {
             settingsMap={settingsMap}
           />
 
-          {/* Upcoming (refined heading and column alignment) */}
+          {/* Upcoming (refined heading, aligned columns, nicer day chips) */}
           <section className="mt-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.05]">
               <CardHeader
@@ -402,7 +417,6 @@ export default function MobileScreen() {
                 )}
               </div>
 
-              {/* subtle bottom padding to match header spacing */}
               <div className="h-2" />
             </div>
           </section>
