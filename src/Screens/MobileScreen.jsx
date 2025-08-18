@@ -26,19 +26,11 @@ const Pill = ({ left, right, className = "" }) => (
 
 /* --- Upcoming UI helpers (refined + aligned) --- */
 /** Shared grid so headers + rows align perfectly:
- *  - Put the grid in monospace so `ch` is stable.
- *  - 1st col: flexible (name) → switch back to sans for readability.
+ *  - 1st col: flexible (name)
  *  - 2nd col: fixed 10ch for time.
  *  - 3rd col: fixed 10ch for time.
  */
 const GRID = "grid font-mono grid-cols-[1fr,10ch,10ch] gap-2";
-
-const CardHeader = ({ title, meta }) => (
-  <div className="flex items-baseline justify-between px-3 pt-3 pb-1">
-    <div className="text-xs uppercase tracking-wide opacity-80">{title}</div>
-    {meta ? <div className="text-[11px] opacity-60">{meta}</div> : null}
-  </div>
-);
 
 // Centered chip with soft gradient rules either side
 const DayDivider = ({ children }) => (
@@ -59,11 +51,16 @@ const UpcomingHeaderRow = () => (
   </div>
 );
 
+// Increased font sizes, keep row height via tight line-height + single line
 const UpcomingRow = ({ name, start, jamaah }) => (
   <div className={`${GRID} items-center px-3 py-2 odd:bg-white/[0.03]`}>
-    <div className="font-sans font-semibold truncate">{name}</div>
-    <div className="justify-self-center tabular-nums text-[15px]">{start}</div>
-    <div className="justify-self-end tabular-nums text-[15px]">{jamaah ?? "—"}</div>
+    <div className="font-sans font-semibold truncate text-[17px] leading-none">{name}</div>
+    <div className="justify-self-center tabular-nums text-[17px] leading-none whitespace-nowrap">
+      {start}
+    </div>
+    <div className="justify-self-end tabular-nums text-[17px] leading-none whitespace-nowrap">
+      {jamaah ?? "—"}
+    </div>
   </div>
 );
 
@@ -333,7 +330,7 @@ export default function MobileScreen() {
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
         {/* Non-sticky header */}
         <div className="px-4 py-3 border-b border-white/10 bg-[#0b0f1a]">
-          <div className="text-lg font-semibold truncate">Greenbank Display</div>
+          <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
           <div className="text-xs opacity-75">Mobile view</div>
         </div>
 
@@ -360,43 +357,26 @@ export default function MobileScreen() {
             settingsMap={settingsMap}
           />
 
-          {/* Upcoming (refined heading, aligned columns, nicer day chips) */}
+          {/* Upcoming (no section title/meta, no Today chip, keep Tomorrow chip) */}
           <section className="mt-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.05]">
-              <CardHeader
-                title="Upcoming"
-                meta={(() => {
-                  const total = (upcomingToday?.length || 0) + (upcomingTomorrow?.length || 0);
-                  if (!total) return null;
-                  const first = upcomingToday[0] || upcomingTomorrow[0];
-                  const last =
-                    (upcomingTomorrow.length
-                      ? upcomingTomorrow[upcomingTomorrow.length - 1]
-                      : upcomingToday[upcomingToday.length - 1]) || first;
-                  return `${total} items • ${fmt(first?.start, !is24Hour)} → ${fmt(last?.start, !is24Hour)}`;
-                })()}
-              />
-
+              {/* Keep column headers */}
               <UpcomingHeaderRow />
 
               {/* Body */}
               <div className="divide-y divide-white/10">
-                {/* Today */}
-                {upcomingToday.length > 0 && (
-                  <>
-                    <DayDivider>Today</DayDivider>
-                    {upcomingToday.map((p, i) => (
-                      <UpcomingRow
-                        key={`t-${p.key}-${i}`}
-                        name={p.name}
-                        start={fmt(p.start, !is24Hour)}
-                        jamaah={p.jamaah ? fmt(p.jamaah, !is24Hour) : null}
-                      />
-                    ))}
-                  </>
-                )}
+                {/* Today → rows only (no chip) */}
+                {upcomingToday.length > 0 &&
+                  upcomingToday.map((p, i) => (
+                    <UpcomingRow
+                      key={`t-${p.key}-${i}`}
+                      name={p.name}
+                      start={fmt(p.start, !is24Hour)}
+                      jamaah={p.jamaah ? fmt(p.jamaah, !is24Hour) : null}
+                    />
+                  ))}
 
-                {/* Tomorrow */}
+                {/* Tomorrow → keep chip */}
                 {upcomingTomorrow.length > 0 && (
                   <>
                     <DayDivider>Tomorrow</DayDivider>
