@@ -70,7 +70,7 @@ export default function MobileCurrentCard({
   const labelKey = (fixed.lookupKey || current.key || "").toLowerCase();
   const label = current.label || labels[labelKey] || current.key || "";
 
-  // Suppress duplicate Arabic
+  // Avoid duplicate Arabic if already in label
   const containsArabic = /[\u0600-\u06FF]/.test(label);
   const arabic = containsArabic ? null : (current.arabic ?? arabicLabels[labelKey] ?? null);
 
@@ -85,52 +85,49 @@ export default function MobileCurrentCard({
 
   const fmt = (m) => (is24Hour ? m.format("HH:mm") : m.format("h:mm a"));
 
-  // Jama‘ah in progress card
-  if (inJamaah) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-green-700 text-white px-3 py-3 text-center">
-        <div className="inline-block text-[10px] px-2 py-[2px] rounded-full bg-white/10 border border-white/20 mb-2">
-          Current
-        </div>
-        <div className="flex items-center justify-center gap-2 mb-1 w-full">
-          <div className="font-semibold whitespace-nowrap w-full text-[clamp(1rem,4vw,1.5rem)]">
-            {label}
-          </div>
-          {arabic ? (
-            <div className="text-xl font-arabic" lang="ar" dir="rtl">
-              {arabic}
-            </div>
-          ) : null}
-        </div>
-        <div className="text-lg font-semibold">Jama‘ah in progress</div>
-      </div>
-    );
-  }
-
-  // Default current card
-  return (
-    <div
-      className={[
-        "rounded-2xl border border-white/10 text-white px-3 py-3 text-center",
-        isMakrooh ? "bg-red-700/80" : "bg-white/10",
-      ].join(" ")}
-    >
+  const CardShell = ({ children, bg }) => (
+    <div className={`rounded-2xl border border-white/10 ${bg} text-white px-3 py-3 text-center`}>
       <div className="inline-block text-[10px] px-2 py-[2px] rounded-full bg-white/10 border border-white/20 mb-2">
         Current
       </div>
+      {children}
+    </div>
+  );
 
-      <div className="flex items-center justify-center gap-2 mb-1 w-full">
-        <div className="font-semibold whitespace-nowrap w-full text-[clamp(1rem,4vw,1.5rem)]">
-          {label}
-        </div>
-        {arabic ? (
-          <div className="text-xl font-arabic" lang="ar" dir="rtl">
-            {arabic}
-          </div>
-        ) : null}
+  const TitleRow = (
+    <div className="flex flex-col items-center justify-center gap-1 mb-1 w-full">
+      {/* English label: wraps if needed */}
+      <div className="font-semibold text-[clamp(1rem,4.5vw,1.5rem)] leading-snug break-words text-center">
+        {label}
       </div>
 
-      {/* Only show times when at least one valid time exists */}
+      {/* Arabic label (optional) */}
+      {arabic ? (
+        <div
+          className="text-[clamp(1rem,4vw,1.25rem)] font-arabic leading-snug"
+          lang="ar"
+          dir="rtl"
+        >
+          {arabic}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (inJamaah) {
+    return (
+      <CardShell bg="bg-green-700">
+        {TitleRow}
+        <div className="text-lg font-semibold">Jama‘ah in progress</div>
+      </CardShell>
+    );
+  }
+
+  return (
+    <CardShell bg={isMakrooh ? "bg-red-700/80" : "bg-white/10"}>
+      {TitleRow}
+
+      {/* Only show times when available */}
       {hasAnyTimes && (
         <div className="text-[13px] sm:text-sm opacity-90">
           {hasStart && (
@@ -146,6 +143,6 @@ export default function MobileCurrentCard({
           )}
         </div>
       )}
-    </div>
+    </CardShell>
   );
 }
