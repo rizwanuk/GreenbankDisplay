@@ -177,24 +177,36 @@ export default function MobileNextCard({
     return `${prefix} ${totalMinutes} minute${totalMinutes !== 1 ? "s" : ""}`;
   }, [target, now, prefix]);
 
-  // UI — match MobileCurrentCard (rounded, border, small badge, compact)
+  // ==== UI with left accent "Next" ====
+  const accentColor = "bg-cyan-600"; // distinct from "Now" (green). Adjust to taste/theme.
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/10 text-white px-3 py-3 text-center">
-      <div className="flex items-center justify-center gap-2 mb-1">
-        <div className="text-2xl font-semibold">
-          {nextItem?.label || "Next"}
-        </div>
-        {nextItem?.arabic ? (
-          <div className="text-xl font-arabic" lang="ar" dir="rtl">
-            {nextItem.arabic}
-          </div>
-        ) : null}
-        <span className="inline-block text-[10px] px-2 py-[2px] rounded-full bg-white/10 border border-white/20">
+    <div className="flex rounded-2xl border border-white/10 bg-white/10 text-white">
+      {/* Left accent with vertical "Next" */}
+      <div className={`w-8 sm:w-10 ${accentColor} rounded-l-2xl flex items-center justify-center`}>
+        <span
+          className="uppercase tracking-wider text-[10px] sm:text-xs text-white/90 -rotate-90 select-none"
+          aria-hidden="true"
+        >
           Next
         </span>
       </div>
 
-      <div className="text-[13px] sm:text-sm opacity-90">{countdown}</div>
+      {/* Card body */}
+      <div className="flex-1 px-3 py-3 text-center">
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <div className="text-2xl font-semibold">
+            {nextItem?.label || "Next"}
+          </div>
+          {nextItem?.arabic ? (
+            <div className="text-xl font-arabic" lang="ar" dir="rtl">
+              {nextItem.arabic}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="text-[13px] sm:text-sm opacity-90">{countdown}</div>
+      </div>
     </div>
   );
 }

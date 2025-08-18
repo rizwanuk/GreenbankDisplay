@@ -58,7 +58,7 @@ export default function MobileCurrentCard({
     );
   }
 
-  // Apply Jummah override
+  // Apply Jummah override for prayer rows
   const normalized = {
     lookupKey: (current.key || "").toLowerCase(),
     name: current.key,
@@ -70,7 +70,7 @@ export default function MobileCurrentCard({
   const labelKey = (fixed.lookupKey || current.key || "").toLowerCase();
   const label = current.label || labels[labelKey] || current.key || "";
 
-  // Avoid duplicate Arabic if already in label
+  // Avoid duplicate Arabic if already in the label
   const containsArabic = /[\u0600-\u06FF]/.test(label);
   const arabic = containsArabic ? null : (current.arabic ?? arabicLabels[labelKey] ?? null);
 
@@ -81,33 +81,54 @@ export default function MobileCurrentCard({
 
   const hasStart = moment.isMoment(start) && start.isValid();
   const hasJamaah = moment.isMoment(jamaah) && jamaah.isValid();
-  const hasAnyTimes = hasStart || hasJamaah;
+  const hasAnyTimes = hasStart || hasJamaah; // “prayer” state if true
 
   const fmt = (m) => (is24Hour ? m.format("HH:mm") : m.format("h:mm a"));
 
+  // Accent bar colour (green default, red when makrooh)
+  const accentColor = isMakrooh ? "bg-red-600" : "bg-green-600";
+
   const CardShell = ({ children, bg }) => (
-    <div className={`rounded-2xl border border-white/10 ${bg} text-white px-3 py-3 text-center`}>
-      <div className="inline-block text-[10px] px-2 py-[2px] rounded-full bg-white/10 border border-white/20 mb-2">
-        Current
+    <div className={`flex rounded-2xl border border-white/10 ${bg} text-white`}>
+      {/* Left accent with vertical "Now" */}
+      <div className={`w-8 sm:w-10 ${accentColor} rounded-l-2xl flex items-center justify-center`}>
+        <span
+          className="uppercase tracking-wider text-[10px] sm:text-xs text-white/90 -rotate-90 select-none"
+          aria-hidden="true"
+        >
+          Now
+        </span>
       </div>
-      {children}
+      <div className="flex-1 px-3 py-3 text-center">{children}</div>
     </div>
   );
 
-  const TitleRow = (
-    <div className="flex flex-col items-center justify-center gap-1 mb-1 w-full">
-      {/* English label: wraps if needed */}
-      <div className="font-semibold text-[clamp(1rem,4.5vw,1.5rem)] leading-snug break-words text-center">
+  // Header for PRAYER states: compact single line (Eng + Arabic)
+  const CompactHeader = (
+    <div className="flex items-center justify-center gap-2 mb-2 w-full">
+      <span className="font-semibold text-[clamp(1.1rem,5vw,1.6rem)] whitespace-nowrap">
         {label}
-      </div>
-
-      {/* Arabic label (optional) */}
+      </span>
       {arabic ? (
-        <div
-          className="text-[clamp(1rem,4vw,1.25rem)] font-arabic leading-snug"
+        <span
+          className="font-arabic text-[clamp(1rem,4.5vw,1.25rem)] whitespace-nowrap"
           lang="ar"
           dir="rtl"
         >
+          {arabic}
+        </span>
+      ) : null}
+    </div>
+  );
+
+  // Header for MESSAGE states (Makrooh/Nafl): may wrap to 2 lines
+  const MessageHeader = (
+    <div className="flex flex-col items-center justify-center gap-1 mb-1 w-full">
+      <div className="font-semibold text-[clamp(1rem,4.5vw,1.5rem)] leading-snug break-words text-center">
+        {label}
+      </div>
+      {arabic ? (
+        <div className="text-[clamp(1rem,4vw,1.25rem)] font-arabic leading-snug" lang="ar" dir="rtl">
           {arabic}
         </div>
       ) : null}
@@ -117,7 +138,7 @@ export default function MobileCurrentCard({
   if (inJamaah) {
     return (
       <CardShell bg="bg-green-700">
-        {TitleRow}
+        {hasAnyTimes ? CompactHeader : MessageHeader}
         <div className="text-lg font-semibold">Jama‘ah in progress</div>
       </CardShell>
     );
@@ -125,9 +146,9 @@ export default function MobileCurrentCard({
 
   return (
     <CardShell bg={isMakrooh ? "bg-red-700/80" : "bg-white/10"}>
-      {TitleRow}
+      {hasAnyTimes ? CompactHeader : MessageHeader}
 
-      {/* Only show times when available */}
+      {/* Only show times when at least one valid time exists */}
       {hasAnyTimes && (
         <div className="text-[13px] sm:text-sm opacity-90">
           {hasStart && (
