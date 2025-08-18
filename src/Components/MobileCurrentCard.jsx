@@ -26,16 +26,21 @@ export default function MobileCurrentCard({
     );
   }
 
-  // Support fake-time (same as your main screen)
-  const fakeEnabled = String(settingsMap["toggles.fakeTimeEnabled"] ?? "false").toLowerCase() === "true";
+  // Fake-time support
+  const fakeEnabled =
+    String(settingsMap["toggles.fakeTimeEnabled"] ?? "false").toLowerCase() === "true";
   const fakeTimeStr = settingsMap["toggles.fakeTime"];
   let effectiveNow = now;
   if (fakeEnabled && fakeTimeStr) {
-    const frozen = moment(`${now.format("YYYY-MM-DD")} ${fakeTimeStr}`, "YYYY-MM-DD HH:mm", true);
+    const frozen = moment(
+      `${now.format("YYYY-MM-DD")} ${fakeTimeStr}`,
+      "YYYY-MM-DD HH:mm",
+      true
+    );
     if (frozen.isValid()) effectiveNow = frozen;
   }
 
-  // Same core logic as your main card
+  // Prayer state
   const current = getCurrentPrayerState({
     now: effectiveNow,
     todayRow,
@@ -45,7 +50,6 @@ export default function MobileCurrentCard({
     arabicLabels,
   });
 
-  // Nothing to show
   if (!current || current.key === "none") {
     return (
       <div className="rounded-2xl bg-white/10 border border-white/10 text-white px-3 py-3 text-center">
@@ -54,7 +58,7 @@ export default function MobileCurrentCard({
     );
   }
 
-  // Apply Jummah override to times (reuse helper, no duplication)
+  // Apply Jummah override
   const normalized = {
     lookupKey: (current.key || "").toLowerCase(),
     name: current.key,
@@ -64,25 +68,34 @@ export default function MobileCurrentCard({
   const fixed = applyJummahOverride(normalized, settingsMap);
 
   const labelKey = (fixed.lookupKey || current.key || "").toLowerCase();
-  const label = current.label || labels[labelKey] || current.key;
-  const arabic = current.arabic ?? arabicLabels[labelKey];
+  const label = current.label || labels[labelKey] || current.key || "";
+
+  // Suppress duplicate Arabic
+  const containsArabic = /[\u0600-\u06FF]/.test(label);
+  const arabic = containsArabic ? null : (current.arabic ?? arabicLabels[labelKey] ?? null);
 
   const isMakrooh = Boolean(current.isMakrooh);
   const inJamaah = Boolean(current.inJamaah);
   const start = current.start;
   const jamaah = fixed.jamaah || current.jamaah;
 
-  const fmt = (m) => (m ? (is24Hour ? m.format("HH:mm") : m.format("h:mm a")) : "—");
+  const hasStart = moment.isMoment(start) && start.isValid();
+  const hasJamaah = moment.isMoment(jamaah) && jamaah.isValid();
+  const hasAnyTimes = hasStart || hasJamaah;
 
-  // Compact visuals for mobile
+  const fmt = (m) => (is24Hour ? m.format("HH:mm") : m.format("h:mm a"));
+
+  // Jama‘ah in progress card
   if (inJamaah) {
     return (
       <div className="rounded-2xl border border-white/10 bg-green-700 text-white px-3 py-3 text-center">
         <div className="inline-block text-[10px] px-2 py-[2px] rounded-full bg-white/10 border border-white/20 mb-2">
           Current
         </div>
-        <div className="flex items-center justify-center gap-2 mb-1">
-          <div className="text-2xl font-semibold">{label}</div>
+        <div className="flex items-center justify-center gap-2 mb-1 w-full">
+          <div className="font-semibold whitespace-nowrap w-full text-[clamp(1rem,4vw,1.5rem)]">
+            {label}
+          </div>
           {arabic ? (
             <div className="text-xl font-arabic" lang="ar" dir="rtl">
               {arabic}
@@ -94,6 +107,7 @@ export default function MobileCurrentCard({
     );
   }
 
+  // Default current card
   return (
     <div
       className={[
@@ -105,8 +119,10 @@ export default function MobileCurrentCard({
         Current
       </div>
 
-      <div className="flex items-center justify-center gap-2 mb-1">
-        <div className="text-2xl font-semibold">{label}</div>
+      <div className="flex items-center justify-center gap-2 mb-1 w-full">
+        <div className="font-semibold whitespace-nowrap w-full text-[clamp(1rem,4vw,1.5rem)]">
+          {label}
+        </div>
         {arabic ? (
           <div className="text-xl font-arabic" lang="ar" dir="rtl">
             {arabic}
@@ -114,16 +130,22 @@ export default function MobileCurrentCard({
         ) : null}
       </div>
 
-      {/* Proportional times (no tiny am/pm) */}
-      <div className="text-[13px] sm:text-sm opacity-90">
-        <span>Begins: <span className="tabular-nums">{fmt(start)}</span></span>
-        {jamaah && <span className="mx-2">|</span>}
-        {jamaah && (
-          <span>
-            Jama‘ah: <span className="tabular-nums">{fmt(jamaah)}</span>
-          </span>
-        )}
-      </div>
+      {/* Only show times when at least one valid time exists */}
+      {hasAnyTimes && (
+        <div className="text-[13px] sm:text-sm opacity-90">
+          {hasStart && (
+            <span>
+              Begins: <span className="tabular-nums">{fmt(start)}</span>
+            </span>
+          )}
+          {hasStart && hasJamaah && <span className="mx-2">|</span>}
+          {hasJamaah && (
+            <span>
+              Jama‘ah: <span className="tabular-nums">{fmt(jamaah)}</span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
