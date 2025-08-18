@@ -169,26 +169,35 @@ function NextPrayerCard({
   const nameClass = `${theme?.nameSize || "text-6xl sm:text-7xl md:text-8xl"} font-eng font-semibold flex-shrink-0`;
   const nameArClass = `${theme?.nameSizeArabic || "text-5xl sm:text-6xl md:text-7xl"} font-arabic flex-shrink-0`;
 
+  // Accent colour: use theme if provided, otherwise a green that matches NOW
+  const accentColor = theme?.accentColor || "bg-green-700";
+
   return (
-    <div style={toFontVars(theme)} className={`w-full px-4 py-6 text-center rounded-xl ${cardBg}`}>
-      <div className="flex items-center gap-4 flex-wrap justify-center mb-4">
-        {nextLabel && <span className={nameClass}>{nextLabel}</span>}
-        {nextArabic && (
-          <span className={nameArClass} lang="ar" dir="rtl">
-            {nextArabic}
-          </span>
-        )}
+    <div style={toFontVars(theme)} className={`rounded-xl overflow-hidden mb-4 ${cardBg} flex items-stretch`}>
+      {/* Left accent with vertical NEXT */}
+      <div className={`w-14 sm:w-16 md:w-20 ${accentColor} flex items-center justify-center`}>
         <span
-          className={`ml-2 px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 ${
-            theme?.badgeColor || "bg-white/10 text-white"
-          } max-w-full sm:max-w-none`}
+          className="uppercase tracking-widest font-extrabold text-xl sm:text-2xl md:text-3xl text-white -rotate-90 select-none"
+          aria-hidden="true"
         >
-          Next
+          NEXT
         </span>
       </div>
 
-      <div className={`${theme?.countdownSize || "text-3xl md:text-5xl"} ${theme?.textColor || "text-white/80"} font-eng`}>
-        {countdown}
+      {/* Main content with comfy padding */}
+      <div className="flex flex-col items-center justify-center flex-1 gap-4 px-6 py-6 text-center">
+        <div className="flex items-center gap-4 flex-wrap justify-center">
+          {nextLabel && <span className={nameClass}>{nextLabel}</span>}
+          {nextArabic && (
+            <span className={nameArClass} lang="ar" dir="rtl">
+              {nextArabic}
+            </span>
+          )}
+        </div>
+
+        <div className={`${theme?.countdownSize || "text-3xl md:text-5xl"} ${theme?.textColor || "text-white/80"} font-eng`}>
+          {countdown}
+        </div>
       </div>
     </div>
   );

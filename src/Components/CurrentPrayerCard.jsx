@@ -116,18 +116,27 @@ export default function CurrentPrayerCard({
       ? theme?.makroohColor || 'bg-red-700/80'
       : theme?.bgColor || 'bg-white/5';
 
+  const accentColor = current.isMakrooh
+    ? theme?.makroohAccent || 'bg-red-900'
+    : theme?.accentColor || 'bg-green-700';
+
   return (
     <div
       style={toFontVars(theme)}
-      className={`rounded-xl px-4 py-4 mb-4 text-center ${bgClass} h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex items-center justify-center`}
+      className={`rounded-xl overflow-hidden mb-4 text-center ${bgClass} h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex`}
     >
-      <div className={`flex flex-col items-center justify-center w-full ${theme?.textColor || 'text-white'} gap-4`}>
+      {/* Left accent with vertical NOW */}
+      <div className={`w-12 sm:w-14 md:w-16 ${accentColor} flex items-center justify-center`}>
+        <span
+          className="uppercase tracking-widest font-extrabold text-lg sm:text-xl md:text-2xl text-white -rotate-90 select-none"
+          aria-hidden="true"
+        >
+          NOW
+        </span>
+      </div>
+
+      <div className={`flex flex-col items-center justify-center flex-1 ${theme?.textColor || 'text-white'} gap-4`}>
         <div className="flex flex-col items-center justify-center w-full gap-2">
-          {theme?.name === 'slideshow' && !current.isMakrooh && (
-            <span className="px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 bg-white/10 text-white">
-              Current
-            </span>
-          )}
           <div className="flex items-center gap-4 flex-wrap justify-center text-center break-words whitespace-normal">
             <span
               className={`${
@@ -146,12 +155,6 @@ export default function CurrentPrayerCard({
                 dir="rtl"
               >
                 {displayArabic}
-              </span>
-            )}
-
-            {theme?.name !== 'slideshow' && !current.isMakrooh && (
-              <span className="ml-2 px-4 py-1 rounded-full text-base sm:text-xl md:text-2xl font-medium tracking-wide backdrop-blur-sm border border-white/20 bg-white/10 text-white">
-                Current
               </span>
             )}
           </div>
