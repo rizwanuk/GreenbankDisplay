@@ -53,7 +53,8 @@ function UpcomingPrayerRows({
       settingsMap,
     }) || [];
 
-  const is24 = typeof is24Hour === "boolean" ? is24Hour : settingsMap["clock24Hours"] === "TRUE";
+  const is24 =
+    typeof is24Hour === "boolean" ? is24Hour : settingsMap["clock24Hours"] === "TRUE";
 
   const upcoming = fullTimeline
     .filter((p) => effectiveNow.isBefore(p.start) && p.name !== "Ishraq")
@@ -92,6 +93,7 @@ function UpcomingPrayerRows({
         space-y-6
       `}
     >
+      {/* Header row */}
       <div
         className={`grid grid-cols-2 sm:grid-cols-4 font-eng font-semibold text-white/80 px-4 pb-2 ${
           theme.headerSize || "text-xl sm:text-2xl md:text-3xl"
@@ -103,29 +105,66 @@ function UpcomingPrayerRows({
         <div className="text-right">Jama'ah</div>
       </div>
 
-      {upcoming.map((p, i) => (
-        <div
-          key={i}
-          className={`grid grid-cols-2 sm:grid-cols-4 items-center gap-4 px-4 py-4 border-t border-white/10 ${
-            theme.rowSize || "text-[clamp(1.5rem,2.5vw,3rem)]"
-          } leading-tight`}
-        >
-          <div className="truncate font-eng font-bold whitespace-nowrap overflow-visible text-ellipsis">
-            {getLabel(p.lookupKey || p.name, labels)}
-          </div>
+      {upcoming.map((p, i) => {
+        const endOfToday = effectiveNow.clone().endOf("day");
+        const isTomorrow = p.start.isAfter(endOfToday);
+        const wasPrevToday = i > 0 ? !upcoming[i - 1].start.isAfter(endOfToday) : false;
+        const isFirstTomorrow = isTomorrow && (i === 0 || wasPrevToday);
 
-          <div
-            className="font-arabic opacity-90 sm:text-center"
-            lang="ar"
-            dir="rtl"
-          >
-            {getArabicLabel(p.lookupKey || p.name, arabicLabels)}
-          </div>
+        return (
+          <div key={i} className="relative">
+            {/* Big Tomorrow tab above the first tomorrow prayer (no layout shift) */}
+            {isFirstTomorrow && (
+              <div className="absolute -top-6 left-4 z-10">
+                <div
+                  className="
+                    px-3 py-1
+                    rounded-lg
+                    bg-sky-600
+                    text-white
+                    text-lg sm:text-xl md:text-2xl
+                    font-bold
+                    tracking-wider
+                    shadow-lg
+                  "
+                >
+                  Tomorrow
+                </div>
+              </div>
+            )}
 
-          <div className="text-center font-eng">{formatWithSmallAmPm(p.start, is24)}</div>
-          <div className="text-right font-eng">{p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}</div>
-        </div>
-      ))}
+            <div
+              className={`grid grid-cols-2 sm:grid-cols-4 items-center gap-2.5 px-4 py-[0.3125rem] border-t border-white/10 ${
+                theme.rowSize || "text-[clamp(1.5rem,2.5vw,3rem)]"
+              } leading-[1.125]`}
+            >
+              {/* English prayer name — +1 relative step */}
+              <div className="truncate font-eng font-bold whitespace-nowrap overflow-visible text-ellipsis text-[1.1em]">
+                {getLabel(p.lookupKey || p.name, labels)}
+              </div>
+
+              {/* Arabic */}
+              <div
+                className="font-arabic opacity-90 sm:text-center whitespace-nowrap"
+                lang="ar"
+                dir="rtl"
+              >
+                {getArabicLabel(p.lookupKey || p.name, arabicLabels)}
+              </div>
+
+              {/* Start time — +2 relative steps (no wrap) */}
+              <div className="text-center font-eng text-[1.2em] whitespace-nowrap">
+                {formatWithSmallAmPm(p.start, is24)}
+              </div>
+
+              {/* Jama'ah time — +2 relative steps + bold (no wrap) */}
+              <div className="text-right font-eng font-extrabold text-[1.3em] whitespace-nowrap">
+                {p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
