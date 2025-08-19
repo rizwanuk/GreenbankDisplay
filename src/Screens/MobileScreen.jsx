@@ -231,11 +231,24 @@ function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 })
   const hasFajrT = limited.some((p) => p.key === "fajr" && isTomorrow(p.start));
   const hasSunT = limited.some((p) => p.key === "sunrise" && isTomorrow(p.start));
 
+  // Case A: We have Fajr (tomorrow) but not Sunrise (tomorrow) → try to include Sunrise
   if (idxFajrT !== -1 && idxSunT !== -1 && hasFajrT && !hasSunT) {
     if (limited.length < max) {
       limited = combined.slice(0, Math.min(max, idxSunT + 1));
     } else {
       limited[limited.length - 1] = combined[idxSunT];
+      limited.sort((a, b) => a.start - b.start);
+    }
+  }
+
+  // Case B: We have Sunrise (tomorrow) but not Fajr (tomorrow) → prefer Fajr
+  if (idxFajrT !== -1 && idxSunT !== -1 && hasSunT && !hasFajrT) {
+    if (limited.length < max) {
+      // Expand up to include Fajr (earlier than Sunrise)
+      limited = combined.slice(0, Math.min(max, idxFajrT + 1));
+    } else {
+      // Replace the last entry with Fajr, then re-sort
+      limited[limited.length - 1] = combined[idxFajrT];
       limited.sort((a, b) => a.start - b.start);
     }
   }
