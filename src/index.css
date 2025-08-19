@@ -136,7 +136,6 @@
   --font-ar:  'Amiri', serif;
 }
 
-/* Stable utility class names; Tailwind doesn’t need to see dynamic classes */
 @layer utilities {
   .font-eng    { font-family: var(--font-eng) !important; }
   .font-arabic { font-family: var(--font-ar)  !important; }
@@ -145,5 +144,38 @@
 /* Language hint helps shaping; also respects the variable */
 :where([lang="ar"]) { font-family: var(--font-ar) !important; }
 
-/* Optional: default Latin UI font (kept as-is, but via var for consistency) */
-html { font-family: var(--font-eng), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans'; }
+/* Default Latin UI font (kept as-is, but via var for consistency) */
+html {
+  font-family: var(--font-eng), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans';
+}
+
+/* ──────────────────────────────────────────────────────────────
+   4) DISPLAY MODES (LOCAL, PER-DEVICE)
+   - Safe scaling via CSS variables (no browser zoom, no transform)
+   - Apply one of the .mode-* classes on your top-level wrapper
+     e.g. <div class="min-h-screen mode-1080p">...</div>
+   ────────────────────────────────────────────────────────────── */
+
+/* Base scales used by the mode classes */
+:root {
+  --font-scale: 1;   /* global font scale multiplier */
+  --density: 1;      /* optional spacing multiplier */
+  --card-pad: 1;     /* optional card padding multiplier */
+}
+
+/* Make Tailwind rem text scale by font-scale */
+html {
+  font-size: calc(16px * var(--font-scale));
+}
+
+/* Mode classes — attach to App/Slideshow root wrapper */
+.mode-1080p   { --font-scale: 1.00; --density: 1.00; --card-pad: 1.00; }
+.mode-1440p   { --font-scale: 1.10; --density: 1.05; --card-pad: 1.05; }
+.mode-4k      { --font-scale: 1.30; --density: 1.10; --card-pad: 1.10; }
+.mode-720p    { --font-scale: 0.90; --density: 0.95; --card-pad: 0.95; }
+.mode-uw-2560 { --font-scale: 1.05; --density: 1.00; --card-pad: 1.00; }
+.mode-compact { --font-scale: 0.92; --density: 0.92; --card-pad: 0.90; }
+.mode-large   { --font-scale: 1.18; --density: 1.10; --card-pad: 1.08; }
+
+/* (Optional) If you want utilities that use density/padding,
+   you can create custom classes and multiply Tailwind spacing. */

@@ -1,19 +1,32 @@
 // src/Components/FloatingMenu.jsx
-import React, { useEffect, useState } from 'react';
-import { Settings2 } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { Settings2 } from "lucide-react";
+import { DISPLAY_MODE_PRESETS } from "../hooks/useLocalDisplayMode";
 
-export default function FloatingMenu({ themeName, setThemeName, zoom, setZoom, themeOptions = [] }) {
+export default function FloatingMenu({
+  // theme
+  themeName,
+  setThemeName,
+  themeOptions = [],
+  // display mode
+  displayMode,
+  setDisplayMode,
+  // weather controls (optional)
+  showWeatherControls = true,
+  showWeather,
+  setShowWeather,
+  weatherMode,
+  setWeatherMode,
+}) {
   const [visible, setVisible] = useState(true);
   const [hovering, setHovering] = useState(false);
 
+  // Auto-hide after 10s whenever panel is open and not hovered
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!hovering) setVisible(false);
-    }, 10000); // hide after 10s
-    return () => clearTimeout(timer);
-  }, [hovering]);
-
-  const toggleVisibility = () => setVisible((v) => !v);
+    if (!visible || hovering) return;
+    const t = setTimeout(() => setVisible(false), 10000);
+    return () => clearTimeout(t);
+  }, [visible, hovering]);
 
   return (
     <div
@@ -21,67 +34,85 @@ export default function FloatingMenu({ themeName, setThemeName, zoom, setZoom, t
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      {!visible && (
-        <button
-          className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition"
-          onClick={toggleVisibility}
-          title="Settings"
-        >
-          <Settings2 className="w-5 h-5 text-white" />
-        </button>
-      )}
+      <button
+        onClick={() => setVisible((v) => !v)}
+        className="rounded-full p-2 bg-black/60 hover:bg-black/70 backdrop-blur shadow text-white"
+        aria-label="Display settings"
+        title="Display settings"
+      >
+        <Settings2 className="w-5 h-5" />
+      </button>
 
       {visible && (
-        <div className="bg-black/80 text-white p-4 rounded-xl shadow-xl space-y-3 w-64">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-sm">Display Settings</span>
-            <button
-              className="text-sm bg-white/10 px-2 py-1 rounded hover:bg-white/20"
-              onClick={toggleVisibility}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Theme</label>
+        <div
+          className="mt-2 w-72 rounded-xl bg-black/80 backdrop-blur p-3 shadow-xl border border-white/10 text-white"
+          role="dialog"
+          aria-label="Display settings menu"
+        >
+          {/* Theme */}
+          <div className="mb-3">
+            <label className="block text-sm mb-1 text-white/80">Theme</label>
             <select
-              className="w-full p-1 rounded bg-white/10"
+              className="w-full p-1 rounded bg-white text-black"
               value={themeName}
               onChange={(e) => setThemeName(e.target.value)}
             >
               {themeOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm mb-1">Zoom</label>
-            <div className="flex items-center space-x-2">
-              <button
-                className="bg-white/10 px-2 py-1 rounded hover:bg-white/20"
-                onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}
-              >
-                ＋
-              </button>
-              <span className="text-sm">{Math.round(zoom * 100)}%</span>
-              <button
-                className="bg-white/10 px-2 py-1 rounded hover:bg-white/20"
-                onClick={() => setZoom((z) => Math.max(z - 0.1, 0.5))}
-              >
-                －
-              </button>
-              <button
-                className="bg-white/10 px-2 py-1 rounded hover:bg-white/20"
-                onClick={() => setZoom(1)}
-              >
-                Reset
-              </button>
-            </div>
+          {/* Display Mode (local only) */}
+          <div className="mb-4">
+            <label className="block text-sm mb-1 text-white/80">Display mode (local)</label>
+            <select
+              className="w-full p-1 rounded bg-white text-black"
+              value={displayMode}
+              onChange={(e) => setDisplayMode(e.target.value)}
+            >
+              {DISPLAY_MODE_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-white/60">
+              Saved on this device only. Auto-hides in 10s.
+            </p>
           </div>
+
+          {/* Weather controls (optional) */}
+          {showWeatherControls && (
+            <>
+              <div className="mb-2">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-white"
+                    checked={!!showWeather}
+                    onChange={
+                      setShowWeather ? (e) => setShowWeather(e.target.checked) : undefined
+                    }
+                  />
+                  <span className="text-sm text-white/90">Show weather</span>
+                </label>
+              </div>
+
+              <div className="mb-1">
+                <label className="block text-sm mb-1 text-white/80">Weather view</label>
+                <select
+                  className="w-full p-1 rounded bg-white text-black"
+                  value={weatherMode}
+                  onChange={setWeatherMode ? (e) => setWeatherMode(e.target.value) : undefined}
+                  disabled={!showWeather}
+                >
+                  <option value="now">Now (hourly)</option>
+                  <option value="3h">3-hourly</option>
+                  <option value="today">Today</option>
+                  <option value="24h">Next 24 hours</option>
+                </select>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

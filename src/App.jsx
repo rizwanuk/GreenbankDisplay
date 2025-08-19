@@ -16,8 +16,12 @@ import AppErrorBoundary from "./Components/AppErrorBoundary";
 import { buildSettingsMap, getTheme } from "./utils/helpers";
 import { getEnglishLabels, getArabicLabels } from "./utils/labels";
 
-// ✅ Weather
+// Weather
 import WeatherCardUnified from "./Components/WeatherCardUnified";
+
+// NEW: display mode + floating menu
+import useLocalDisplayMode from "./hooks/useLocalDisplayMode";
+import FloatingMenu from "./Components/FloatingMenu";
 
 function App() {
   const settings = useSettings();
@@ -25,16 +29,12 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const prevLastUpdated = useRef(null);
 
-  // --- UI state ---
-  const [zoom, setZoom] = useState(() => {
-    const stored = localStorage.getItem("zoomLevel");
-    return stored ? parseFloat(stored) : 1;
-  });
-  const [zoomBoxVisible, setZoomBoxVisible] = useState(false);
-  const zoomTimeoutRef = useRef(null);
-  const [selectedTheme, setSelectedTheme] = useState(() => localStorage.getItem("selectedTheme"));
+  // Local theme override (kept)
+  const [selectedTheme, setSelectedTheme] = useState(() =>
+    localStorage.getItem("selectedTheme")
+  );
 
-  // 🌤️ Weather UI state
+  // Weather UI state (restored)
   const [showWeather, setShowWeather] = useState(() => {
     const v = localStorage.getItem("ui.showWeather");
     return v === null ? true : v === "true";
@@ -42,19 +42,24 @@ function App() {
   const [weatherMode, setWeatherMode] = useState(() => {
     return localStorage.getItem("ui.weatherMode") || "3h";
   });
-
-  useEffect(() => localStorage.setItem("zoomLevel", zoom), [zoom]);
   useEffect(() => localStorage.setItem("ui.showWeather", String(showWeather)), [showWeather]);
   useEffect(() => localStorage.setItem("ui.weatherMode", weatherMode), [weatherMode]);
 
-  const showZoomBox = () => {
-    setZoomBoxVisible(true);
-    clearTimeout(zoomTimeoutRef.current);
-    zoomTimeoutRef.current = setTimeout(() => setZoomBoxVisible(false), 10000);
-  };
-  useEffect(() => () => clearTimeout(zoomTimeoutRef.current), []);
+  // NEW: per-device display mode
+  const [displayMode, setDisplayMode] = useLocalDisplayMode("1080p");
 
-  // 🔒 Clear legacy local weather creds/coords
+  // Apply display mode class to <html> so font-size scaling works
+  useEffect(() => {
+    const root = document.documentElement;
+    const prior = Array.from(root.classList).filter((c) => c.startsWith("mode-"));
+    prior.forEach((c) => root.classList.remove(c));
+    root.classList.add(`mode-${displayMode}`);
+    return () => {
+      root.classList.remove(`mode-${displayMode}`);
+    };
+  }, [displayMode]);
+
+  // 🔒 Clear legacy local weather creds/coords (unchanged)
   useEffect(() => {
     try {
       localStorage.removeItem("ui.weatherLat");
@@ -64,12 +69,13 @@ function App() {
     } catch {}
   }, []);
 
-  // --- Static mosque details ---
+  // --- Static mosque details (unchanged) ---
   const mosque = {
     name: "Greenbank Masjid",
     address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
     webpage: "greenbankbristol.org",
-    logoUrl: "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
+    logoUrl:
+      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
   };
 
   // Build settingsMap once
@@ -87,7 +93,7 @@ function App() {
   );
   const themeAll = useMemo(() => getTheme(mapWithThemeOverride), [mapWithThemeOverride]);
 
-  // Shorthand
+  // Shorthand themes
   const themeHeader = themeAll.header || {};
   const themeClock = themeAll.clock || {};
   const themeDateCard = themeAll.dateCard || {};
@@ -95,7 +101,7 @@ function App() {
   const themeUpcomingPrayer = themeAll.upcomingPrayer || {};
   const themeNextPrayer = themeAll.nextPrayer || {};
   const themeInfoCard = themeAll.infoCard || {};
-  const themeWeather = themeAll.weatherCard || {}; // ✅ added
+  const themeWeather = themeAll.weatherCard || {};
 
   // Toggles
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
@@ -110,7 +116,9 @@ function App() {
     "muharram","safar","rabiAwal","rabiThani","jumadaAwal","jumadaThani",
     "rajab","shaban","ramadan","shawwal","dhulQadah","dhulHijjah"
   ];
-  const islamicMonths = hijriMonthKeys.map((key) => L[key] || key.charAt(0).toUpperCase() + key.slice(1));
+  const islamicMonths = hijriMonthKeys.map(
+    (key) => L[key] || key.charAt(0).toUpperCase() + key.slice(1)
+  );
 
   // Timetable accessors
   const getRow = (m) =>
@@ -128,7 +136,7 @@ function App() {
   const tomorrowRow = getRow(tomorrow);
   const yesterdayRow = getRow(yesterday);
 
-  // 🔁 Google Sheet auto-refresh
+  // 🔁 Google Sheet auto-refresh (unchanged)
   useEffect(() => {
     if (!Array.isArray(settings)) return;
 
@@ -149,7 +157,7 @@ function App() {
     return () => clearInterval(interval);
   }, [settings]);
 
-  // Theme list for selector
+  // Theme list for selector (unchanged logic)
   const allThemes = useMemo(() => {
     const rows = Array.isArray(settings) ? settings : [];
     const names = rows
@@ -161,178 +169,105 @@ function App() {
 
   const numberUpcoming = parseInt(settingsMap["toggles.numberUpcomingPrayers"] || "6", 10);
 
+  // Helper for FloatingMenu to set theme locally
+  const handleSetTheme = (name) => {
+    setSelectedTheme(name);
+    try {
+      localStorage.setItem("selectedTheme", name);
+    } catch {}
+  };
+
   return (
     <AppErrorBoundary>
+      {/* NOTE: mode-* now applied to <html> via useEffect above */}
       <div className="relative bg-black text-white min-h-screen overflow-auto">
-        <div style={{ zoom: zoom, width: "100%", height: "100%" }}>
-          <div className="flex flex-col">
-            <Header mosque={mosque} theme={themeHeader} />
+        <div className="flex flex-col">
+          <Header mosque={mosque} theme={themeHeader} />
 
-            <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
-              <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
-                <Clock
-                  settings={{
-                    clock24Hours: settingsMap["toggles.clock24Hours"],
-                    ampmLowercase: settingsMap["toggles.ampmLowercase"],
-                  }}
-                  theme={themeClock}
+          <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
+            <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
+              <Clock
+                settings={{
+                  clock24Hours: settingsMap["toggles.clock24Hours"],
+                  ampmLowercase: settingsMap["toggles.ampmLowercase"],
+                }}
+                theme={themeClock}
+              />
+
+              <DateCard
+                theme={themeDateCard}
+                islamicMonths={islamicMonths}
+                islamicOffset={islamicOffset}
+              />
+
+              <NextPrayerCard
+                todayRow={todayRow}
+                tomorrowRow={tomorrowRow}
+                isFriday={today.day() === 5}
+                labels={L}
+                arabicLabels={A}
+                settingsMap={settingsMap}
+                theme={themeNextPrayer}
+              />
+
+              {showWeather && (
+                <WeatherCardUnified
+                  settings={settingsMap}
+                  theme={themeWeather}
+                  mode={weatherMode}
                 />
-                <DateCard
-                  theme={themeDateCard}
-                  islamicMonths={islamicMonths}
-                  islamicOffset={islamicOffset}
+              )}
+
+              <InfoCard settings={settings} settingsMap={settingsMap} theme={themeInfoCard} />
+            </div>
+
+            <div className="w-full md:w-2/3 flex flex-col h-full overflow-hidden min-h-0">
+              <div className="shrink-0 mb-6">
+                <CurrentPrayerCard
+                  theme={themeCurrentPrayer}
+                  todayRow={todayRow}
+                  yesterdayRow={yesterdayRow}
+                  settingsMap={settingsMap}
+                  labels={L}
+                  arabicLabels={A}
+                  is24Hour={is24Hour}
                 />
-                <NextPrayerCard
+              </div>
+
+              <div className="flex-1 flex flex-col">
+                <UpcomingPrayerRows
                   todayRow={todayRow}
                   tomorrowRow={tomorrowRow}
-                  isFriday={today.day() === 5}
+                  yesterdayRow={yesterdayRow}
+                  settings={settings}
                   labels={L}
                   arabicLabels={A}
                   settingsMap={settingsMap}
-                  theme={themeNextPrayer}
-                />
-
-                {/* 🌤️ Weather card — now uses themeWeather from Google Sheet */}
-                {showWeather && (
-                  <WeatherCardUnified
-                    settings={settingsMap}
-                    theme={themeWeather}
-                    mode={weatherMode}
-                  />
-                )}
-
-                <InfoCard
-                  settings={settings}
-                  settingsMap={settingsMap}
-                  theme={themeInfoCard}
+                  numberToShow={numberUpcoming}
+                  theme={themeUpcomingPrayer}
+                  is24Hour={is24Hour}
                 />
               </div>
-
-              <div className="w-full md:w-2/3 flex flex-col h-full overflow-hidden min-h-0">
-                <div className="shrink-0 mb-6">
-                  <CurrentPrayerCard
-                    theme={themeCurrentPrayer}
-                    todayRow={todayRow}
-                    yesterdayRow={yesterdayRow}
-                    settingsMap={settingsMap}
-                    labels={L}
-                    arabicLabels={A}
-                    is24Hour={is24Hour}
-                  />
-                </div>
-
-                <div className="flex-1 flex flex-col">
-                  <UpcomingPrayerRows
-                    todayRow={todayRow}
-                    tomorrowRow={tomorrowRow}
-                    yesterdayRow={yesterdayRow}
-                    settings={settings}
-                    labels={L}
-                    arabicLabels={A}
-                    settingsMap={settingsMap}
-                    numberToShow={numberUpcoming}
-                    theme={themeUpcomingPrayer}
-                    is24Hour={is24Hour}
-                  />
-                </div>
-              </div>
             </div>
+          </div>
 
-            <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
-              ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
-            </div>
+          <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
+            ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
           </div>
         </div>
 
-        {/* ⚙️ Floating Controls */}
-        <div className="absolute bottom-2 left-2 z-50">
-          <button
-            onClick={showZoomBox}
-            className="bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition"
-            title="Settings"
-          >
-            ⚙️
-          </button>
-
-          {zoomBoxVisible && (
-            <div className="mt-2 bg-black/80 text-white p-3 rounded shadow-lg w-64 flex flex-col gap-3">
-              {/* Zoom */}
-              <div className="flex flex-col items-center">
-                <div className="text-xs mb-2">Zoom: {Math.round(zoom * 100)}%</div>
-                <div className="flex gap-2 mb-1">
-                  <button
-                    onClick={() => setZoom((z) => Math.min(z + 0.05, 1.5))}
-                    className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    onClick={() => setZoom((z) => Math.max(z - 0.05, 0.5))}
-                    className="px-2 py-1 bg-white text-black rounded hover:bg-gray-200 text-sm"
-                  >
-                    ▼
-                  </button>
-                </div>
-              </div>
-
-              {/* Theme */}
-              <div>
-                <div className="text-xs mb-1">Theme</div>
-                <select
-                  value={activeTheme}
-                  onChange={(e) => {
-                    const newTheme = e.target.value;
-                    setSelectedTheme(newTheme);
-                    localStorage.setItem("selectedTheme", newTheme);
-                  }}
-                  className="bg-white text-black px-2 py-1 rounded text-sm w-full"
-                >
-                  {Array.isArray(allThemes) &&
-                    allThemes.map((theme) => (
-                      <option key={theme} value={theme}>
-                        {theme}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Weather */}
-              <div className="border-t border-white/10 pt-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs">Show weather card</label>
-                  <input
-                    type="checkbox"
-                    checked={showWeather}
-                    onChange={(e) => setShowWeather(e.target.checked)}
-                  />
-                </div>
-
-                <div className="mt-2">
-                  <div className="text-xs mb-1">Weather mode</div>
-                  <select
-                    value={showWeather ? weatherMode : "off"}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "off") {
-                        setShowWeather(false);
-                      } else {
-                        setShowWeather(true);
-                        setWeatherMode(v);
-                      }
-                    }}
-                    className="bg-white text-black px-2 py-1 rounded text-sm w-full"
-                  >
-                    <option value="now">Hourly (now)</option>
-                    <option value="3h">Next 3 periods</option>
-                    <option value="today">Today</option>
-                    <option value="24h">Next 24 hours</option>
-                    <option value="off">Hidden</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Floating controls (Theme + Display Mode + Weather) */}
+        <FloatingMenu
+          themeName={activeTheme}
+          setThemeName={handleSetTheme}
+          themeOptions={allThemes}
+          displayMode={displayMode}
+          setDisplayMode={setDisplayMode}
+          showWeather={showWeather}
+          setShowWeather={setShowWeather}
+          weatherMode={weatherMode}
+          setWeatherMode={setWeatherMode}
+        />
       </div>
     </AppErrorBoundary>
   );
