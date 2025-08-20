@@ -16,6 +16,8 @@ import FloatingMenu from "../Components/FloatingMenu";
 
 import useSettings from "../hooks/useSettings";
 import usePrayerTimes from "../hooks/usePrayerTimes";
+import useDeviceId from "../hooks/useDeviceId";
+import useRemoteDeviceConfig from "../hooks/useRemoteDeviceConfig";
 
 /* ---------------- helpers ---------------- */
 
@@ -79,7 +81,7 @@ export default function SlideshowScreen() {
 
   const settingsMap = useMemo(() => buildSettingsMap(settings), [settings]);
 
-  // Theme selection
+  // Theme selection (local with optional remote override)
   const defaultTheme = settingsMap["toggles.theme"] || "Theme_1";
   const [selectedTheme, setSelectedTheme] = useState(
     () => localStorage.getItem("selectedTheme") || null
@@ -172,13 +174,47 @@ export default function SlideshowScreen() {
     };
   }, [displayMode]);
 
+  // 6-digit device code (overlay in header)
+  const { code: deviceCode } = useDeviceId();
+
+  // 🔗 Remote device overrides (displayMode, themeOverride, enabled)
+  const DEVICE_API = import.meta.env.VITE_DEVICE_API || "";
+  const { cfg: remoteCfg, error: remoteErr } = useRemoteDeviceConfig(
+    deviceCode,
+    DEVICE_API,
+    15000
+  );
+
+  useEffect(() => {
+    if (!remoteCfg) return;
+    if (String(remoteCfg.enabled ?? "TRUE").toUpperCase() === "FALSE") return;
+
+    if (remoteCfg.displayMode) setDisplayMode(remoteCfg.displayMode);
+
+    if (remoteCfg.themeOverride) {
+      setSelectedTheme(remoteCfg.themeOverride);
+      try {
+        localStorage.setItem("selectedTheme", remoteCfg.themeOverride);
+      } catch {}
+    }
+    // (No weather on slideshow by design)
+  }, [remoteCfg]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="relative w-screen h-screen bg-black text-white overflow-auto">
       {/* NOTE: mode-* is applied to <html> via useEffect above; no transform/zoom used */}
       <div className="w-screen h-screen flex flex-col">
-        {/* Header */}
-        <div className="shrink-0">
+        {/* Header with centered device code glass card */}
+        <div className="shrink-0 relative">
           <Header mosque={mosque} theme={themeHeader} />
+          {deviceCode ? (
+            <div className="pointer-events-none select-text absolute left-1/2 -translate-x-1/2 top-2 text-base md:text-lg">
+              <span className="pointer-events-auto inline-flex items-center gap-2 rounded-xl bg-black/30 backdrop-blur-md px-3 py-1.5 shadow ring-1 ring-white/20">
+                <span className="uppercase tracking-wide text-white/70 text-[10px]">Device</span>
+                <span className="font-semibold">ID: {deviceCode}</span>
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Main content */}
@@ -222,10 +258,13 @@ export default function SlideshowScreen() {
           </div>
         </div>
 
-        {/* Footer tick */}
-        <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-2">
+        {/* Footer tick + optional remote error */}
+        <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-3">
           <span className="text-green-400">●</span>
           <span>Last updated: {now.format("HH:mm:ss")}</span>
+          {remoteErr ? (
+            <span className="text-red-300">• Remote: {String(remoteErr)}</span>
+          ) : null}
         </div>
       </div>
 

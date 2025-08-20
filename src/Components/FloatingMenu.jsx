@@ -1,4 +1,3 @@
-// src/Components/FloatingMenu.jsx
 import React, { useEffect, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { DISPLAY_MODE_PRESETS } from "../hooks/useLocalDisplayMode";
@@ -11,7 +10,7 @@ export default function FloatingMenu({
   // display mode
   displayMode,
   setDisplayMode,
-  // weather controls (optional)
+  // weather controls (optional; slideshow passes false)
   showWeatherControls = true,
   showWeather,
   setShowWeather,
@@ -89,9 +88,7 @@ export default function FloatingMenu({
                     type="checkbox"
                     className="accent-white"
                     checked={!!showWeather}
-                    onChange={
-                      setShowWeather ? (e) => setShowWeather(e.target.checked) : undefined
-                    }
+                    onChange={(e) => setShowWeather(e.target.checked)}
                   />
                   <span className="text-sm text-white/90">Show weather</span>
                 </label>
@@ -102,7 +99,7 @@ export default function FloatingMenu({
                 <select
                   className="w-full p-1 rounded bg-white text-black"
                   value={weatherMode}
-                  onChange={setWeatherMode ? (e) => setWeatherMode(e.target.value) : undefined}
+                  onChange={(e) => setWeatherMode(e.target.value)}
                   disabled={!showWeather}
                 >
                   <option value="now">Now (hourly)</option>

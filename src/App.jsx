@@ -19,22 +19,28 @@ import { getEnglishLabels, getArabicLabels } from "./utils/labels";
 // Weather
 import WeatherCardUnified from "./Components/WeatherCardUnified";
 
-// NEW: display mode + floating menu
+// Display mode + floating menu
 import useLocalDisplayMode from "./hooks/useLocalDisplayMode";
 import FloatingMenu from "./Components/FloatingMenu";
 
+// Device ID (6-digit code)
+import useDeviceId from "./hooks/useDeviceId";
+
+// Remote device config (JSONP-capable hook)
+import useRemoteDeviceConfig from "./hooks/useRemoteDeviceConfig";
+
 function App() {
+  // 🔒 Always call hooks in the same order, unconditionally
   const settings = useSettings();
   const timetable = usePrayerTimes();
+
   const [lastUpdated, setLastUpdated] = useState(null);
   const prevLastUpdated = useRef(null);
 
-  // Local theme override (kept)
   const [selectedTheme, setSelectedTheme] = useState(() =>
     localStorage.getItem("selectedTheme")
   );
 
-  // Weather UI state (restored)
   const [showWeather, setShowWeather] = useState(() => {
     const v = localStorage.getItem("ui.showWeather");
     return v === null ? true : v === "true";
@@ -45,10 +51,9 @@ function App() {
   useEffect(() => localStorage.setItem("ui.showWeather", String(showWeather)), [showWeather]);
   useEffect(() => localStorage.setItem("ui.weatherMode", weatherMode), [weatherMode]);
 
-  // NEW: per-device display mode
   const [displayMode, setDisplayMode] = useLocalDisplayMode("1080p");
 
-  // Apply display mode class to <html> so font-size scaling works
+  // Apply display mode class to <html>
   useEffect(() => {
     const root = document.documentElement;
     const prior = Array.from(root.classList).filter((c) => c.startsWith("mode-"));
@@ -59,7 +64,7 @@ function App() {
     };
   }, [displayMode]);
 
-  // 🔒 Clear legacy local weather creds/coords (unchanged)
+  // Clear legacy local weather creds/coords
   useEffect(() => {
     try {
       localStorage.removeItem("ui.weatherLat");
@@ -69,7 +74,7 @@ function App() {
     } catch {}
   }, []);
 
-  // --- Static mosque details (unchanged) ---
+  // Static mosque details
   const mosque = {
     name: "Greenbank Masjid",
     address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
@@ -78,7 +83,7 @@ function App() {
       "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
   };
 
-  // Build settingsMap once
+  // Build settings map
   const settingsMap = useMemo(
     () => (Array.isArray(settings) && settings.length ? buildSettingsMap(settings) : {}),
     [settings]
@@ -93,7 +98,6 @@ function App() {
   );
   const themeAll = useMemo(() => getTheme(mapWithThemeOverride), [mapWithThemeOverride]);
 
-  // Shorthand themes
   const themeHeader = themeAll.header || {};
   const themeClock = themeAll.clock || {};
   const themeDateCard = themeAll.dateCard || {};
@@ -103,11 +107,9 @@ function App() {
   const themeInfoCard = themeAll.infoCard || {};
   const themeWeather = themeAll.weatherCard || {};
 
-  // Toggles
+  // Toggles / labels
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
   const islamicOffset = parseInt(settingsMap["islamicCalendar.offset"] || 0, 10);
-
-  // Labels
   const L = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const A = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
@@ -120,7 +122,7 @@ function App() {
     (key) => L[key] || key.charAt(0).toUpperCase() + key.slice(1)
   );
 
-  // Timetable accessors
+  // Timetable helpers
   const getRow = (m) =>
     Array.isArray(timetable)
       ? timetable.find(
@@ -136,7 +138,7 @@ function App() {
   const tomorrowRow = getRow(tomorrow);
   const yesterdayRow = getRow(yesterday);
 
-  // 🔁 Google Sheet auto-refresh (unchanged)
+  // Auto-refresh when Settings sheet changes (meta.lastUpdated)
   useEffect(() => {
     if (!Array.isArray(settings)) return;
 
@@ -157,7 +159,7 @@ function App() {
     return () => clearInterval(interval);
   }, [settings]);
 
-  // Theme list for selector (unchanged logic)
+  // Theme options for selector
   const allThemes = useMemo(() => {
     const rows = Array.isArray(settings) ? settings : [];
     const names = rows
@@ -169,20 +171,59 @@ function App() {
 
   const numberUpcoming = parseInt(settingsMap["toggles.numberUpcomingPrayers"] || "6", 10);
 
-  // Helper for FloatingMenu to set theme locally
   const handleSetTheme = (name) => {
     setSelectedTheme(name);
-    try {
-      localStorage.setItem("selectedTheme", name);
-    } catch {}
+    try { localStorage.setItem("selectedTheme", name); } catch {}
   };
+
+  // Device code
+  const { code: deviceCode } = useDeviceId();
+
+  // 🔗 Remote device config — ALWAYS call this hook (no conditionals)
+  const DEVICE_API = import.meta.env.VITE_DEVICE_API || "";
+  const { cfg: remoteCfg, error: remoteErr } = useRemoteDeviceConfig(deviceCode, DEVICE_API, 15000);
+
+  // Apply remote overrides whenever they change
+  useEffect(() => {
+    if (!remoteCfg) return;
+
+    // optional kill-switch
+    const enabled = String(remoteCfg.enabled ?? "TRUE").toUpperCase() !== "FALSE";
+    if (!enabled) return;
+
+    if (remoteCfg.displayMode) setDisplayMode(remoteCfg.displayMode);
+
+    if (remoteCfg.themeOverride) {
+      setSelectedTheme(remoteCfg.themeOverride);
+      try { localStorage.setItem("selectedTheme", remoteCfg.themeOverride); } catch {}
+    }
+
+    if (typeof remoteCfg.showWeather !== "undefined") {
+      const sw =
+        String(remoteCfg.showWeather).toUpperCase() === "TRUE" ||
+        remoteCfg.showWeather === true;
+      setShowWeather(sw);
+    }
+
+    if (remoteCfg.weatherMode) setWeatherMode(remoteCfg.weatherMode);
+  }, [remoteCfg, setDisplayMode, setSelectedTheme, setShowWeather, setWeatherMode]);
 
   return (
     <AppErrorBoundary>
-      {/* NOTE: mode-* now applied to <html> via useEffect above */}
       <div className="relative bg-black text-white min-h-screen overflow-auto">
         <div className="flex flex-col">
-          <Header mosque={mosque} theme={themeHeader} />
+          {/* Header with centered device code glass card */}
+          <div className="relative">
+            <Header mosque={mosque} theme={themeHeader} />
+            {deviceCode ? (
+              <div className="pointer-events-none select-text absolute left-1/2 -translate-x-1/2 top-2 text-base md:text-lg">
+                <span className="pointer-events-auto inline-flex items-center gap-2 rounded-xl bg-black/30 backdrop-blur-md px-3 py-1.5 shadow ring-1 ring-white/20">
+                  <span className="uppercase tracking-wide text-white/70 text-[10px]">Device</span>
+                  <span className="font-semibold">ID: {deviceCode}</span>
+                </span>
+              </div>
+            ) : null}
+          </div>
 
           <div className="flex-1 flex flex-col md:flex-row px-4 sm:px-6 md:px-12 lg:px-16 pt-6 gap-6 items-start overflow-hidden">
             <div className="w-full md:w-1/3 max-w-full md:max-w-[33vw] flex flex-col gap-6">
@@ -253,6 +294,7 @@ function App() {
 
           <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
             ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
+            {remoteErr ? <span className="ml-2 text-red-400">• Remote: {String(remoteErr)}</span> : null}
           </div>
         </div>
 
