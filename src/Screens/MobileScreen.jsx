@@ -1,6 +1,8 @@
 // src/Screens/MobileScreen.jsx
+
 import "../index.css";
 import React, { useEffect, useMemo, useState } from "react";
+
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
@@ -105,53 +107,34 @@ function findRowForDate(rows, date = new Date()) {
   const dmyDash = `${pad2(d)}-${pad2(m)}-${y}`;
 
   for (const r of rows) {
-    const dayVal = r.Day ?? r.day ?? r.DAY;
-    const monVal = r.Month ?? r.month ?? r.MONTH;
-    if (dayVal != null && monVal != null) {
-      const dayNum = Number(String(dayVal).replace(/\D/g, ""));
-      const monNum = Number(String(monVal).replace(/\D/g, ""));
-      if (dayNum === d && monNum === m) return r;
+    const dayVal = r.Day ?? r.day ?? r["Day "];
+    const monthVal = r.Month ?? r.month;
+    if (dayVal && monthVal) {
+      if (parseInt(dayVal, 10) === d && parseInt(monthVal, 10) === m) return r;
     }
-    for (const k of Object.keys(r || {})) {
-      if (/^date$/i.test(k) || /iso/i.test(k)) {
-        const raw = String(r[k]).trim();
-        if (raw.startsWith(iso) || raw === dmySlash || raw === dmyDash) return r;
-        const parsed = new Date(raw);
-        if (
-          !isNaN(parsed) &&
-          parsed.getFullYear() === y &&
-          parsed.getMonth() + 1 === m &&
-          parsed.getDate() === d
-        ) {
-          return r;
-        }
-      }
+    if (r.Date || r.date) {
+      const v = String(r.Date || r.date).trim();
+      if (v === iso || v === dmySlash || v === dmyDash) return r;
     }
   }
   return null;
 }
 
-// tolerant time parser: "13:22", "1:22 pm", "1322", 802 (mins), Date
-function parseTimeToDay(anyTime, refDate = new Date()) {
-  if (anyTime == null) return null;
-  if (anyTime instanceof Date && !isNaN(anyTime)) return anyTime;
+function parseTimeToDay(cell, refDate) {
+  if (!cell) return null;
+  let str = String(cell).trim();
+  if (!str) return null;
 
-  let h = NaN,
-    m = NaN;
-  if (typeof anyTime === "number") {
-    if (anyTime < 48 * 60) {
-      h = Math.floor(anyTime / 60);
-      m = anyTime % 60;
-    } else {
-      h = Math.floor(anyTime / 100);
-      m = anyTime % 100;
-    }
-  } else if (typeof anyTime === "string") {
-    const s = anyTime.trim().toLowerCase();
-    let mm =
-      /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s) ||
-      /^(\d{1,2}):(\d{2})\s*(am|pm)$/.exec(s) ||
-      /^(\d{2})(\d{2})$/.exec(s);
+  // Handle 24h "HH:MM"
+  let h, m;
+  const m24 = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (m24) {
+    h = Number(m24[1]);
+    m = Number(m24[2]);
+  } else {
+    // Handle 12h “h:mm am/pm”
+    str = str.toLowerCase().replace(/\s+/g, "");
+    const mm = str.match(/^(\d{1,2}):(\d{2})(am|pm)$/);
     if (mm) {
       h = Number(mm[1]);
       m = Number(mm[2]);
@@ -216,39 +199,38 @@ function buildTimeline(row, refDate, labelMap) {
   return ORDER.map((k) => map[k]).filter(Boolean);
 }
 
-// Ensure Sunrise follows Fajr when the list crosses to tomorrow (cap 6)
+/** Build ≤max upcoming items. Guarantees Fajr (tomorrow) is present;
+ * if there’s room, Sunrise (tomorrow) is included immediately after. */
 function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 }) {
   const isToday = (d) => d.toDateString() === todayRef.toDateString();
   const isTomorrow = (d) => d.toDateString() === tomorrowRef.toDateString();
 
-  const futureToday = today.filter((p) => p.start > now);
-  const combined = [...futureToday, ...tomorrow]; // chronological
+  const futureToday = (today || []).filter((p) => p.start > now);
+  const combined = [...futureToday, ...(tomorrow || [])]; // already chronological
 
   let limited = combined.slice(0, max);
 
+  // Ensure Fajr (tomorrow) is present
   const idxFajrT = combined.findIndex((p) => p.key === "fajr" && isTomorrow(p.start));
-  const idxSunT = combined.findIndex((p) => p.key === "sunrise" && isTomorrow(p.start));
   const hasFajrT = limited.some((p) => p.key === "fajr" && isTomorrow(p.start));
-  const hasSunT = limited.some((p) => p.key === "sunrise" && isTomorrow(p.start));
+  if (idxFajrT !== -1 && !hasFajrT) {
+    if (limited.length < max) {
+      limited = combined.slice(0, Math.min(max, Math.max(idxFajrT + 1, limited.length + 1)));
+    } else {
+      // replace the last entry if needed then re-sort
+      limited[limited.length - 1] = combined[idxFajrT];
+    }
+    limited.sort((a, b) => a.start - b.start);
+  }
 
-  // Case A: We have Fajr (tomorrow) but not Sunrise (tomorrow) → try to include Sunrise
-  if (idxFajrT !== -1 && idxSunT !== -1 && hasFajrT && !hasSunT) {
+  // If Fajr (tomorrow) is there and Sunrise (tomorrow) is close behind, try to include Sunrise
+  const idxSunT = combined.findIndex((p) => p.key === "sunrise" && isTomorrow(p.start));
+  const hasSunT = limited.some((p) => p.key === "sunrise" && isTomorrow(p.start));
+  if (idxFajrT !== -1 && idxSunT !== -1 && limited.some((p) => p.key === "fajr" && isTomorrow(p.start)) && !hasSunT) {
     if (limited.length < max) {
       limited = combined.slice(0, Math.min(max, idxSunT + 1));
     } else {
       limited[limited.length - 1] = combined[idxSunT];
-      limited.sort((a, b) => a.start - b.start);
-    }
-  }
-
-  // Case B: We have Sunrise (tomorrow) but not Fajr (tomorrow) → prefer Fajr
-  if (idxFajrT !== -1 && idxSunT !== -1 && hasSunT && !hasFajrT) {
-    if (limited.length < max) {
-      // Expand up to include Fajr (earlier than Sunrise)
-      limited = combined.slice(0, Math.min(max, idxFajrT + 1));
-    } else {
-      // Replace the last entry with Fajr, then re-sort
-      limited[limited.length - 1] = combined[idxFajrT];
       limited.sort((a, b) => a.start - b.start);
     }
   }
