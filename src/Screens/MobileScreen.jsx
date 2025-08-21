@@ -199,40 +199,46 @@ function buildTimeline(row, refDate, labelMap) {
   return ORDER.map((k) => map[k]).filter(Boolean);
 }
 
-/** Build ≤max upcoming items. Guarantees Fajr (tomorrow) is present;
- * if there’s room, Sunrise (tomorrow) is included immediately after. */
+/** Build ≤max upcoming items.
+ *  Guarantee: once **today's Fajr has started**, include **tomorrow's Fajr** immediately.
+ *  If there’s room, Sunrise (tomorrow) can follow Fajr (tomorrow). */
 function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 }) {
   const isToday = (d) => d.toDateString() === todayRef.toDateString();
   const isTomorrow = (d) => d.toDateString() === tomorrowRef.toDateString();
 
   const futureToday = (today || []).filter((p) => p.start > now);
-  const combined = [...futureToday, ...(tomorrow || [])]; // already chronological
+  const combined = [...futureToday, ...(tomorrow || [])]; // chronological
 
   let limited = combined.slice(0, max);
 
-  // Ensure Fajr (tomorrow) is present
-  const idxFajrT = combined.findIndex((p) => p.key === "fajr" && isTomorrow(p.start));
-  const hasFajrT = limited.some((p) => p.key === "fajr" && isTomorrow(p.start));
-  if (idxFajrT !== -1 && !hasFajrT) {
-    if (limited.length < max) {
-      limited = combined.slice(0, Math.min(max, Math.max(idxFajrT + 1, limited.length + 1)));
-    } else {
-      // replace the last entry if needed then re-sort
-      limited[limited.length - 1] = combined[idxFajrT];
-    }
+  // --- Force-inject Fajr (tomorrow) once today's Fajr has begun ---
+  const fajrToday = (today || []).find((p) => p.key === "fajr");
+  const fajrTomorrow = (tomorrow || []).find((p) => p.key === "fajr" && isTomorrow(p.start));
+
+  if (
+    fajrToday &&
+    fajrTomorrow &&
+    now >= fajrToday.start &&
+    !limited.some((p) => p.key === "fajr" && isTomorrow(p.start))
+  ) {
+    // add and keep chronological order
+    limited.push(fajrTomorrow);
     limited.sort((a, b) => a.start - b.start);
+    if (limited.length > max) limited = limited.slice(0, max);
   }
 
-  // If Fajr (tomorrow) is there and Sunrise (tomorrow) is close behind, try to include Sunrise
-  const idxSunT = combined.findIndex((p) => p.key === "sunrise" && isTomorrow(p.start));
+  // If Fajr (tomorrow) is present and there's space/need, try to include Sunrise (tomorrow) next
+  const sunTomorrow = (tomorrow || []).find((p) => p.key === "sunrise" && isTomorrow(p.start));
+  const hasFajrT = limited.some((p) => p.key === "fajr" && isTomorrow(p.start));
   const hasSunT = limited.some((p) => p.key === "sunrise" && isTomorrow(p.start));
-  if (idxFajrT !== -1 && idxSunT !== -1 && limited.some((p) => p.key === "fajr" && isTomorrow(p.start)) && !hasSunT) {
+  if (hasFajrT && sunTomorrow && !hasSunT) {
     if (limited.length < max) {
-      limited = combined.slice(0, Math.min(max, idxSunT + 1));
+      limited.push(sunTomorrow);
     } else {
-      limited[limited.length - 1] = combined[idxSunT];
-      limited.sort((a, b) => a.start - b.start);
+      // replace the last entry if needed
+      limited[limited.length - 1] = sunTomorrow;
     }
+    limited.sort((a, b) => a.start - b.start);
   }
 
   return { list: limited, isToday, isTomorrow };
