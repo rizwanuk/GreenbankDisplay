@@ -38,7 +38,13 @@ function UpcomingPrayerRows({
         true
       );
       if (m.isValid()) return m;
-      console.warn("[UpcomingPrayerRows] Invalid toggles.fakeTime:", rawTime, "(normalized:", normalized, ")");
+      console.warn(
+        "[UpcomingPrayerRows] Invalid toggles.fakeTime:",
+        rawTime,
+        "(normalized:",
+        normalized,
+        ")"
+      );
     }
     return tickNow;
   }, [nowProp, tickNow, settingsMap]);
@@ -56,7 +62,7 @@ function UpcomingPrayerRows({
   const is24 =
     typeof is24Hour === "boolean" ? is24Hour : settingsMap["clock24Hours"] === "TRUE";
 
-  const upcoming = fullTimeline
+  let upcoming = fullTimeline
     .filter((p) => effectiveNow.isBefore(p.start) && p.name !== "Ishraq")
     .map((p) => {
       let name = p.name;
@@ -75,6 +81,25 @@ function UpcomingPrayerRows({
     })
     .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, numberToShow);
+
+  // --- Force-inject tomorrow's Fajr once today's Fajr has started ---
+  const fajrToday = fullTimeline.find(
+    (p) => p.key === "fajr" && p.start.isSame(effectiveNow, "day")
+  );
+  const fajrTomorrow = fullTimeline.find(
+    (p) => p.key === "fajr" && p.start.isAfter(effectiveNow.clone().endOf("day"))
+  );
+
+  if (
+    fajrToday &&
+    fajrTomorrow &&
+    effectiveNow.isSameOrAfter(fajrToday.start) &&
+    !upcoming.some((p) => p.key === "fajr" && p.start.isSame(fajrTomorrow.start, "minute"))
+  ) {
+    upcoming.push(fajrTomorrow);
+    upcoming.sort((a, b) => a.start.valueOf() - b.start.valueOf());
+    if (upcoming.length > numberToShow) upcoming = upcoming.slice(0, numberToShow);
+  }
 
   return (
     <div
@@ -138,7 +163,7 @@ function UpcomingPrayerRows({
                 theme.rowSize || "text-[clamp(1.5rem,2.5vw,3rem)]"
               } leading-[1.125]`}
             >
-              {/* English prayer name — +1 relative step */}
+              {/* English prayer name */}
               <div className="truncate font-eng font-bold whitespace-nowrap overflow-visible text-ellipsis text-[1.1em]">
                 {getLabel(p.lookupKey || p.name, labels)}
               </div>
@@ -152,12 +177,12 @@ function UpcomingPrayerRows({
                 {getArabicLabel(p.lookupKey || p.name, arabicLabels)}
               </div>
 
-              {/* Start time — +2 relative steps (no wrap) */}
+              {/* Start time */}
               <div className="text-center font-eng text-[1.2em] whitespace-nowrap">
                 {formatWithSmallAmPm(p.start, is24)}
               </div>
 
-              {/* Jama'ah time — +2 relative steps + bold (no wrap) */}
+              {/* Jama'ah time */}
               <div className="text-right font-eng font-extrabold text-[1.3em] whitespace-nowrap">
                 {p.jamaah ? formatWithSmallAmPm(p.jamaah, is24) : ""}
               </div>

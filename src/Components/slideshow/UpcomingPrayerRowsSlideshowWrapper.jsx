@@ -25,7 +25,7 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
 
   const isFriday = now.format("dddd") === "Friday";
 
-  const upcoming = fullTimeline
+  let upcoming = fullTimeline
     .filter((p) => now.isBefore(p.start) && p.name !== "Ishraq")
     .map((p) => {
       let name = p.name;
@@ -47,7 +47,27 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
         lookupKey,
       };
     })
+    .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, 6);
+
+  // --- Force-inject tomorrow's Fajr once today's Fajr has started ---
+  const fajrToday = fullTimeline.find(
+    (p) => p.key === "fajr" && p.start.isSame(now, "day")
+  );
+  const fajrTomorrow = fullTimeline.find(
+    (p) => p.key === "fajr" && p.start.isAfter(now.clone().endOf("day"))
+  );
+
+  if (
+    fajrToday &&
+    fajrTomorrow &&
+    now.isSameOrAfter(fajrToday.start) &&
+    !upcoming.some((p) => p.key === "fajr" && p.start.isSame(fajrTomorrow.start, "minute"))
+  ) {
+    upcoming.push(fajrTomorrow);
+    upcoming.sort((a, b) => a.start.valueOf() - b.start.valueOf());
+    if (upcoming.length > 6) upcoming = upcoming.slice(0, 6);
+  }
 
   const is24 = settingsMap["clock24Hours"] === "TRUE";
   const getLabel = (key) => labels[key.toLowerCase()] || key;
@@ -66,7 +86,9 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
   const todayDateStr = now.clone().startOf("day").format("YYYY-MM-DD");
 
   return (
-    <div className={`w-full rounded-2xl bg-gray-800 shadow-xl px-4 py-4 backdrop-blur ${textColor} ${engFont}`}>
+    <div
+      className={`w-full rounded-2xl bg-gray-800 shadow-xl px-4 py-4 backdrop-blur ${textColor} ${engFont}`}
+    >
       <div className={`grid grid-cols-3 font-semibold text-white/80 px-2 pb-2 ${headerClass}`}>
         <div>Prayer</div>
         <div className="text-center">Start</div>
