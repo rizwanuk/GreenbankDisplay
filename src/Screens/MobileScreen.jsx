@@ -46,7 +46,10 @@ function useInstallPrompt() {
     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
     (window.navigator && window.navigator.standalone);
 
-  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIOS = /iPad|iPhone|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isDesktop = !isIOS && !isAndroid;
 
   const install = async () => {
     const ev = promptEvent || window.__deferredInstallPrompt;
@@ -69,7 +72,7 @@ function useInstallPrompt() {
   // show button if not installed and (have event OR on iOS which uses A2HS)
   const canInstall = !inStandalone && (!!(promptEvent || window.__deferredInstallPrompt) || isIOS);
 
-  return { canInstall, install, installed };
+  return { canInstall, install, installed, inStandalone, isIOS, isAndroid, isDesktop };
 }
 
 /* ------------------------------------------------------------------ */
@@ -201,6 +204,26 @@ const Pill = ({ left, right, className = "" }) => (
   </div>
 );
 
+// Small banner with platform-specific install hints
+function InstallHintBanner({ isIOS, isAndroid, isDesktop }) {
+  let text = "";
+  if (isIOS) {
+    text = "Tip: On iPhone/iPad, tap the Share icon, then ‘Add to Home Screen’.";
+  } else if (isAndroid) {
+    text = "Tip: Use the browser menu and choose ‘Install app’ or ‘Add to Home screen’.";
+  } else if (isDesktop) {
+    text = "Tip: In your browser menu, choose ‘Install app’ (or click the install icon).";
+  } else {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-snug text-white/90">
+      {text}
+    </div>
+  );
+}
+
 /* --------------------------- helpers ---------------------------- */
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
 const fmt = (d, hour12 = false) =>
@@ -311,7 +334,8 @@ export default function MobileScreen() {
   const nowStr = fmt(now, !is24Hour);
 
   // Install button state
-  const { canInstall, install, installed } = useInstallPrompt();
+  const { canInstall, install, installed, inStandalone, isIOS, isAndroid, isDesktop } =
+    useInstallPrompt();
 
   return (
     <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">
@@ -331,6 +355,11 @@ export default function MobileScreen() {
             >
               Install app
             </button>
+          )}
+
+          {/* If we can't show the install button, show a gentle hint instead */}
+          {!canInstall && !installed && !inStandalone && (
+            <InstallHintBanner isIOS={isIOS} isAndroid={isAndroid} isDesktop={isDesktop} />
           )}
 
           <PushToggle />
