@@ -5,6 +5,7 @@ import { getJummahTime, getArabicLabel, getLabel } from "../hooks/usePrayerHelpe
 import useNow from "../hooks/useNow";
 import formatWithSmallAmPm from "../helpers/formatWithSmallAmPm";
 import { toFontVars } from "../utils/fontMap";
+import applyFajrShouruqRule from "../helpers/applyFajrShouruqRule";
 
 function UpcomingPrayerRows({
   now: nowProp,
@@ -62,6 +63,7 @@ function UpcomingPrayerRows({
   const is24 =
     typeof is24Hour === "boolean" ? is24Hour : settingsMap["clock24Hours"] === "TRUE";
 
+  // Start with upcoming (exclude Ishraq)
   let upcoming = fullTimeline
     .filter((p) => effectiveNow.isBefore(p.start) && p.name !== "Ishraq")
     .map((p) => {
@@ -69,8 +71,9 @@ function UpcomingPrayerRows({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
+      // Friday override: Dhuhr/Zuhr → Jummah (labels + iqamah from settings)
       const isFridayForPrayer = p.start.format("dddd") === "Friday";
-      if (isFridayForPrayer && lookupKey === "dhuhr") {
+      if (isFridayForPrayer && (lookupKey === "dhuhr" || lookupKey === "zuhr")) {
         name = "Jummah";
         lookupKey = "jummah";
         const jummahMoment = getJummahTime(settingsMap, p.start);
@@ -82,24 +85,15 @@ function UpcomingPrayerRows({
     .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, numberToShow);
 
-  // --- Force-inject tomorrow's Fajr once today's Fajr has started ---
-  const fajrToday = fullTimeline.find(
-    (p) => p.key === "fajr" && p.start.isSame(effectiveNow, "day")
-  );
-  const fajrTomorrow = fullTimeline.find(
-    (p) => p.key === "fajr" && p.start.isAfter(effectiveNow.clone().endOf("day"))
-  );
+  // Apply shared Fajr/Shouruq behaviour
+  upcoming = applyFajrShouruqRule({
+    now: effectiveNow,
+    upcoming,
+    fullTimeline,
+    max: numberToShow,
+  });
 
-  if (
-    fajrToday &&
-    fajrTomorrow &&
-    effectiveNow.isSameOrAfter(fajrToday.start) &&
-    !upcoming.some((p) => p.key === "fajr" && p.start.isSame(fajrTomorrow.start, "minute"))
-  ) {
-    upcoming.push(fajrTomorrow);
-    upcoming.sort((a, b) => a.start.valueOf() - b.start.valueOf());
-    if (upcoming.length > numberToShow) upcoming = upcoming.slice(0, numberToShow);
-  }
+  // (After Shouruq starts, tomorrow’s Shouruq is allowed naturally.)
 
   return (
     <div

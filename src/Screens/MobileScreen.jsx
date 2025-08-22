@@ -8,6 +8,7 @@ import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
 import { getJummahTime } from "../hooks/usePrayerHelpers";
+import applyFajrShouruqRule from "../helpers/applyFajrShouruqRule";
 
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
@@ -187,32 +188,6 @@ function buildTimeline(row, refDate, labelMap) {
   return ORDER.map((k) => map[k]).filter(Boolean);
 }
 
-function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 }) {
-  const isToday = (d) => d.toDateString() === todayRef.toDateString();
-  const isTomorrow = (d) => d.toDateString() === tomorrowRef.toDateString();
-
-  const futureToday = (today || []).filter((p) => p.start > now);
-  const combined = [...futureToday, ...(tomorrow || [])];
-
-  let limited = combined.slice(0, max);
-
-  const fajrToday = (today || []).find((p) => p.key === "fajr");
-  const fajrTomorrow = (tomorrow || []).find((p) => p.key === "fajr" && isTomorrow(p.start));
-
-  if (
-    fajrToday &&
-    fajrTomorrow &&
-    now >= fajrToday.start &&
-    !limited.some((p) => p.key === "fajr" && isTomorrow(p.start))
-  ) {
-    limited.push(fajrTomorrow);
-    limited.sort((a, b) => a.start - b.start);
-    if (limited.length > max) limited = limited.slice(0, max);
-  }
-
-  return { list: limited, isToday, isTomorrow };
-}
-
 /* --- Jum‘ah override --- */
 function applyJummahOverrideToList(list, settingsMap, labels) {
   const jummahLabel = labels?.jummah || "Jum‘ah";
@@ -283,9 +258,45 @@ export default function MobileScreen() {
   const today = useMemo(() => buildTimeline(todayRow, refToday, labelMap), [todayRow, refToday, labelMap]);
   const tomorrow = useMemo(() => buildTimeline(tRow, refTomorrow, labelMap), [tRow, refTomorrow, labelMap]);
 
-  const { list: rawUpcoming, isToday, isTomorrow } = useMemo(
-    () => buildUpcoming({ now, today, tomorrow, todayRef: refToday, tomorrowRef: refTomorrow, max: 6 }),
-    [now, today, tomorrow, refToday, refTomorrow]
+  // Build a full timeline as moments for the helper
+  const fullTimeline = useMemo(
+    () =>
+      [...(today || []), ...(tomorrow || [])].map((p) => ({
+        ...p,
+        start: moment(p.start),
+        jamaah: p.jamaah ? moment(p.jamaah) : null,
+      })),
+    [today, tomorrow]
+  );
+
+  // Initial upcoming (future items) as moments
+  const prelimUpcoming = useMemo(() => {
+    const mNow = moment(now);
+    const next = fullTimeline.filter((p) => mNow.isBefore(p.start)).sort((a, b) => a.start.valueOf() - b.start.valueOf());
+    return next.slice(0, 6);
+  }, [fullTimeline, now]);
+
+  // Apply shared Fajr/Shouruq behaviour
+  const adjustedUpcomingMoments = useMemo(
+    () =>
+      applyFajrShouruqRule({
+        now: moment(now),
+        upcoming: prelimUpcoming,
+        fullTimeline,
+        max: 6,
+      }),
+    [prelimUpcoming, fullTimeline, now]
+  );
+
+  // Convert back to Dates for rendering
+  const rawUpcoming = useMemo(
+    () =>
+      adjustedUpcomingMoments.map((p) => ({
+        ...p,
+        start: p.start.toDate(),
+        jamaah: p.jamaah ? p.jamaah.toDate() : null,
+      })),
+    [adjustedUpcomingMoments]
   );
 
   const upcoming = useMemo(
@@ -306,8 +317,9 @@ export default function MobileScreen() {
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
 
-  const upcomingToday = upcoming.filter((p) => isToday(p.start));
-  const upcomingTomorrow = upcoming.filter((p) => isTomorrow(p.start));
+  const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const upcomingToday = upcoming.filter((p) => isSameDay(p.start, refToday));
+  const upcomingTomorrow = upcoming.filter((p) => isSameDay(p.start, refTomorrow));
 
   return (
     <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">

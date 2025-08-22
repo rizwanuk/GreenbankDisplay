@@ -3,6 +3,7 @@ import moment from "moment";
 import formatWithSmallAmPm from "../../helpers/formatWithSmallAmPm";
 import { buildPrayerTimeline } from "../../helpers/getCurrentPrayer";
 import { getJummahTime } from "../../hooks/usePrayerHelpers";
+import applyFajrShouruqRule from "../../helpers/applyFajrShouruqRule";
 
 export default function UpcomingPrayerRowsSlideshowWrapper({
   now,
@@ -31,7 +32,7 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      // ✅ Decide Jummah per prayer's own day (today OR tomorrow)
+      // Friday override: Dhuhr/Zuhr → Jummah
       const isFridayForPrayer = p.start.format("dddd") === "Friday";
       if (isFridayForPrayer && (lookupKey === "dhuhr" || lookupKey === "zuhr")) {
         name = "Jummah";
@@ -45,24 +46,13 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
     .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, 6);
 
-  // --- Force-inject tomorrow's Fajr once today's Fajr has started ---
-  const fajrToday = fullTimeline.find(
-    (p) => p.key === "fajr" && p.start.isSame(now, "day")
-  );
-  const fajrTomorrow = fullTimeline.find(
-    (p) => p.key === "fajr" && p.start.isAfter(now.clone().endOf("day"))
-  );
-
-  if (
-    fajrToday &&
-    fajrTomorrow &&
-    now.isSameOrAfter(fajrToday.start) &&
-    !upcoming.some((p) => p.key === "fajr" && p.start.isSame(fajrTomorrow.start, "minute"))
-  ) {
-    upcoming.push(fajrTomorrow);
-    upcoming.sort((a, b) => a.start.valueOf() - b.start.valueOf());
-    if (upcoming.length > 6) upcoming = upcoming.slice(0, 6);
-  }
+  // Apply shared Fajr/Shouruq behaviour
+  upcoming = applyFajrShouruqRule({
+    now,
+    upcoming,
+    fullTimeline,
+    max: 6,
+  });
 
   const is24 = settingsMap["clock24Hours"] === "TRUE";
   const getLabel = (key) => labels[key.toLowerCase()] || key;
