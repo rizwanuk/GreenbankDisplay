@@ -1,7 +1,7 @@
 // src/Screens/MobileScreen.jsx
 
 import "../index.css";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import moment from "moment";
 
 import usePrayerTimes from "../hooks/usePrayerTimes";
@@ -21,7 +21,6 @@ function useInstallPrompt() {
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    // pick up any deferred event captured before React mounted
     setPromptEvent(window.__deferredInstallPrompt || null);
 
     const onPrompt = (e) => {
@@ -48,8 +47,7 @@ function useInstallPrompt() {
 
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
-  const isAndroid = /Android/i.test(ua);
-  const isDesktop = !isIOS && !isAndroid;
+  const isIOSSafari = isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Brave/i.test(ua);
 
   const install = async () => {
     const ev = promptEvent || window.__deferredInstallPrompt;
@@ -60,19 +58,18 @@ function useInstallPrompt() {
       setPromptEvent(null);
       return choice?.outcome === "accepted";
     }
-    // Fallback instructions (for iOS / no event)
-    alert(
-      isIOS
-        ? "On iPhone/iPad: tap the Share icon, then ‘Add to Home Screen’."
-        : "Use your browser’s menu and choose ‘Install app’ (or the plus icon)."
-    );
+    // Fallback: iOS Safari never fires the event—show instructions
+    alert("In Safari: tap the Share icon, then ‘Add to Home Screen’.");
     return false;
   };
 
-  // show button if not installed and (have event OR on iOS which uses A2HS)
-  const canInstall = !inStandalone && (!!(promptEvent || window.__deferredInstallPrompt) || isIOS);
+  // show Install entry when:
+  // - not already installed, and
+  // - either we have the event (Android/desktop) OR we’re on iOS Safari
+  const canInstallMenu =
+    !inStandalone && (Boolean(promptEvent || window.__deferredInstallPrompt) || isIOSSafari);
 
-  return { canInstall, install, installed, inStandalone, isIOS, isAndroid, isDesktop };
+  return { canInstallMenu, install, installed, inStandalone, isIOS, isIOSSafari };
 }
 
 /* ------------------------------------------------------------------ */
@@ -141,13 +138,9 @@ function PushToggle() {
         const reg = await navigator.serviceWorker?.ready;
         const sub = await reg?.pushManager?.getSubscription?.();
         if (mounted) setEnabled(!!sub);
-      } catch {
-        /* ignore */
-      }
+      } catch {/* ignore */}
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   const onToggle = async () => {
@@ -172,7 +165,7 @@ function PushToggle() {
   if (!supported) return null;
 
   return (
-    <div className="mt-2">
+    <div id="notif-toggle" className="mt-2">
       <button
         onClick={onToggle}
         disabled={loading}
@@ -204,24 +197,36 @@ const Pill = ({ left, right, className = "" }) => (
   </div>
 );
 
-// Small banner with platform-specific install hints
-function InstallHintBanner({ isIOS, isAndroid, isDesktop }) {
-  let text = "";
-  if (isIOS) {
-    text = "Tip: On iPhone/iPad, tap the Share icon, then ‘Add to Home Screen’.";
-  } else if (isAndroid) {
-    text = "Tip: Use the browser menu and choose ‘Install app’ or ‘Add to Home screen’.";
-  } else if (isDesktop) {
-    text = "Tip: In your browser menu, choose ‘Install app’ (or click the install icon).";
-  } else {
-    return null;
-  }
-
+/* Simple 3-dot menu */
+function Kebab({ onClick }) {
   return (
-    <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-snug text-white/90">
-      {text}
-    </div>
+    <button
+      aria-label="More"
+      onClick={onClick}
+      className="p-2 -mr-2 rounded-lg hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20"
+    >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-white/80">
+        <circle cx="12" cy="5" r="2" />
+        <circle cx="12" cy="12" r="2" />
+        <circle cx="12" cy="19" r="2" />
+      </svg>
+    </button>
   );
+}
+
+function useOnClickOutside(ref, handler) {
+  useEffect(() => {
+    function onClick(e) {
+      if (!ref.current || ref.current.contains(e.target)) return;
+      handler();
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("touchstart", onClick);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("touchstart", onClick);
+    };
+  }, [ref, handler]);
 }
 
 /* --------------------------- helpers ---------------------------- */
@@ -259,7 +264,6 @@ function findRowForDate(rows, date = new Date()) {
   const iso = `${y}-${pad2(m)}-${pad2(d)}`;
   const dmySlash = `${pad2(d)}/${pad2(m)}/${y}`;
   const dmyDash = `${pad2(d)}-${pad2(m)}-${y}`;
-
   for (const r of rows) {
     const dayVal = r.Day ?? r.day ?? r["Day "];
     const monthVal = r.Month ?? r.month;
@@ -277,6 +281,11 @@ function findRowForDate(rows, date = new Date()) {
 /* ============================= Component ============================= */
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useOnClickOutside(menuRef, () => setMenuOpen(false));
+
   useEffect(() => {
     const id = setInterval(() => setHb((h) => h + 1), 30_000);
     return () => clearInterval(id);
@@ -334,33 +343,96 @@ export default function MobileScreen() {
   const nowStr = fmt(now, !is24Hour);
 
   // Install button state
-  const { canInstall, install, installed, inStandalone, isIOS, isAndroid, isDesktop } =
-    useInstallPrompt();
+  const { canInstallMenu, install, installed, inStandalone, isIOS, isIOSSafari } = useInstallPrompt();
+
+  // Menu actions
+  const scrollToNotifications = () => {
+    document.getElementById("notif-toggle")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setMenuOpen(false);
+  };
+  const doInstall = async () => {
+    setMenuOpen(false);
+    if (isIOS && !isIOSSafari) {
+      alert("Open this page in Safari, then tap Share → Add to Home Screen.");
+      return;
+    }
+    await install();
+  };
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      alert("Link copied. Open it in Safari to install.");
+    } catch {
+      alert("Copy failed. Long-press the URL bar to copy.");
+    } finally {
+      setMenuOpen(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">
+    <div
+      className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 bg-[#0b0f1a]">
-          <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
-          <div className="text-xs opacity-75">Mobile view</div>
+        {/* Header with menu */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0b0f1a] relative">
+          <div className="min-w-0">
+            <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
+            <div className="text-xs opacity-75">Mobile view</div>
+          </div>
+
+          <div className="relative" ref={menuRef}>
+            <Kebab onClick={() => setMenuOpen((s) => !s)} />
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-60 rounded-xl border border-white/10 bg-[#121827] shadow-xl overflow-hidden z-20">
+                <div className="px-3 py-2 text-xs uppercase tracking-wide text-white/60 border-b border-white/10">
+                  Menu
+                </div>
+
+                {/* Install option appears only when viable */}
+                {canInstallMenu && !installed && (
+                  <button
+                    onClick={doInstall}
+                    className="w-full text-left px-4 py-3 hover:bg-white/5"
+                  >
+                    Install app
+                    <div className="text-xs text-white/60">Add to Home Screen</div>
+                  </button>
+                )}
+
+                {/* iOS non-Safari: show “Open in Safari to install” */}
+                {!canInstallMenu && !installed && isIOS && (
+                  <>
+                    <button
+                      onClick={() =>
+                        alert("Open in Safari, then Share → Add to Home Screen.")
+                      }
+                      className="w-full text-left px-4 py-3 hover:bg-white/5"
+                    >
+                      How to install (iOS)
+                      <div className="text-xs text-white/60">Open in Safari to install</div>
+                    </button>
+                    <button onClick={copyLink} className="w-full text-left px-4 py-3 hover:bg-white/5">
+                      Copy link for Safari
+                    </button>
+                  </>
+                )}
+
+                <button onClick={scrollToNotifications} className="w-full text-left px-4 py-3 hover:bg-white/5">
+                  Notifications
+                  <div className="text-xs text-white/60">Enable or disable alerts</div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <main className="px-4 py-4 space-y-3">
           <Pill left={todayLong} right={nowStr} />
-
-          {canInstall && !installed && (
-            <button
-              onClick={install}
-              className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[15px] font-semibold text-emerald-300 hover:bg-emerald-400/15"
-            >
-              Install app
-            </button>
-          )}
-
-          {/* If we can't show the install button, show a gentle hint instead */}
-          {!canInstall && !installed && !inStandalone && (
-            <InstallHintBanner isIOS={isIOS} isAndroid={isAndroid} isDesktop={isDesktop} />
-          )}
 
           <PushToggle />
 
