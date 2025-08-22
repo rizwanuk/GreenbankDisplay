@@ -4,7 +4,6 @@ import moment from "moment";
 import applyJummahOverride from "../helpers/applyJummahOverride";
 
 const SUNRISE_ALIASES = ["sunrise", "shouruq", "shuruq", "shurooq", "shourouq"];
-const DHUHR_ALIASES = ["dhuhr", "zuhr"];
 
 // tolerant: "13:22", "1:22 pm", "1322", 802 (mins), Date -> moment on base day
 function toMomentOn(anyTime, baseMoment) {
@@ -46,13 +45,17 @@ function pickKey(row, aliases) {
 function buildItemsForDay(row, baseMoment, labels, arabicLabels, settingsMap) {
   if (!row) return [];
   const out = [];
+  const isFriday = baseMoment.isoWeekday() === 5; // 1=Mon … 5=Fri
 
   const make = (keyName) => {
     const lk = keyName.toLowerCase();
     const startStr =
-      row[`${keyName} Adhan`] ?? row[keyName] ??
-      (lk === "dhuhr" && row["Zuhr"]) ?? null;
-    const jamaahStr = row[`${keyName} Iqamah`] ?? null;
+      row[`${keyName} Adhan`] ??
+      row[keyName] ??
+      (lk === "dhuhr" && (row["Zuhr"] || row["zuhr"])) ??
+      null;
+
+    const jamaahStr = row[`${keyName} Iqamah`] ?? row[`${keyName} Jama'ah`] ?? null;
     if (!startStr) return null;
 
     let start = toMomentOn(startStr, baseMoment);
@@ -67,7 +70,17 @@ function buildItemsForDay(row, baseMoment, labels, arabicLabels, settingsMap) {
       label: labels?.[lk] ?? keyName,
       arabic: arabicLabels?.[lk] ?? "",
     };
-    item = applyJummahOverride(item, settingsMap);
+
+    // Allow shared helper first (in case it sets a special time/label)
+    item = applyJummahOverride ? applyJummahOverride(item, settingsMap) : item;
+
+    // Hard override for Fridays: show Jum‘ah (labels only) for Dhuhr
+    if (item.lookupKey === "dhuhr" && isFriday) {
+      item.key = "jummah";
+      item.label = labels?.jummah || "Jum‘ah";
+      item.arabic = arabicLabels?.jummah || arabicLabels?.dhuhr || item.arabic;
+    }
+
     return item;
   };
 
@@ -113,7 +126,7 @@ export default function MobileNextCard({
     return () => clearInterval(id);
   }, []);
 
-  // Fake time support (same switch as elsewhere)
+  // Fake time support
   const fakeEnabled = String(settingsMap["toggles.fakeTimeEnabled"] ?? "false").toLowerCase() === "true";
   const fakeTimeStr = settingsMap["toggles.fakeTime"];
   let now = tick;
@@ -143,14 +156,14 @@ export default function MobileNextCard({
       if (!p.start) continue;
 
       if (now.isBefore(p.start)) {
-        // not started yet
+        // Not started yet → countdown to start
         if (!bestTarget || p.start.isBefore(bestTarget)) {
           best = p;
           bestTarget = p.start;
           bestPrefix = "Begins in";
         }
       } else if (p.jamaah && now.isBefore(p.jamaah)) {
-        // between adhan and jama‘ah
+        // Between adhan and jama‘ah → countdown to jama‘ah
         if (!bestTarget || p.jamaah.isBefore(bestTarget)) {
           best = p;
           bestTarget = p.jamaah;
@@ -160,6 +173,23 @@ export default function MobileNextCard({
     }
     return { nextItem: best, target: bestTarget, prefix: bestPrefix };
   }, [list, now]);
+
+  // FINAL guard at render-time: if the next item is Dhuhr on a Friday, display as Jum‘ah
+  const isJummahDisplay = useMemo(() => {
+    if (!nextItem) return false;
+    const isDhuhr = nextItem.lookupKey === "dhuhr" || nextItem.key === "dhuhr";
+    const fridayByStart = nextItem.start?.isoWeekday?.() === 5;
+    const fridayByNow = now.isoWeekday() === 5;
+    return isDhuhr && (fridayByStart || fridayByNow);
+  }, [nextItem, now]);
+
+  const displayLabel = isJummahDisplay
+    ? (labels?.jummah || "Jum‘ah")
+    : (nextItem?.label || "Next");
+
+  const displayArabic = isJummahDisplay
+    ? (arabicLabels?.jummah || arabicLabels?.dhuhr || "")
+    : (nextItem?.arabic || "");
 
   // countdown string
   const countdown = useMemo(() => {
@@ -178,7 +208,7 @@ export default function MobileNextCard({
   }, [target, now, prefix]);
 
   // ==== UI with left accent "Next" ====
-  const accentColor = "bg-cyan-600"; // distinct from "Now" (green). Adjust to taste/theme.
+  const accentColor = "bg-cyan-600";
 
   return (
     <div className="flex rounded-2xl border border-white/10 bg-white/10 text-white">
@@ -196,11 +226,11 @@ export default function MobileNextCard({
       <div className="flex-1 px-3 py-3 text-center">
         <div className="flex items-center justify-center gap-2 mb-1">
           <div className="text-2xl font-semibold">
-            {nextItem?.label || "Next"}
+            {displayLabel}
           </div>
-          {nextItem?.arabic ? (
+          {displayArabic ? (
             <div className="text-xl font-arabic" lang="ar" dir="rtl">
-              {nextItem.arabic}
+              {displayArabic}
             </div>
           ) : null}
         </div>

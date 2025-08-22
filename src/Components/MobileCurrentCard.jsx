@@ -58,7 +58,7 @@ export default function MobileCurrentCard({
     );
   }
 
-  // Apply Jummah override for prayer rows
+  // Apply Jummah override for times/normalisation
   const normalized = {
     lookupKey: (current.key || "").toLowerCase(),
     name: current.key,
@@ -67,21 +67,36 @@ export default function MobileCurrentCard({
   };
   const fixed = applyJummahOverride(normalized, settingsMap);
 
-  const labelKey = (fixed.lookupKey || current.key || "").toLowerCase();
-  const label = current.label || labels[labelKey] || current.key || "";
+  // Label + Arabic with Friday Jum‘ah override
+  let labelKey = (fixed.lookupKey || current.key || "").toLowerCase();
+  let label = current.label || labels[labelKey] || current.key || "";
 
-  // Avoid duplicate Arabic if already in the label
+  // If it's Friday and current prayer is Dhuhr, display as Jum‘ah (labels only)
+  const isFriday = effectiveNow.isoWeekday() === 5; // 1=Mon … 5=Fri
+  if (labelKey === "dhuhr" && isFriday) {
+    labelKey = "jummah";
+    label = labels.jummah || "Jum‘ah";
+  }
+
+  // Avoid duplicate Arabic if already part of the English label
   const containsArabic = /[\u0600-\u06FF]/.test(label);
-  const arabic = containsArabic ? null : (current.arabic ?? arabicLabels[labelKey] ?? null);
+  const arabic =
+    containsArabic
+      ? null
+      : (current.arabic ??
+          arabicLabels[labelKey] ??
+          (labelKey === "jummah" ? arabicLabels.dhuhr : null) ??
+          null);
 
   const isMakrooh = Boolean(current.isMakrooh);
   const inJamaah = Boolean(current.inJamaah);
+
   const start = current.start;
   const jamaah = fixed.jamaah || current.jamaah;
 
   const hasStart = moment.isMoment(start) && start.isValid();
   const hasJamaah = moment.isMoment(jamaah) && jamaah.isValid();
-  const hasAnyTimes = hasStart || hasJamaah; // “prayer” state if true
+  const hasAnyTimes = hasStart || hasJamaah;
 
   const fmt = (m) => (is24Hour ? m.format("HH:mm") : m.format("h:mm a"));
 
@@ -142,7 +157,7 @@ export default function MobileCurrentCard({
         <div className="text-lg font-semibold">Jama‘ah in progress</div>
       </CardShell>
     );
-  }
+    }
 
   return (
     <CardShell bg={isMakrooh ? "bg-red-700/80" : "bg-white/10"}>

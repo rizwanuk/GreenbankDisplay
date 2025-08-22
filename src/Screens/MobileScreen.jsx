@@ -2,12 +2,13 @@
 
 import "../index.css";
 import React, { useEffect, useMemo, useState } from "react";
+import moment from "moment";
 
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
+import { getJummahTime } from "../hooks/usePrayerHelpers";
 
-// Mobile-only compact cards
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 
@@ -26,15 +27,8 @@ const Pill = ({ left, right, className = "" }) => (
   </div>
 );
 
-/* --- Upcoming UI helpers (refined + aligned) --- */
-/** Shared grid so headers + rows align perfectly:
- *  - 1st col: flexible (name)
- *  - 2nd col: fixed 10ch for time.
- *  - 3rd col: fixed 10ch for time.
- */
 const GRID = "grid font-mono grid-cols-[1fr,10ch,10ch] gap-2";
 
-// Centered chip with soft gradient rules either side
 const DayDivider = ({ children }) => (
   <div className="flex items-center gap-3 px-3 my-1.5">
     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -53,7 +47,6 @@ const UpcomingHeaderRow = () => (
   </div>
 );
 
-// Increased font sizes, keep row height via tight line-height + single line
 const UpcomingRow = ({ name, start, jamaah }) => (
   <div className={`${GRID} items-center px-3 py-2 odd:bg-white/[0.03]`}>
     <div className="font-sans font-semibold truncate text-[17px] leading-none">{name}</div>
@@ -125,14 +118,12 @@ function parseTimeToDay(cell, refDate) {
   let str = String(cell).trim();
   if (!str) return null;
 
-  // Handle 24h "HH:MM"
   let h, m;
   const m24 = str.match(/^(\d{1,2}):(\d{2})$/);
   if (m24) {
     h = Number(m24[1]);
     m = Number(m24[2]);
   } else {
-    // Handle 12h “h:mm am/pm”
     str = str.toLowerCase().replace(/\s+/g, "");
     const mm = str.match(/^(\d{1,2}):(\d{2})(am|pm)$/);
     if (mm) {
@@ -147,7 +138,6 @@ function parseTimeToDay(cell, refDate) {
   return new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), h, m, 0, 0);
 }
 
-// pull adhan/jama‘ah regardless of naming; includes Shouruq aliases
 function extractRowTimes(row, refDate, labelMap) {
   if (!row) return {};
   const keys = Object.keys(row || {});
@@ -159,7 +149,6 @@ function extractRowTimes(row, refDate, labelMap) {
 
   const out = {};
   ORDER.forEach((p) => {
-    // resolve adhan/start column
     let adhanKey;
     if (p === "sunrise") {
       adhanKey = pickKey(SUNRISE_ALIASES);
@@ -172,7 +161,6 @@ function extractRowTimes(row, refDate, labelMap) {
         findKey(new RegExp(`${p}.*(adhan|start|begin|beg|time)`, "i"));
     }
 
-    // resolve jama‘ah/iqamah column
     const jamaahKey =
       p === "sunrise" ? null : findKey(new RegExp(`${p}.*(jama|jamaah|jamaat|jamah|iqama|iqamah|congregation|j)$`, "i"));
 
@@ -199,19 +187,15 @@ function buildTimeline(row, refDate, labelMap) {
   return ORDER.map((k) => map[k]).filter(Boolean);
 }
 
-/** Build ≤max upcoming items.
- *  Guarantee: once **today's Fajr has started**, include **tomorrow's Fajr** immediately.
- *  If there’s room, Sunrise (tomorrow) can follow Fajr (tomorrow). */
 function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 }) {
   const isToday = (d) => d.toDateString() === todayRef.toDateString();
   const isTomorrow = (d) => d.toDateString() === tomorrowRef.toDateString();
 
   const futureToday = (today || []).filter((p) => p.start > now);
-  const combined = [...futureToday, ...(tomorrow || [])]; // chronological
+  const combined = [...futureToday, ...(tomorrow || [])];
 
   let limited = combined.slice(0, max);
 
-  // --- Force-inject Fajr (tomorrow) once today's Fajr has begun ---
   const fajrToday = (today || []).find((p) => p.key === "fajr");
   const fajrTomorrow = (tomorrow || []).find((p) => p.key === "fajr" && isTomorrow(p.start));
 
@@ -221,32 +205,34 @@ function buildUpcoming({ now, today, tomorrow, todayRef, tomorrowRef, max = 6 })
     now >= fajrToday.start &&
     !limited.some((p) => p.key === "fajr" && isTomorrow(p.start))
   ) {
-    // add and keep chronological order
     limited.push(fajrTomorrow);
     limited.sort((a, b) => a.start - b.start);
     if (limited.length > max) limited = limited.slice(0, max);
   }
 
-  // If Fajr (tomorrow) is present and there's space/need, try to include Sunrise (tomorrow) next
-  const sunTomorrow = (tomorrow || []).find((p) => p.key === "sunrise" && isTomorrow(p.start));
-  const hasFajrT = limited.some((p) => p.key === "fajr" && isTomorrow(p.start));
-  const hasSunT = limited.some((p) => p.key === "sunrise" && isTomorrow(p.start));
-  if (hasFajrT && sunTomorrow && !hasSunT) {
-    if (limited.length < max) {
-      limited.push(sunTomorrow);
-    } else {
-      // replace the last entry if needed
-      limited[limited.length - 1] = sunTomorrow;
-    }
-    limited.sort((a, b) => a.start - b.start);
-  }
-
   return { list: limited, isToday, isTomorrow };
+}
+
+/* --- Jum‘ah override --- */
+function applyJummahOverrideToList(list, settingsMap, labels) {
+  const jummahLabel = labels?.jummah || "Jum‘ah";
+
+  return (list || []).map((p) => {
+    if (p?.key === "dhuhr" && p.start && p.start.getDay() === 5) {
+      const override = { ...p, name: jummahLabel };
+
+      const jummahMoment = getJummahTime(settingsMap, moment(p.start));
+      if (jummahMoment?.isValid?.()) {
+        override.jamaah = jummahMoment.toDate();
+      }
+      return override;
+    }
+    return p;
+  });
 }
 
 /* ============================= Component ============================= */
 export default function MobileScreen() {
-  // Heartbeat to refresh UI regularly (every 30s)
   const [hb, setHb] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setHb((h) => h + 1), 30_000);
@@ -260,7 +246,6 @@ export default function MobileScreen() {
   const labels = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const arabic = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
-  // reference midnights so we stamp times on the correct day
   const now = useMemo(() => new Date(), [hb]);
   const refToday = useMemo(() => {
     const d = new Date(now);
@@ -278,12 +263,10 @@ export default function MobileScreen() {
     return d;
   }, [refToday]);
 
-  // timetable rows
   const todayRow = useMemo(() => findRowForDate(timetable, refToday), [timetable, refToday]);
   const yRow = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
   const tRow = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
 
-  // labels consistent with main screen
   const labelMap = useMemo(
     () => ({
       fajr: labels?.fajr || "Fajr",
@@ -292,27 +275,29 @@ export default function MobileScreen() {
       asr: labels?.asr || "Asr",
       maghrib: labels?.maghrib || "Maghrib",
       isha: labels?.isha || "Isha",
+      jummah: labels?.jummah || "Jum‘ah",
     }),
     [labels]
   );
 
-  // timelines for upcoming
   const today = useMemo(() => buildTimeline(todayRow, refToday, labelMap), [todayRow, refToday, labelMap]);
   const tomorrow = useMemo(() => buildTimeline(tRow, refTomorrow, labelMap), [tRow, refTomorrow, labelMap]);
 
-  // Upcoming (≤6), includes Sunrise after Fajr when rolling into tomorrow
-  const { list: upcoming, isToday, isTomorrow } = useMemo(
+  const { list: rawUpcoming, isToday, isTomorrow } = useMemo(
     () => buildUpcoming({ now, today, tomorrow, todayRef: refToday, tomorrowRef: refTomorrow, max: 6 }),
     [now, today, tomorrow, refToday, refTomorrow]
   );
 
-  // clock format
+  const upcoming = useMemo(
+    () => applyJummahOverrideToList(rawUpcoming, settingsMap, labels),
+    [rawUpcoming, settingsMap, labels]
+  );
+
   const is24Hour =
     (settingsMap["toggles.clock24Hours"] || settingsMap["clock24Hours"] || "")
       .toString()
       .toUpperCase() === "TRUE";
 
-  // header strings
   const todayLong = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "2-digit",
@@ -321,25 +306,20 @@ export default function MobileScreen() {
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
 
-  // split upcoming
   const upcomingToday = upcoming.filter((p) => isToday(p.start));
   const upcomingTomorrow = upcoming.filter((p) => isTomorrow(p.start));
 
   return (
-    // desktop phone-frame; mobile is full width
     <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
-        {/* Non-sticky header */}
         <div className="px-4 py-3 border-b border-white/10 bg-[#0b0f1a]">
           <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
           <div className="text-xs opacity-75">Mobile view</div>
         </div>
 
         <main className="px-4 py-4 space-y-3">
-          {/* Date */}
           <Pill left={todayLong} right={nowStr} />
 
-          {/* Current (compact, mobile-only) */}
           <MobileCurrentCard
             labels={labels}
             arabicLabels={arabic}
@@ -349,7 +329,6 @@ export default function MobileScreen() {
             settingsMap={settingsMap}
           />
 
-          {/* Next (compact, mobile-only) */}
           <MobileNextCard
             todayRow={todayRow}
             tomorrowRow={tRow}
@@ -358,15 +337,11 @@ export default function MobileScreen() {
             settingsMap={settingsMap}
           />
 
-          {/* Upcoming (no section title/meta, no Today chip, keep Tomorrow chip) */}
           <section className="mt-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.05]">
-              {/* Keep column headers */}
               <UpcomingHeaderRow />
 
-              {/* Body */}
               <div className="divide-y divide-white/10">
-                {/* Today → rows only (no chip) */}
                 {upcomingToday.length > 0 &&
                   upcomingToday.map((p, i) => (
                     <UpcomingRow
@@ -377,7 +352,6 @@ export default function MobileScreen() {
                     />
                   ))}
 
-                {/* Tomorrow → keep chip */}
                 {upcomingTomorrow.length > 0 && (
                   <>
                     <DayDivider>Tomorrow</DayDivider>
@@ -392,7 +366,6 @@ export default function MobileScreen() {
                   </>
                 )}
 
-                {/* Empty state */}
                 {!upcomingToday.length && !upcomingTomorrow.length && (
                   <div className="px-3 py-4 text-sm opacity-70">No upcoming times.</div>
                 )}
