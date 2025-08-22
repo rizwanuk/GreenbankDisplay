@@ -16,6 +16,7 @@ import MobileUpcomingList from "../Components/MobileUpcomingList";
 import useInstallPrompt from "../hooks/useInstallPrompt";
 import KebabMenu from "../Components/pwa/KebabMenu";
 import PushControls from "../Components/pwa/PushControls";
+import usePushStatus from "../hooks/usePushStatus";
 
 /* --------------------------- UI atoms --------------------------- */
 const Pill = ({ left, right, className = "" }) => (
@@ -233,8 +234,9 @@ export default function MobileScreen() {
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
 
-  // Install/menu state
+  // Install/menu state + push status
   const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
+  const push = usePushStatus();
 
   const scrollToNotifications = () => {
     document.getElementById("notif-toggle")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -279,6 +281,8 @@ export default function MobileScreen() {
             onInstall={doInstall}
             onNotifications={scrollToNotifications}
             onCopyLink={copyLinkFallback}
+            notifStatusLabel={push.statusLabel}
+            notifStatusColor={push.statusColor}
           />
         </div>
 

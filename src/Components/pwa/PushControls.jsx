@@ -97,6 +97,7 @@ export default function PushControls() {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [savedNote, setSavedNote] = useState("");
 
   // Platform detection
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
@@ -110,6 +111,12 @@ export default function PushControls() {
   const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
+  const broadcast = () => {
+    try {
+      window.dispatchEvent(new CustomEvent("gb:push:changed"));
+    } catch {}
+  };
+
   const refreshState = async () => {
     try {
       setPerm(typeof Notification !== "undefined" ? Notification.permission : "default");
@@ -118,6 +125,8 @@ export default function PushControls() {
       setEnabled(!!sub);
     } catch {
       setEnabled(false);
+    } finally {
+      broadcast();
     }
   };
 
@@ -133,6 +142,7 @@ export default function PushControls() {
       mounted = false;
       document.removeEventListener("visibilitychange", onVis);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onCheckboxChange = async (e) => {
@@ -145,10 +155,13 @@ export default function PushControls() {
     try {
       if (e.target.checked) {
         await subscribeToPush();
+        setSavedNote("Notifications enabled ✓");
       } else {
         await unsubscribeFromPush();
+        setSavedNote("Notifications disabled ✓");
       }
       await refreshState();
+      setTimeout(() => setSavedNote(""), 2000);
     } catch (err) {
       setError(err?.message || "Failed to change notifications.");
       await refreshState();
@@ -186,9 +199,8 @@ export default function PushControls() {
     }
   };
 
-  /* ----- Render guidance (reordered) ----- */
+  /* ----- Render guidance (iOS-first) ----- */
 
-  // 1) iOS not-installed → show clear install guidance (even if Notification API is missing)
   if (isIOS && !isStandalone) {
     return (
       <InfoBanner id="ios-install-hint" tone="warn">
@@ -216,7 +228,6 @@ export default function PushControls() {
     );
   }
 
-  // 2) Generic missing SW/Notification (e.g. in-app browsers, private mode)
   if (!(hasNotification && hasSW)) {
     return (
       <InfoBanner id="no-sw-or-notification">
@@ -225,7 +236,6 @@ export default function PushControls() {
     );
   }
 
-  // 3) Installed but no Push API (very old iOS/contexts)
   if (!hasPush) {
     return (
       <InfoBanner id="no-push-api" tone="warn">
@@ -235,7 +245,6 @@ export default function PushControls() {
     );
   }
 
-  // --- Normal supported UI ---
   const statusText =
     perm === "denied"
       ? "Blocked in browser settings"
@@ -263,6 +272,8 @@ export default function PushControls() {
         </div>
         {loading && <span className="text-xs opacity-75">…</span>}
       </label>
+
+      {savedNote && <div className="text-xs text-emerald-300">{savedNote}</div>}
 
       {enabled && (
         <button
