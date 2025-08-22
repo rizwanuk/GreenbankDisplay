@@ -8,11 +8,31 @@ import { RouterProvider } from "react-router-dom";
 // If it exports a named `router`, change to: import { router } from "./router";
 import router from "./router";
 
+// ✅ Register the /mobile PWA service worker in production via dynamic import
+if (import.meta?.env?.PROD && "serviceWorker" in navigator) {
+  import("./pwa/registerMobileSW.js")
+    .then((mod) => {
+      // Supports both named and default export
+      const fn = mod.registerMobileSW || mod.default;
+      if (typeof fn === "function") fn();
+    })
+    .catch((err) => console.error("[PWA] SW registration import failed:", err));
+}
+
 // Simple crash UI so we never get a silent blank screen
 function Crash({ error }) {
-  const msg = (error && (error.stack || error.message)) || String(error || "Unknown error");
+  const msg =
+    (error && (error.stack || error.message)) || String(error || "Unknown error");
   return (
-    <div style={{ padding: 16, background: "#1b1b1b", color: "#ffb4b4", fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
+    <div
+      style={{
+        padding: 16,
+        background: "#1b1b1b",
+        color: "#ffb4b4",
+        fontFamily: "monospace",
+        whiteSpace: "pre-wrap",
+      }}
+    >
       <div style={{ fontWeight: "bold", marginBottom: 8 }}>❌ App crashed</div>
       {msg}
     </div>
@@ -49,5 +69,9 @@ createRoot(rootEl).render(
 );
 
 // Log global errors to console (don’t re-render the root here to avoid race conditions)
-window.addEventListener("error", (e) => console.error("Global error:", e.error || e.message));
-window.addEventListener("unhandledrejection", (e) => console.error("Unhandled rejection:", e.reason || e));
+window.addEventListener("error", (e) =>
+  console.error("Global error:", e.error || e.message)
+);
+window.addEventListener("unhandledrejection", (e) =>
+  console.error("Unhandled rejection:", e.reason || e)
+);
