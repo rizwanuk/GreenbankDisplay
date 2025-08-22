@@ -2,34 +2,61 @@
 import React from "react";
 import moment from "moment";
 
-// helpers
-const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
-const fmt = (d, hour12 = false) =>
-  d
-    ? new Intl.DateTimeFormat("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12,
-        timeZone: tz,
-      }).format(d)
-    : "—";
+/* ---------- helpers ---------- */
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
 
-const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+// Render time with am/pm as subscript (12h only)
+function TimeWithSmallAmPm({ date, is24Hour }) {
+  if (!date) return <>—</>;
+  const d =
+    date instanceof Date
+      ? date
+      : moment.isMoment(date)
+      ? date.toDate()
+      : typeof date === "number"
+      ? new Date(date)
+      : typeof date === "string"
+      ? new Date(date)
+      : null;
+  if (!(d instanceof Date) || isNaN(d.getTime())) return <>—</>;
 
-// --- robust date coercion ---
+  if (is24Hour) {
+    return (
+      <span className="tabular-nums whitespace-nowrap">
+        {pad2(d.getHours())}:{pad2(d.getMinutes())}
+      </span>
+    );
+  }
+
+  const h = d.getHours();
+  const h12 = h % 12 || 12;
+  const am = h < 12;
+  return (
+    <span className="tabular-nums whitespace-nowrap">
+      {h12}:{pad2(d.getMinutes())}
+      <span
+        style={{ verticalAlign: "sub" }}
+        className="text-[0.62em] ml-0.5 opacity-80 tracking-tight"
+      >
+        {am ? "am" : "pm"}
+      </span>
+    </span>
+  );
+}
+
 function toDate(x) {
   if (!x) return null;
   if (x instanceof Date) return x;
   if (moment.isMoment(x)) return x.toDate();
   if (typeof x === "number") return new Date(x);
-  // optionally handle ISO strings
   if (typeof x === "string") {
     const d = new Date(x);
     return isNaN(d.getTime()) ? null : d;
   }
   return null;
 }
-
 function sameYMD(a, b) {
   const da = toDate(a);
   const db = toDate(b);
@@ -41,89 +68,64 @@ function sameYMD(a, b) {
   );
 }
 
-// Label resolvers (prefer your Sheets labels; fall back to defaults)
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+function normalizeKey(raw) {
+  let k = String(raw || "").toLowerCase().normalize("NFKD");
+  k = k.replace(/[’'‘]/g, "").replace(/\s+/g, "");
+  if (k === "ishaa") k = "isha";
+  if (k === "magrib") k = "maghrib";
+  if (["shouruq", "shuruq", "shurooq", "shourouq", "ishraq"].includes(k)) k = "sunrise";
+  if (k.startsWith("jum")) k = "jummah";
+  return k;
+}
 function resolveKey(p) {
-  // prefer explicit lookupKey, then builder key, then normalized name
-  const n = (p?.name || "").toString().trim().toLowerCase();
-  return (p?.lookupKey || p?.key || n || "").toLowerCase();
+  const base = p?.lookupKey || p?.key || p?.name || "";
+  return normalizeKey(base);
 }
-
 function resolveEnglishLabel(p, labels) {
-  const key0 = resolveKey(p);
-  const sunriseAliases = new Set(["shouruq", "ishraq", "shuruq", "shurooq", "shourouq"]);
-  const key = sunriseAliases.has(key0) ? "sunrise" : key0;
-
-  // try exact, then fallback to capitalized key/name
-  return (
-    labels?.[key] ??
-    labels?.[key0] ??
-    (key === "sunrise" ? "Shouruq" : cap(key || p?.name || ""))
-  );
+  const key = resolveKey(p);
+  return labels?.[key] ?? (key === "sunrise" ? "Shouruq" : cap(key || p?.name || ""));
 }
 
-function resolveArabicLabel(p, arabicLabels, labels) {
-  const key0 = resolveKey(p);
-  const sunriseAliases = new Set(["shouruq", "ishraq", "shuruq", "shurooq", "shourouq"]);
-  const key = sunriseAliases.has(key0) ? "sunrise" : key0;
+/* ---------- UI pieces ---------- */
 
-  // prefer explicit Arabic map; allow ar_* fallback in labels if you store it there
-  return (
-    arabicLabels?.[key] ??
-    arabicLabels?.[key0] ??
-    labels?.[`ar_${key}`] ??
-    labels?.[`ar_${key0}`] ??
-    ""
-  );
-}
-
-const GRID = "grid font-mono grid-cols-[1fr,10ch,10ch] gap-2";
-
+// Header uses same fixed widths as rows for perfect alignment
 const UpcomingHeaderRow = () => (
-  <div className={`${GRID} text-[11px] uppercase px-3 py-1.5`}>
-    <div className="font-sans tracking-wide opacity-70">Salah</div>
-    <div className="justify-self-center tabular-nums tracking-normal opacity-70">Start</div>
-    <div className="justify-self-end tabular-nums tracking-normal opacity-70">Jam’ah</div>
-  </div>
-);
-
-const DayDivider = ({ children }) => (
-  <div className="flex items-center gap-3 px-3 my-1.5">
-    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-    <span className="px-2 py-[3px] text-[11px] rounded-full bg-white/10 border border-white/15 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-      {children}
-    </span>
-    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-  </div>
-);
-
-const UpcomingRow = ({ name, start, jamaah, arabic }) => (
-  <div className={`${GRID} items-center px-3 py-2 odd:bg-white/[0.03]`}>
-    <div className="font-sans font-semibold truncate text-[17px] leading-none">
-      <span className="align-middle">{name}</span>
-      {arabic ? (
-        <span className="ml-2 text-[13px] opacity-75 font-arabic align-middle" lang="ar" dir="rtl">
-          {arabic}
-        </span>
-      ) : null}
+  <div className="flex items-center px-3 py-1.5 text-[11px] uppercase">
+    <div className="flex-1 font-sans tracking-wide opacity-70 whitespace-nowrap">Salah</div>
+    <div className="w-[10ch] text-center tabular-nums tracking-normal opacity-70 whitespace-nowrap">
+      Start
     </div>
-    <div className="justify-self-center tabular-nums text-[17px] leading-none whitespace-nowrap">
-      {start}
-    </div>
-    <div className="justify-self-end tabular-nums text-[17px] leading-none whitespace-nowrap">
-      {jamaah ?? "—"}
+    <div className="w-[10ch] text-right tabular-nums tracking-normal opacity-70 whitespace-nowrap">
+      Jam’ah
     </div>
   </div>
 );
 
+// Rows: flex layout with fixed time widths so spacing is balanced
+const UpcomingRow = ({ name, start, jamaah, is24Hour }) => (
+  <div className="flex items-center px-3 py-2 odd:bg-white/[0.03]">
+    <div className="flex-1 font-sans font-semibold text-[20px] leading-none whitespace-nowrap overflow-hidden text-ellipsis">
+      {name}
+    </div>
+    <div className="w-[10ch] text-[19px] leading-none text-center whitespace-nowrap">
+      <TimeWithSmallAmPm date={start} is24Hour={is24Hour} />
+    </div>
+    <div className="w-[10ch] text-[19px] leading-none text-right whitespace-nowrap">
+      {jamaah ? <TimeWithSmallAmPm date={jamaah} is24Hour={is24Hour} /> : "—"}
+    </div>
+  </div>
+);
+
+/* ---------- Main component ---------- */
 export default function MobileUpcomingList({
   upcoming = [],
   is24Hour = false,
   todayRef,
   tomorrowRef,
   labels = {},
-  arabicLabels = {},
 }) {
-  // Coerce dates up-front and drop any malformed entries
+  // Coerce dates and drop malformed entries
   const sanitized = (upcoming || [])
     .map((p) => {
       const start = toDate(p.start);
@@ -143,24 +145,30 @@ export default function MobileUpcomingList({
           {todayItems.length > 0 &&
             todayItems.map((p, i) => (
               <UpcomingRow
-                key={`t-${p.key || p.name || i}-${i}`}
+                key={`t-${p.key || p.lookupKey || p.name || i}-${i}`}
                 name={resolveEnglishLabel(p, labels)}
-                arabic={resolveArabicLabel(p, arabicLabels, labels)}
-                start={fmt(p.start, !is24Hour)}
-                jamaah={p.jamaah ? fmt(p.jamaah, !is24Hour) : null}
+                start={p.start}
+                jamaah={p.jamaah}
+                is24Hour={is24Hour}
               />
             ))}
 
           {tomorrowItems.length > 0 && (
             <>
-              <DayDivider>Tomorrow</DayDivider>
+              <div className="flex items-center gap-3 px-3 my-1.5">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                <span className="px-2 py-[3px] text-[11px] rounded-full bg-white/10 border border-white/15 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+                  Tomorrow
+                </span>
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              </div>
               {tomorrowItems.map((p, i) => (
                 <UpcomingRow
-                  key={`tm-${p.key || p.name || i}-${i}`}
+                  key={`tm-${p.key || p.lookupKey || p.name || i}-${i}`}
                   name={resolveEnglishLabel(p, labels)}
-                  arabic={resolveArabicLabel(p, arabicLabels, labels)}
-                  start={fmt(p.start, !is24Hour)}
-                  jamaah={p.jamaah ? fmt(p.jamaah, !is24Hour) : null}
+                  start={p.start}
+                  jamaah={p.jamaah}
+                  is24Hour={is24Hour}
                 />
               ))}
             </>
