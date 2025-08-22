@@ -2,6 +2,7 @@ import React from "react";
 import moment from "moment";
 import formatWithSmallAmPm from "../../helpers/formatWithSmallAmPm";
 import { buildPrayerTimeline } from "../../helpers/getCurrentPrayer";
+import { getJummahTime } from "../../hooks/usePrayerHelpers";
 
 export default function UpcomingPrayerRowsSlideshowWrapper({
   now,
@@ -23,8 +24,6 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
       settingsMap,
     }) || [];
 
-  const isFriday = now.format("dddd") === "Friday";
-
   let upcoming = fullTimeline
     .filter((p) => now.isBefore(p.start) && p.name !== "Ishraq")
     .map((p) => {
@@ -32,20 +31,16 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      if (isFriday && p.name.toLowerCase() === "dhuhr") {
+      // ✅ Decide Jummah per prayer's own day (today OR tomorrow)
+      const isFridayForPrayer = p.start.format("dddd") === "Friday";
+      if (isFridayForPrayer && (lookupKey === "dhuhr" || lookupKey === "zuhr")) {
         name = "Jummah";
-        lookupKey = "zuhr";
-        const jummahTimeStr = settingsMap["timings.jummahTime"];
-        const jummahMoment = moment(jummahTimeStr, "HH:mm");
-        if (jummahMoment.isValid()) jamaah = jummahMoment;
+        lookupKey = "jummah";
+        const jummahMoment = getJummahTime(settingsMap, p.start);
+        if (jummahMoment?.isValid?.()) jamaah = jummahMoment;
       }
 
-      return {
-        ...p,
-        name,
-        jamaah,
-        lookupKey,
-      };
+      return { ...p, name, jamaah, lookupKey };
     })
     .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, 6);
