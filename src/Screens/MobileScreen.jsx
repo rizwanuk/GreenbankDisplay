@@ -1,3 +1,5 @@
+// src/Screens/MobileScreen.jsx
+
 import "../index.css";
 import React, { useEffect, useMemo, useState } from "react";
 import moment from "moment";
@@ -10,6 +12,179 @@ import useMobileTimeline from "../hooks/useMobileTimeline";
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 import MobileUpcomingList from "../Components/MobileUpcomingList";
+
+/* ------------------------------------------------------------------ */
+/* Install prompt hook (reads deferred event saved early in main.jsx)  */
+/* ------------------------------------------------------------------ */
+function useInstallPrompt() {
+  const [promptEvent, setPromptEvent] = useState(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    // pick up any deferred event captured before React mounted
+    setPromptEvent(window.__deferredInstallPrompt || null);
+
+    const onPrompt = (e) => {
+      e.preventDefault();
+      window.__deferredInstallPrompt = e;
+      setPromptEvent(e);
+    };
+    const onInstalled = () => {
+      window.__deferredInstallPrompt = null;
+      setInstalled(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  const inStandalone =
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+    (window.navigator && window.navigator.standalone);
+
+  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
+
+  const install = async () => {
+    const ev = promptEvent || window.__deferredInstallPrompt;
+    if (ev && typeof ev.prompt === "function") {
+      ev.prompt();
+      const choice = await ev.userChoice;
+      window.__deferredInstallPrompt = null;
+      setPromptEvent(null);
+      return choice?.outcome === "accepted";
+    }
+    // Fallback instructions (for iOS / no event)
+    alert(
+      isIOS
+        ? "On iPhone/iPad: tap the Share icon, then ‘Add to Home Screen’."
+        : "Use your browser’s menu and choose ‘Install app’ (or the plus icon)."
+    );
+    return false;
+  };
+
+  // show button if not installed and (have event OR on iOS which uses A2HS)
+  const canInstall = !inStandalone && (!!(promptEvent || window.__deferredInstallPrompt) || isIOS);
+
+  return { canInstall, install, installed };
+}
+
+/* ------------------------------------------------------------------ */
+/* Web Push subscribe/unsubscribe (expects /api/push endpoints)        */
+/* ------------------------------------------------------------------ */
+const VAPID_PUBLIC = (import.meta?.env?.VITE_VAPID_PUBLIC_KEY || "").trim(); // base64url
+
+function b64UrlToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+async function subscribeToPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    throw new Error("Push notifications are not supported on this browser.");
+  }
+  if (!VAPID_PUBLIC) {
+    throw new Error("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
+  }
+
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") throw new Error("Notifications permission was denied.");
+
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
+  });
+
+  await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sub),
+  });
+
+  return sub;
+}
+
+async function unsubscribeFromPush() {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (!sub) return;
+
+  try {
+    await fetch("/api/push/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+  } finally {
+    await sub.unsubscribe();
+  }
+}
+
+function PushToggle() {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker?.ready;
+        const sub = await reg?.pushManager?.getSubscription?.();
+        if (mounted) setEnabled(!!sub);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const onToggle = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      if (!enabled) {
+        await subscribeToPush();
+        setEnabled(true);
+      } else {
+        await unsubscribeFromPush();
+        setEnabled(false);
+      }
+    } catch (e) {
+      setError(e?.message || "Failed to change notifications.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const supported = typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator;
+  if (!supported) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={onToggle}
+        disabled={loading}
+        className={`w-full rounded-xl border px-3 py-2 text-[15px] font-semibold transition ${
+          enabled
+            ? "border-amber-400/30 bg-amber-400/10 text-amber-300 hover:bg-amber-400/15"
+            : "border-sky-400/30 bg-sky-400/10 text-sky-300 hover:bg-sky-400/15"
+        }`}
+      >
+        {loading ? "Please wait…" : enabled ? "Disable notifications" : "Enable notifications"}
+      </button>
+      {!!error && <div className="mt-1 text-sm text-red-300">{error}</div>}
+    </div>
+  );
+}
 
 /* --------------------------- UI atoms --------------------------- */
 const Pill = ({ left, right, className = "" }) => (
@@ -98,19 +273,19 @@ export default function MobileScreen() {
     return d;
   }, [now]);
   const refTomorrow = useMemo(() => {
-       const d = new Date(refToday);
-       d.setDate(refToday.getDate() + 1);
-       return d;
-     }, [refToday]);
+    const d = new Date(refToday);
+    d.setDate(refToday.getDate() + 1);
+    return d;
+  }, [refToday]);
   const refYesterday = useMemo(() => {
-       const d = new Date(refToday);
-       d.setDate(refToday.getDate() - 1);
-       return d;
-     }, [refToday]);
+    const d = new Date(refToday);
+    d.setDate(refToday.getDate() - 1);
+    return d;
+  }, [refToday]);
 
   const todayRow = useMemo(() => findRowForDate(timetable, refToday), [timetable, refToday]);
-  const yRow     = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
-  const tRow     = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
+  const yRow = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
+  const tRow = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
 
   const is24Hour =
     (settingsMap["toggles.clock24Hours"] || settingsMap["clock24Hours"] || "")
@@ -135,6 +310,9 @@ export default function MobileScreen() {
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
 
+  // Install button state
+  const { canInstall, install, installed } = useInstallPrompt();
+
   return (
     <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
@@ -145,6 +323,17 @@ export default function MobileScreen() {
 
         <main className="px-4 py-4 space-y-3">
           <Pill left={todayLong} right={nowStr} />
+
+          {canInstall && !installed && (
+            <button
+              onClick={install}
+              className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[15px] font-semibold text-emerald-300 hover:bg-emerald-400/15"
+            >
+              Install app
+            </button>
+          )}
+
+          <PushToggle />
 
           <MobileCurrentCard
             labels={labels}

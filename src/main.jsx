@@ -3,16 +3,28 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { RouterProvider } from "react-router-dom";
-
-// If your router exports default, this works.
-// If it exports a named `router`, change to: import { router } from "./router";
 import router from "./router";
 
-// ✅ Register the /mobile PWA service worker in production via dynamic import
+// --- Capture beforeinstallprompt EARLY so React doesn't miss it ---
+if (typeof window !== "undefined") {
+  // holds the last beforeinstallprompt event if the page hasn't shown it yet
+  window.__deferredInstallPrompt = window.__deferredInstallPrompt || null;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    // Chrome fires this before the app is ready; stash it
+    e.preventDefault();
+    window.__deferredInstallPrompt = e;
+  });
+
+  window.addEventListener("appinstalled", () => {
+    window.__deferredInstallPrompt = null;
+  });
+}
+
+// ✅ Register the /mobile PWA service worker in production
 if (import.meta?.env?.PROD && "serviceWorker" in navigator) {
   import("./pwa/registerMobileSW.js")
     .then((mod) => {
-      // Supports both named and default export
       const fn = mod.registerMobileSW || mod.default;
       if (typeof fn === "function") fn();
     })
@@ -39,7 +51,6 @@ function Crash({ error }) {
   );
 }
 
-// ErrorBoundary to catch render-time errors inside RouterProvider/route elements
 class RootErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -59,7 +70,6 @@ class RootErrorBoundary extends React.Component {
 
 const rootEl = document.getElementById("root");
 createRoot(rootEl).render(
-  // NOTE: StrictMode is intentionally OFF while we stabilise HMR/reload.
   <RootErrorBoundary>
     <RouterProvider
       router={router}
@@ -68,7 +78,7 @@ createRoot(rootEl).render(
   </RootErrorBoundary>
 );
 
-// Log global errors to console (don’t re-render the root here to avoid race conditions)
+// Just log global errors
 window.addEventListener("error", (e) =>
   console.error("Global error:", e.error || e.message)
 );
