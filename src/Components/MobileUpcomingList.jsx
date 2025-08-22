@@ -89,29 +89,29 @@ function resolveEnglishLabel(p, labels) {
 
 /* ---------- UI pieces ---------- */
 
-// Header uses same fixed widths as rows for perfect alignment
+// Header: 3 equal columns (Salah / Start / Jam’ah)
 const UpcomingHeaderRow = () => (
-  <div className="flex items-center px-3 py-1.5 text-[11px] uppercase">
-    <div className="flex-1 font-sans tracking-wide opacity-70 whitespace-nowrap">Salah</div>
-    <div className="w-[10ch] text-center tabular-nums tracking-normal opacity-70 whitespace-nowrap">
+  <div className="grid grid-cols-3 items-center px-3 py-1.5 text-[11px] uppercase">
+    <div className="font-sans tracking-wide opacity-70 whitespace-nowrap">Salah</div>
+    <div className="text-center tabular-nums tracking-normal opacity-70 whitespace-nowrap">
       Start
     </div>
-    <div className="w-[10ch] text-right tabular-nums tracking-normal opacity-70 whitespace-nowrap">
+    <div className="text-right tabular-nums tracking-normal opacity-70 whitespace-nowrap">
       Jam’ah
     </div>
   </div>
 );
 
-// Rows: flex layout with fixed time widths so spacing is balanced
+// Rows: 3 equal columns (name / start / jam’ah), single-line, bigger fonts
 const UpcomingRow = ({ name, start, jamaah, is24Hour }) => (
-  <div className="flex items-center px-3 py-2 odd:bg-white/[0.03]">
-    <div className="flex-1 font-sans font-semibold text-[20px] leading-none whitespace-nowrap overflow-hidden text-ellipsis">
+  <div className="grid grid-cols-3 items-center px-3 py-2 odd:bg-white/[0.03]">
+    <div className="min-w-0 font-sans font-semibold text-[20px] leading-none whitespace-nowrap overflow-hidden text-ellipsis">
       {name}
     </div>
-    <div className="w-[10ch] text-[19px] leading-none text-center whitespace-nowrap">
+    <div className="text-[19px] leading-none text-center whitespace-nowrap">
       <TimeWithSmallAmPm date={start} is24Hour={is24Hour} />
     </div>
-    <div className="w-[10ch] text-[19px] leading-none text-right whitespace-nowrap">
+    <div className="text-[19px] leading-none text-right whitespace-nowrap">
       {jamaah ? <TimeWithSmallAmPm date={jamaah} is24Hour={is24Hour} /> : "—"}
     </div>
   </div>
