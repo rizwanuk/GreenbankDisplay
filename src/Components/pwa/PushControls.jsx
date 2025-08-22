@@ -51,7 +51,6 @@ async function unsubscribeFromPush() {
 
 /* ---------- Small, reusable, closable banner ---------- */
 function InfoBanner({ id, children, tone = "neutral" }) {
-  // id is used as localStorage key to remember dismissal
   const storageKey = `gb:notif:banner:${id}`;
   const [hidden, setHidden] = useState(false);
 
@@ -99,10 +98,9 @@ export default function PushControls() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
-  // Platform detection for friendlier guidance
+  // Platform detection
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
-  // Standalone if: display-mode: standalone OR legacy iOS A2HS flag
   const isStandalone =
     (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
     (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
@@ -188,18 +186,9 @@ export default function PushControls() {
     }
   };
 
-  /* ----- Render guidance for unsupported states (with close) ----- */
+  /* ----- Render guidance (reordered) ----- */
 
-  // 0) Missing SW/Notification APIs entirely
-  if (!(hasNotification && hasSW)) {
-    return (
-      <InfoBanner id="no-sw-or-notification">
-        This browser can’t use service workers or notifications in this context.
-      </InfoBanner>
-    );
-  }
-
-  // 1) iOS must be installed-from-Safari; show hint if not standalone
+  // 1) iOS not-installed → show clear install guidance (even if Notification API is missing)
   if (isIOS && !isStandalone) {
     return (
       <InfoBanner id="ios-install-hint" tone="warn">
@@ -227,11 +216,20 @@ export default function PushControls() {
     );
   }
 
-  // 2) Standalone but Push API missing (very old iOS or unusual contexts)
+  // 2) Generic missing SW/Notification (e.g. in-app browsers, private mode)
+  if (!(hasNotification && hasSW)) {
+    return (
+      <InfoBanner id="no-sw-or-notification">
+        This browser can’t use service workers or notifications in this context.
+      </InfoBanner>
+    );
+  }
+
+  // 3) Installed but no Push API (very old iOS/contexts)
   if (!hasPush) {
     return (
       <InfoBanner id="no-push-api" tone="warn">
-        This app is installed, but the Push API isn’t available here. Please ensure you’re on the latest iOS and opened
+        This app is installed, but the Push API isn’t available here. Ensure you’re on recent iOS and opened
         the app from the Home Screen.
       </InfoBanner>
     );
@@ -249,13 +247,6 @@ export default function PushControls() {
 
   return (
     <div className="mt-2 space-y-2" id="notif-toggle">
-      {/* Optional debug line in dev only */}
-      {import.meta.env.DEV && (
-        <div className="text-xs text-white/50">
-          Debug: iOS={String(isIOS)} standalone={String(isStandalone)} push={String(hasPush)} perm={perm}
-        </div>
-      )}
-
       <label className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2">
         <input
           type="checkbox"
