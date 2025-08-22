@@ -1,5 +1,3 @@
-// src/Screens/MobileScreen.jsx
-
 import "../index.css";
 import React, { useEffect, useMemo, useState } from "react";
 import moment from "moment";
@@ -7,11 +5,11 @@ import moment from "moment";
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
-import { getJummahTime } from "../hooks/usePrayerHelpers";
-import applyFajrShouruqRule from "../helpers/applyFajrShouruqRule";
+import useMobileTimeline from "../hooks/useMobileTimeline";
 
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
+import MobileUpcomingList from "../Components/MobileUpcomingList";
 
 /* --------------------------- UI atoms --------------------------- */
 const Pill = ({ left, right, className = "" }) => (
@@ -28,43 +26,7 @@ const Pill = ({ left, right, className = "" }) => (
   </div>
 );
 
-const GRID = "grid font-mono grid-cols-[1fr,10ch,10ch] gap-2";
-
-const DayDivider = ({ children }) => (
-  <div className="flex items-center gap-3 px-3 my-1.5">
-    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-    <span className="px-2 py-[3px] text-[11px] rounded-full bg-white/10 border border-white/15 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-      {children}
-    </span>
-    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-  </div>
-);
-
-const UpcomingHeaderRow = () => (
-  <div className={`${GRID} text-[11px] uppercase px-3 py-1.5`}>
-    <div className="font-sans tracking-wide opacity-70">Salah</div>
-    <div className="justify-self-center tabular-nums tracking-normal opacity-70">Start</div>
-    <div className="justify-self-end tabular-nums tracking-normal opacity-70">Jam’ah</div>
-  </div>
-);
-
-const UpcomingRow = ({ name, start, jamaah }) => (
-  <div className={`${GRID} items-center px-3 py-2 odd:bg-white/[0.03]`}>
-    <div className="font-sans font-semibold truncate text-[17px] leading-none">{name}</div>
-    <div className="justify-self-center tabular-nums text-[17px] leading-none whitespace-nowrap">
-      {start}
-    </div>
-    <div className="justify-self-end tabular-nums text-[17px] leading-none whitespace-nowrap">
-      {jamaah ?? "—"}
-    </div>
-  </div>
-);
-
 /* --------------------------- helpers ---------------------------- */
-const ORDER = ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"];
-const SUNRISE_ALIASES = ["sunrise", "shouruq", "shuruq", "shurooq", "shourouq"];
-const DHUHR_ALIASES = ["dhuhr", "zuhr"];
-
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
 const fmt = (d, hour12 = false) =>
   d
@@ -114,98 +76,6 @@ function findRowForDate(rows, date = new Date()) {
   return null;
 }
 
-function parseTimeToDay(cell, refDate) {
-  if (!cell) return null;
-  let str = String(cell).trim();
-  if (!str) return null;
-
-  let h, m;
-  const m24 = str.match(/^(\d{1,2}):(\d{2})$/);
-  if (m24) {
-    h = Number(m24[1]);
-    m = Number(m24[2]);
-  } else {
-    str = str.toLowerCase().replace(/\s+/g, "");
-    const mm = str.match(/^(\d{1,2}):(\d{2})(am|pm)$/);
-    if (mm) {
-      h = Number(mm[1]);
-      m = Number(mm[2]);
-      const ampm = mm[3];
-      if (ampm === "pm" && h < 12) h += 12;
-      if (ampm === "am" && h === 12) h = 0;
-    }
-  }
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  return new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), h, m, 0, 0);
-}
-
-function extractRowTimes(row, refDate, labelMap) {
-  if (!row) return {};
-  const keys = Object.keys(row || {});
-  const pickKey = (names) => {
-    const lower = names.map((s) => s.toLowerCase());
-    return keys.find((k) => lower.includes(k.toLowerCase()));
-  };
-  const findKey = (re) => keys.find((k) => re.test(k));
-
-  const out = {};
-  ORDER.forEach((p) => {
-    let adhanKey;
-    if (p === "sunrise") {
-      adhanKey = pickKey(SUNRISE_ALIASES);
-    } else if (p === "dhuhr") {
-      adhanKey = pickKey(DHUHR_ALIASES) || findKey(new RegExp(`^\\s*${p}\\s*`, "i"));
-    } else {
-      adhanKey =
-        findKey(new RegExp(`^\\s*${p}\\s*(adhan|start|begin|beg|time)?\\s*$`, "i")) ||
-        findKey(new RegExp(`^\\s*${p}\\s*$`, "i")) ||
-        findKey(new RegExp(`${p}.*(adhan|start|begin|beg|time)`, "i"));
-    }
-
-    const jamaahKey =
-      p === "sunrise" ? null : findKey(new RegExp(`${p}.*(jama|jamaah|jamaat|jamah|iqama|iqamah|congregation|j)$`, "i"));
-
-    const adhan = adhanKey ? row[adhanKey] : null;
-    const jamaah = jamaahKey ? row[jamaahKey] : null;
-
-    const startDate = parseTimeToDay(adhan, refDate);
-    const jamaahDate = parseTimeToDay(jamaah, refDate);
-
-    if (startDate) {
-      out[p] = {
-        key: p,
-        name: labelMap?.[p] || (p === "sunrise" ? "Shouruq" : p[0].toUpperCase() + p.slice(1)),
-        start: startDate,
-        jamaah: jamaahDate || null,
-      };
-    }
-  });
-  return out;
-}
-
-function buildTimeline(row, refDate, labelMap) {
-  const map = extractRowTimes(row, refDate, labelMap) || {};
-  return ORDER.map((k) => map[k]).filter(Boolean);
-}
-
-/* --- Jum‘ah override --- */
-function applyJummahOverrideToList(list, settingsMap, labels) {
-  const jummahLabel = labels?.jummah || "Jum‘ah";
-
-  return (list || []).map((p) => {
-    if (p?.key === "dhuhr" && p.start && p.start.getDay() === 5) {
-      const override = { ...p, name: jummahLabel };
-
-      const jummahMoment = getJummahTime(settingsMap, moment(p.start));
-      if (jummahMoment?.isValid?.()) {
-        override.jamaah = jummahMoment.toDate();
-      }
-      return override;
-    }
-    return p;
-  });
-}
-
 /* ============================= Component ============================= */
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
@@ -228,86 +98,34 @@ export default function MobileScreen() {
     return d;
   }, [now]);
   const refTomorrow = useMemo(() => {
-    const d = new Date(refToday);
-    d.setDate(refToday.getDate() + 1);
-    return d;
-  }, [refToday]);
+       const d = new Date(refToday);
+       d.setDate(refToday.getDate() + 1);
+       return d;
+     }, [refToday]);
   const refYesterday = useMemo(() => {
-    const d = new Date(refToday);
-    d.setDate(refToday.getDate() - 1);
-    return d;
-  }, [refToday]);
+       const d = new Date(refToday);
+       d.setDate(refToday.getDate() - 1);
+       return d;
+     }, [refToday]);
 
   const todayRow = useMemo(() => findRowForDate(timetable, refToday), [timetable, refToday]);
-  const yRow = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
-  const tRow = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
-
-  const labelMap = useMemo(
-    () => ({
-      fajr: labels?.fajr || "Fajr",
-      sunrise: labels?.sunrise || labels?.shouruq || "Shouruq",
-      dhuhr: labels?.dhuhr || labels?.zuhr || "Dhuhr",
-      asr: labels?.asr || "Asr",
-      maghrib: labels?.maghrib || "Maghrib",
-      isha: labels?.isha || "Isha",
-      jummah: labels?.jummah || "Jum‘ah",
-    }),
-    [labels]
-  );
-
-  const today = useMemo(() => buildTimeline(todayRow, refToday, labelMap), [todayRow, refToday, labelMap]);
-  const tomorrow = useMemo(() => buildTimeline(tRow, refTomorrow, labelMap), [tRow, refTomorrow, labelMap]);
-
-  // Build a full timeline as moments for the helper
-  const fullTimeline = useMemo(
-    () =>
-      [...(today || []), ...(tomorrow || [])].map((p) => ({
-        ...p,
-        start: moment(p.start),
-        jamaah: p.jamaah ? moment(p.jamaah) : null,
-      })),
-    [today, tomorrow]
-  );
-
-  // Initial upcoming (future items) as moments
-  const prelimUpcoming = useMemo(() => {
-    const mNow = moment(now);
-    const next = fullTimeline.filter((p) => mNow.isBefore(p.start)).sort((a, b) => a.start.valueOf() - b.start.valueOf());
-    return next.slice(0, 6);
-  }, [fullTimeline, now]);
-
-  // Apply shared Fajr/Shouruq behaviour
-  const adjustedUpcomingMoments = useMemo(
-    () =>
-      applyFajrShouruqRule({
-        now: moment(now),
-        upcoming: prelimUpcoming,
-        fullTimeline,
-        max: 6,
-      }),
-    [prelimUpcoming, fullTimeline, now]
-  );
-
-  // Convert back to Dates for rendering
-  const rawUpcoming = useMemo(
-    () =>
-      adjustedUpcomingMoments.map((p) => ({
-        ...p,
-        start: p.start.toDate(),
-        jamaah: p.jamaah ? p.jamaah.toDate() : null,
-      })),
-    [adjustedUpcomingMoments]
-  );
-
-  const upcoming = useMemo(
-    () => applyJummahOverrideToList(rawUpcoming, settingsMap, labels),
-    [rawUpcoming, settingsMap, labels]
-  );
+  const yRow     = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
+  const tRow     = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
 
   const is24Hour =
     (settingsMap["toggles.clock24Hours"] || settingsMap["clock24Hours"] || "")
       .toString()
       .toUpperCase() === "TRUE";
+
+  // Use shared hook (handles Fajr/Shouruq + Jummah)
+  const { upcoming } = useMobileTimeline({
+    now: useMemo(() => moment(now), [now]),
+    todayRow,
+    tomorrowRow: tRow,
+    yesterdayRow: yRow,
+    settingsMap,
+    numberToShow: 6,
+  });
 
   const todayLong = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
@@ -316,10 +134,6 @@ export default function MobileScreen() {
     timeZone: tz,
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
-
-  const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const upcomingToday = upcoming.filter((p) => isSameDay(p.start, refToday));
-  const upcomingTomorrow = upcoming.filter((p) => isSameDay(p.start, refTomorrow));
 
   return (
     <div className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6">
@@ -349,43 +163,12 @@ export default function MobileScreen() {
             settingsMap={settingsMap}
           />
 
-          <section className="mt-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.05]">
-              <UpcomingHeaderRow />
-
-              <div className="divide-y divide-white/10">
-                {upcomingToday.length > 0 &&
-                  upcomingToday.map((p, i) => (
-                    <UpcomingRow
-                      key={`t-${p.key}-${i}`}
-                      name={p.name}
-                      start={fmt(p.start, !is24Hour)}
-                      jamaah={p.jamaah ? fmt(p.jamaah, !is24Hour) : null}
-                    />
-                  ))}
-
-                {upcomingTomorrow.length > 0 && (
-                  <>
-                    <DayDivider>Tomorrow</DayDivider>
-                    {upcomingTomorrow.map((p, i) => (
-                      <UpcomingRow
-                        key={`tm-${p.key}-${i}`}
-                        name={p.name}
-                        start={fmt(p.start, !is24Hour)}
-                        jamaah={p.jamaah ? fmt(p.jamaah, !is24Hour) : null}
-                      />
-                    ))}
-                  </>
-                )}
-
-                {!upcomingToday.length && !upcomingTomorrow.length && (
-                  <div className="px-3 py-4 text-sm opacity-70">No upcoming times.</div>
-                )}
-              </div>
-
-              <div className="h-2" />
-            </div>
-          </section>
+          <MobileUpcomingList
+            upcoming={upcoming}
+            is24Hour={is24Hour}
+            todayRef={refToday}
+            tomorrowRef={refTomorrow}
+          />
         </main>
       </div>
     </div>
