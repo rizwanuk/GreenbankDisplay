@@ -82,6 +82,65 @@ function findRowForDate(rows, date = new Date()) {
   return null;
 }
 
+/* ---------- label + key normalization helpers ---------- */
+function toLowerMap(obj) {
+  const out = {};
+  if (!obj) return out;
+  for (const [k, v] of Object.entries(obj)) out[String(k).toLowerCase()] = v;
+  return out;
+}
+
+function withLabelAliases(map) {
+  const out = { ...map };
+  const aliasPairs = [
+    ["dhuhr", "zuhr"],
+    ["isha", "ishaa"],
+    ["maghrib", "magrib"],
+    ["sunrise", "shouruq"],
+    ["sunrise", "shuruq"],
+    ["sunrise", "shurooq"],
+    ["sunrise", "shourouq"],
+    ["jummah", "jumuah"],
+    ["jummah", "jumma"],
+  ];
+  for (const [canonical, alias] of aliasPairs) {
+    if (out[alias] && !out[canonical]) out[canonical] = out[alias];
+    if (out[canonical] && !out[alias]) out[alias] = out[canonical];
+  }
+  return out;
+}
+
+function normalizeKey(raw) {
+  let k = String(raw || "").toLowerCase().normalize("NFKD");
+  k = k.replace(/[’'‘]/g, "").replace(/\s+/g, "");
+  if (k === "ishaa") k = "isha";
+  if (k === "magrib") k = "maghrib";
+  if (k === "shouruq" || k === "shuruq" || k === "shurooq" || k === "shourouq" || k === "ishraq")
+    k = "sunrise";
+  // don't force zuhr→dhuhr; our alias map now supports both
+  if (k.startsWith("jum")) k = "jummah"; // jummah/jumuah/jumma → jummah
+  return k;
+}
+
+function computeLookupKey(p) {
+  let k = p?.lookupKey || p?.key || p?.name || "";
+  k = normalizeKey(k);
+
+  // Friday override for display-only resolution
+  let isFriday = false;
+  const s = p?.start;
+  if (s) {
+    if (typeof s.getDay === "function") {
+      isFriday = s.getDay() === 5;
+    } else if (moment.isMoment(s)) {
+      isFriday = s.day() === 5;
+    }
+  }
+  if (isFriday && k === "dhuhr") k = "jummah";
+
+  return k;
+}
+
 /* ============================= Component ============================= */
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
@@ -94,8 +153,12 @@ export default function MobileScreen() {
   const settingsRows = useSettings();
 
   const settingsMap = useMemo(() => flattenSettings(settingsRows), [settingsRows]);
-  const labels = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
-  const arabic = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
+  const labelsRaw = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
+  const arabicRaw = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
+
+  // Lower-cased, alias-augmented maps so lookups are resilient
+  const labels = useMemo(() => withLabelAliases(toLowerMap(labelsRaw)), [labelsRaw]);
+  const arabic = useMemo(() => withLabelAliases(toLowerMap(arabicRaw)), [arabicRaw]);
 
   const now = useMemo(() => new Date(), [hb]);
   const refToday = useMemo(() => {
@@ -123,7 +186,7 @@ export default function MobileScreen() {
       .toString()
       .toUpperCase() === "TRUE";
 
-  // Shared hook: Fajr/Shouruq + Jum‘ah handled here
+  // Build upcoming (Fajr/Shouruq + Jum‘ah handled by the hook)
   const { upcoming } = useMobileTimeline({
     now: useMemo(() => moment(now), [now]),
     todayRow,
@@ -132,6 +195,35 @@ export default function MobileScreen() {
     settingsMap,
     numberToShow: 6,
   });
+
+  // Add a robust lookupKey to each item for label resolution
+  const upcomingWithKeys = useMemo(
+    () =>
+      (upcoming || []).map((p) => ({
+        ...p,
+        lookupKey: computeLookupKey(p),
+      })),
+    [upcoming]
+  );
+
+  // Optional: quick debug (open /mobile?debug=labels)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("debug=labels")) {
+      // eslint-disable-next-line no-console
+      console.log("[labels]", labels);
+      // eslint-disable-next-line no-console
+      console.log("[arabic]", arabic);
+      // eslint-disable-next-line no-console
+      console.table(
+        upcomingWithKeys.map((u) => ({
+          key: u.key,
+          lookupKey: u.lookupKey,
+          name: u.name,
+          start: u.start?.toString?.(),
+        }))
+      );
+    }
+  }, [labels, arabic, upcomingWithKeys]);
 
   const todayLong = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
@@ -213,10 +305,12 @@ export default function MobileScreen() {
           />
 
           <MobileUpcomingList
-            upcoming={upcoming}
+            upcoming={upcomingWithKeys}
             is24Hour={is24Hour}
             todayRef={refToday}
             tomorrowRef={refTomorrow}
+            labels={labels}
+            arabicLabels={arabic}
           />
         </main>
       </div>
