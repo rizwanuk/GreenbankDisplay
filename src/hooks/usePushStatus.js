@@ -12,13 +12,14 @@ export default function usePushStatus() {
   const isStandalone =
     (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
     (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
+
   const hasNotification = typeof window !== "undefined" && "Notification" in window;
   const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
+  // Looser detection on iOS: PushManager may be hidden until certain conditions.
   const computeSupported = () => {
-    // On iOS, push only works when launched from Home Screen
-    if (isIOS) return hasNotification && hasSW && hasPush && isStandalone;
+    if (isIOS) return hasNotification && hasSW && isStandalone;
     return hasNotification && hasSW && hasPush;
   };
 
@@ -47,6 +48,14 @@ export default function usePushStatus() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Optional debug: /mobile?debug=pwa
+  useEffect(() => {
+    if (typeof window !== "undefined" && location.search.includes("debug=pwa")) {
+      // eslint-disable-next-line no-console
+      console.table({ isIOS, isStandalone, hasNotification, hasSW, hasPush, perm, enabled, supported });
+    }
+  }, [isIOS, isStandalone, hasNotification, hasSW, hasPush, perm, enabled, supported]);
 
   const { statusLabel, statusColor } = useMemo(() => {
     if (!supported) return { statusLabel: "Unsupported", statusColor: "text-white/60" };
