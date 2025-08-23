@@ -1,13 +1,42 @@
-// src/hooks/usePushStatus.js
 import { useEffect, useState } from "react";
 
-// Get an active SW registration (prefer /mobile/, else whatever is ready)
-async function getAnyRegistration() {
-  if (!("serviceWorker" in navigator)) return null;
-  const regMobile = await navigator.serviceWorker.getRegistration("/mobile/").catch(() => null);
-  if (regMobile?.active) return regMobile;
-  const ready = await navigator.serviceWorker.ready.catch(() => null);
-  return ready || regMobile || null;
+// Find any active push subscription, preferring the controlling SW.
+async function anySubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { reg: null, sub: null };
+  }
+
+  // 1) Prefer the controlling registration
+  let controlling = null;
+  try { controlling = await navigator.serviceWorker.ready; } catch {}
+  if (controlling) {
+    try {
+      const sub = await controlling.pushManager.getSubscription();
+      if (sub) return { reg: controlling, sub };
+    } catch {}
+  }
+
+  // 2) Specific /mobile/ registration (may exist but not control)
+  try {
+    const regMobile = await navigator.serviceWorker.getRegistration("/mobile/");
+    if (regMobile) {
+      const sub = await regMobile.pushManager.getSubscription();
+      if (sub) return { reg: regMobile, sub };
+    }
+  } catch {}
+
+  // 3) Last resort: scan all registrations (root vs others)
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) {
+      try {
+        const sub = await r.pushManager.getSubscription();
+        if (sub) return { reg: r, sub };
+      } catch {}
+    }
+  } catch {}
+
+  return { reg: controlling || null, sub: null };
 }
 
 export default function usePushStatus() {
@@ -21,22 +50,16 @@ export default function usePushStatus() {
   const refresh = async () => {
     try {
       const perm = typeof Notification !== "undefined" ? Notification.permission : "default";
-
       if (perm === "denied") {
-        return setState({ enabled: false, perm, label: "Blocked", color: "text-red-300" });
+        setState({ enabled: false, perm, label: "Blocked", color: "text-red-300" });
+        return;
       }
 
-      let enabled = false;
-      if ("serviceWorker" in navigator && "PushManager" in window) {
-        const reg = (await getAnyRegistration()) || null;
-        const sub = await reg?.pushManager?.getSubscription?.();
-        enabled = !!sub;
-      }
+      const { sub } = await anySubscription();
+      const enabled = !!sub;
 
-      const label =
-        enabled ? "Enabled" : perm === "granted" ? "Allowed" : "Off";
-      const color =
-        enabled ? "text-emerald-400" : perm === "granted" ? "text-amber-300" : "text-white/60";
+      const label = enabled ? "Enabled" : perm === "granted" ? "Allowed" : "Off";
+      const color = enabled ? "text-emerald-400" : perm === "granted" ? "text-amber-300" : "text-white/60";
 
       setState({ enabled, perm, label, color });
     } catch {
