@@ -138,8 +138,8 @@ export default function PushControls() {
   const isStandalone =
     (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
     (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
-  const isIOSSafari = isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Brave/i.test(ua);
 
+  // Declare once and reuse
   const hasNotification = typeof window !== "undefined" && "Notification" in window;
   const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
@@ -287,10 +287,6 @@ export default function PushControls() {
       </InfoBanner>
     );
   }
-
-  const hasNotification = typeof window !== "undefined" && "Notification" in window;
-  const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
-  const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
   if (!(hasNotification && hasSW)) {
     return (
