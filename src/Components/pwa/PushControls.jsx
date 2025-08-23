@@ -1,7 +1,10 @@
 // src/Components/pwa/PushControls.jsx
 import React, { useEffect, useState } from "react";
 
-const VAPID_PUBLIC = (import.meta?.env?.VITE_VAPID_PUBLIC_KEY || "").trim();
+// IMPORTANT: Use the exact Vite form so it gets inlined at build time.
+// eslint-disable-next-line no-undef
+const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY || "").trim();
+
 // Debug: confirm the client can see the key (remove later if you want)
 if (typeof window !== "undefined") {
   // eslint-disable-next-line no-console
@@ -284,6 +287,10 @@ export default function PushControls() {
       </InfoBanner>
     );
   }
+
+  const hasNotification = typeof window !== "undefined" && "Notification" in window;
+  const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
+  const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
   if (!(hasNotification && hasSW)) {
     return (
