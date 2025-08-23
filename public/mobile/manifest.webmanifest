@@ -1,6 +1,7 @@
 {
   "name": "Greenbank Masjid",
   "short_name": "Greenbank",
+  "id": "/mobile/",
   "start_url": "/mobile/",
   "scope": "/mobile/",
   "display": "standalone",
@@ -9,19 +10,10 @@
   "icons": [
     { "src": "/mobile/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/mobile/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-
     { "src": "/mobile/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "/mobile/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "/mobile/screenshots/wide-1280x720.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide" }
   ]
-
-"screenshots": [
-  {
-    "src": "/mobile/screenshots/wide-1280x720.png",
-    "sizes": "1280x720",
-    "type": "image/png",
-    "form_factor": "wide"
-  }
-]
-
-
 }
