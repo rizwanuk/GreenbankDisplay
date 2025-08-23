@@ -1,69 +1,75 @@
 // src/hooks/usePushStatus.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+
+// Get an active SW registration (prefer /mobile/, else whatever is ready)
+async function getAnyRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  const regMobile = await navigator.serviceWorker.getRegistration("/mobile/").catch(() => null);
+  if (regMobile?.active) return regMobile;
+  const ready = await navigator.serviceWorker.ready.catch(() => null);
+  return ready || regMobile || null;
+}
 
 export default function usePushStatus() {
-  const [enabled, setEnabled] = useState(false);
-  const [perm, setPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "default");
-  const [supported, setSupported] = useState(false);
-
-  // platform checks
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const isIOS = /iPad|iPhone|iPod/i.test(ua);
-  const isStandalone =
-    (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
-    (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
-
-  const hasNotification = typeof window !== "undefined" && "Notification" in window;
-  const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
-  const hasPush = typeof window !== "undefined" && "PushManager" in window;
-
-  // Looser detection on iOS: PushManager may be hidden until certain conditions.
-  const computeSupported = () => {
-    if (isIOS) return hasNotification && hasSW && isStandalone;
-    return hasNotification && hasSW && hasPush;
-  };
+  const [state, setState] = useState({
+    enabled: false,
+    perm: typeof Notification !== "undefined" ? Notification.permission : "default",
+    label: "Off",
+    color: "text-white/60",
+  });
 
   const refresh = async () => {
     try {
-      setPerm(typeof Notification !== "undefined" ? Notification.permission : "default");
-      const reg = await navigator.serviceWorker?.ready;
-      const sub = await reg?.pushManager?.getSubscription?.();
-      setEnabled(!!sub);
+      const perm = typeof Notification !== "undefined" ? Notification.permission : "default";
+
+      if (perm === "denied") {
+        return setState({ enabled: false, perm, label: "Blocked", color: "text-red-300" });
+      }
+
+      let enabled = false;
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const reg = (await getAnyRegistration()) || null;
+        const sub = await reg?.pushManager?.getSubscription?.();
+        enabled = !!sub;
+      }
+
+      const label =
+        enabled ? "Enabled" : perm === "granted" ? "Allowed" : "Off";
+      const color =
+        enabled ? "text-emerald-400" : perm === "granted" ? "text-amber-300" : "text-white/60";
+
+      setState({ enabled, perm, label, color });
     } catch {
-      setEnabled(false);
-    } finally {
-      setSupported(computeSupported());
+      setState({ enabled: false, perm: "default", label: "Off", color: "text-white/60" });
     }
   };
 
   useEffect(() => {
     refresh();
-    const onVis = () => refresh();
-    const onChanged = () => refresh();
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("gb:push:changed", onChanged);
+
+    const onChange = () => refresh();
+    window.addEventListener("gb:push:changed", onChange);
+    document.addEventListener("visibilitychange", onChange);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("controllerchange", onChange);
+      navigator.serviceWorker.addEventListener("message", onChange);
+    }
+
     return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("gb:push:changed", onChanged);
+      window.removeEventListener("gb:push:changed", onChange);
+      document.removeEventListener("visibilitychange", onChange);
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+        navigator.serviceWorker.removeEventListener("message", onChange);
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Optional debug: /mobile?debug=pwa
-  useEffect(() => {
-    if (typeof window !== "undefined" && location.search.includes("debug=pwa")) {
-      // eslint-disable-next-line no-console
-      console.table({ isIOS, isStandalone, hasNotification, hasSW, hasPush, perm, enabled, supported });
-    }
-  }, [isIOS, isStandalone, hasNotification, hasSW, hasPush, perm, enabled, supported]);
-
-  const { statusLabel, statusColor } = useMemo(() => {
-    if (!supported) return { statusLabel: "Unsupported", statusColor: "text-white/60" };
-    if (perm === "denied") return { statusLabel: "Blocked", statusColor: "text-red-300" };
-    if (enabled) return { statusLabel: "On", statusColor: "text-emerald-300" };
-    if (perm === "granted") return { statusLabel: "Allowed (off)", statusColor: "text-amber-300" };
-    return { statusLabel: "Off", statusColor: "text-white/70" };
-  }, [supported, perm, enabled]);
-
-  return { enabled, perm, supported, statusLabel, statusColor, refresh };
+  return {
+    enabled: state.enabled,
+    permission: state.perm,
+    statusLabel: state.label,
+    statusColor: state.color,
+    refresh,
+  };
 }

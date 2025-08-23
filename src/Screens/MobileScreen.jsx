@@ -16,7 +16,7 @@ import MobileUpcomingList from "../Components/MobileUpcomingList";
 import useInstallPrompt from "../hooks/useInstallPrompt";
 import KebabMenu from "../Components/pwa/KebabMenu";
 import PushControls from "../Components/pwa/PushControls";
-import usePushStatus from "../hooks/usePushStatus";
+import usePushStatus from "../hooks/usePushStatus"; // ⬅️ use the new hook
 
 // ✅ SW registrar for /mobile/
 import { registerMobileSW } from "../pwa/registerMobileSW";
@@ -86,14 +86,12 @@ function findRowForDate(rows, date = new Date()) {
   return null;
 }
 
-/* ---------- label + key normalization helpers ---------- */
 function toLowerMap(obj) {
   const out = {};
   if (!obj) return out;
   for (const [k, v] of Object.entries(obj)) out[String(k).toLowerCase()] = v;
   return out;
 }
-
 function withLabelAliases(map) {
   const out = { ...map };
   const aliasPairs = [
@@ -113,7 +111,6 @@ function withLabelAliases(map) {
   }
   return out;
 }
-
 function normalizeKey(raw) {
   let k = String(raw || "").toLowerCase().normalize("NFKD");
   k = k.replace(/[’'‘]/g, "").replace(/\s+/g, "");
@@ -124,11 +121,9 @@ function normalizeKey(raw) {
   if (k.startsWith("jum")) k = "jummah";
   return k;
 }
-
 function computeLookupKey(p) {
   let k = p?.lookupKey || p?.key || p?.name || "";
   k = normalizeKey(k);
-
   let isFriday = false;
   const s = p?.start;
   if (s) {
@@ -155,13 +150,16 @@ export default function MobileScreen() {
     new URLSearchParams(window.location.search).get("debug") === "pwa";
   const [showDebug, setShowDebug] = useState(!!initialDebug);
 
-  // 🔁 Heartbeat to tick time
+  // Live push status (drives header menu)
+  const push = usePushStatus();
+
+  // Heartbeat tick
   useEffect(() => {
     const id = setInterval(() => setHb((h) => h + 1), 30_000);
     return () => clearInterval(id);
   }, []);
 
-  // 🧭 Canonicalize path: force /mobile → /mobile/
+  // Canonicalize /mobile → /mobile/
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname;
@@ -171,7 +169,7 @@ export default function MobileScreen() {
     }
   }, []);
 
-  // ✅ Register SW on mount and capture scope
+  // Register SW and capture scope
   useEffect(() => {
     (async () => {
       try {
@@ -238,21 +236,6 @@ export default function MobileScreen() {
     [upcoming]
   );
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.location.search.includes("debug=labels")) {
-      console.log("[labels]", labels);
-      console.log("[arabic]", arabic);
-      console.table(
-        upcomingWithKeys.map((u) => ({
-          key: u.key,
-          lookupKey: u.lookupKey,
-          name: u.name,
-          start: u.start?.toString?.(),
-        }))
-      );
-    }
-  }, [labels, arabic, upcomingWithKeys]);
-
   const todayLong = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "2-digit",
@@ -262,7 +245,6 @@ export default function MobileScreen() {
   const nowStr = fmt(now, !is24Hour);
 
   const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
-  const push = usePushStatus();
 
   const scrollToNotifications = () => {
     document.getElementById("notif-toggle")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -283,7 +265,6 @@ export default function MobileScreen() {
     }
   };
 
-  // Show a tiny SW banner when ?debug=sw or when scope is wrong
   const showSWBanner =
     typeof window !== "undefined" &&
     (window.location.search.includes("debug=sw") ||
@@ -315,7 +296,6 @@ export default function MobileScreen() {
             onCopyLink={copyLinkFallback}
             notifStatusLabel={push.statusLabel}
             notifStatusColor={push.statusColor}
-            /* NEW: menu switch for troubleshooting UI */
             debugEnabled={showDebug}
             onToggleDebug={() => setShowDebug((v) => !v)}
           />
@@ -324,7 +304,7 @@ export default function MobileScreen() {
         <main className="px-4 py-4 space-y-3">
           <Pill left={todayLong} right={nowStr} />
 
-          {showSWBanner && (
+          {showDebug && showSWBanner && (
             <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 px-3 py-2 text-[12px]">
               <b>Service Worker:</b> {swInfo.ready ? "ready" : "not ready"} — <b>scope</b>:{" "}
               <code>{swInfo.scope || "(none)"}</code>
@@ -332,7 +312,6 @@ export default function MobileScreen() {
             </div>
           )}
 
-          {/* Pass the toggle down */}
           <PushControls debug={showDebug} />
 
           <MobileCurrentCard
