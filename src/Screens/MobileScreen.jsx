@@ -18,6 +18,9 @@ import KebabMenu from "../Components/pwa/KebabMenu";
 import PushControls from "../Components/pwa/PushControls";
 import usePushStatus from "../hooks/usePushStatus";
 
+// ✅ Add the SW registrar for /mobile/
+import { registerMobileSW } from "../pwa/registerMobileSW";
+
 /* --------------------------- UI atoms --------------------------- */
 const Pill = ({ left, right, className = "" }) => (
   <div
@@ -148,6 +151,11 @@ export default function MobileScreen() {
   useEffect(() => {
     const id = setInterval(() => setHb((h) => h + 1), 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  // ✅ Register the service worker for /mobile/ on mount
+  useEffect(() => {
+    registerMobileSW();
   }, []);
 
   const timetable = usePrayerTimes();
