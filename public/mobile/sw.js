@@ -1,69 +1,31 @@
-// public/mobile/sw.js
+// /api/push/test-send.js
+import webpush from "web-push";
 
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+const PUB  = process.env.VAPID_PUBLIC_KEY;
+const PRIV = process.env.VAPID_PRIVATE_KEY;
+const SUBJ = process.env.VAPID_SUBJECT?.startsWith("mailto:")
+  || process.env.VAPID_SUBJECT?.startsWith("https://")
+  ? process.env.VAPID_SUBJECT
+  : "mailto:admin@example.com";
 
-self.addEventListener("push", (event) => {
-  event.waitUntil((async () => {
-    // 1) Parse payload safely (JSON first, fallback to text)
-    let data = {};
-    if (event.data) {
-      try {
-        data = event.data.json();
-      } catch {
-        try {
-          const txt = await event.data.text();
-          data = { body: txt };
-        } catch {
-          data = {};
-        }
-      }
-    }
+webpush.setVapidDetails(SUBJ, PUB, PRIV);
 
-    // 2) Sanitize + defaults
-    const isNonEmptyString = (v) => typeof v === "string" && v.trim().length > 0;
+export default async function handler(req, res) {
+  try {
+    const { sub, title, body, url } = req.body || {};
+    if (!sub) return res.status(400).json({ ok: false, error: "Missing subscription" });
+    if (!PUB || !PRIV) return res.status(500).json({ ok: false, error: "VAPID keys not set" });
 
-    let title = isNonEmptyString(data.title) ? data.title.trim() : "Greenbank Masjid";
-    let body  = isNonEmptyString(data.body)  ? data.body.trim()  : "Prayer reminder";
-    let url   = isNonEmptyString(data.url)   ? data.url.trim()   : "/mobile/";
+    const payload = JSON.stringify({
+      title: typeof title === "string" && title.trim() ? title : "Greenbank Masjid",
+      body:  typeof body  === "string" && body.trim()  ? body  : "Test notification ✓",
+      url:   typeof url   === "string" && url.trim()   ? url   : "https://greenbank-display.vercel.app/mobile"
+    });
 
-    // If the body looks like an error message, swap to a friendly default
-    const errorHints = [
-      "The string did not match the expected pattern",
-      "Error",
-      "Exception",
-      "Invalid",
-      "Failed",
-      "NotAllowed",
-      "stack"
-    ];
-    if (errorHints.some((h) => body.includes(h))) {
-      body = "Test notification ✓";
-    }
-
-    const options = {
-      body,
-      icon: "/mobile/icons/icon-192.png",
-      badge: "/mobile/icons/icon-192.png",
-      data: { url },
-    };
-
-    await self.registration.showNotification(title, options);
-  })());
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const url = (event.notification?.data && event.notification.data.url) || "/mobile/";
-
-  event.waitUntil((async () => {
-    const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    const existing = all.find((c) => c.url.includes("/mobile/"));
-    if (existing) {
-      await existing.focus();
-      try { existing.navigate && existing.navigate(url); } catch {}
-      return;
-    }
-    await clients.openWindow(url);
-  })());
-});
+    await webpush.sendNotification(sub, payload, { TTL: 300 });
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    // Don't forward raw errors to the client or to the push payload
+    return res.status(500).json({ ok: false, error: e?.message || "Send failed" });
+  }
+}
