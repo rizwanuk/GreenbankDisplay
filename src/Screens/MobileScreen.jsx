@@ -18,7 +18,7 @@ import KebabMenu from "../Components/pwa/KebabMenu";
 import PushControls from "../Components/pwa/PushControls";
 import usePushStatus from "../hooks/usePushStatus";
 
-// ✅ Add the SW registrar for /mobile/
+// ✅ SW registrar for /mobile/
 import { registerMobileSW } from "../pwa/registerMobileSW";
 
 /* --------------------------- UI atoms --------------------------- */
@@ -121,8 +121,7 @@ function normalizeKey(raw) {
   if (k === "magrib") k = "maghrib";
   if (k === "shouruq" || k === "shuruq" || k === "shurooq" || k === "shourouq" || k === "ishraq")
     k = "sunrise";
-  // don't force zuhr→dhuhr; our alias map now supports both
-  if (k.startsWith("jum")) k = "jummah"; // jummah/jumuah/jumma → jummah
+  if (k.startsWith("jum")) k = "jummah";
   return k;
 }
 
@@ -130,7 +129,6 @@ function computeLookupKey(p) {
   let k = p?.lookupKey || p?.key || p?.name || "";
   k = normalizeKey(k);
 
-  // Friday override for display-only resolution
   let isFriday = false;
   const s = p?.start;
   if (s) {
@@ -148,14 +146,26 @@ function computeLookupKey(p) {
 /* ============================= Component ============================= */
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
+
+  // 🔧 SW health (ready/scope) — helps diagnose “allowed but not subscribed”
+  const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
+
   useEffect(() => {
     const id = setInterval(() => setHb((h) => h + 1), 30_000);
     return () => clearInterval(id);
   }, []);
 
-  // ✅ Register the service worker for /mobile/ on mount
+  // ✅ Register the service worker for /mobile/ on mount and capture scope
   useEffect(() => {
-    registerMobileSW();
+    (async () => {
+      try {
+        await registerMobileSW(); // should register '/mobile/sw.js' with scope '/mobile/'
+        const reg = await navigator.serviceWorker.ready;
+        setSwInfo({ ready: true, scope: reg?.scope || "" });
+      } catch {
+        setSwInfo({ ready: false, scope: "(failed)" });
+      }
+    })();
   }, []);
 
   const timetable = usePrayerTimes();
@@ -165,7 +175,6 @@ export default function MobileScreen() {
   const labelsRaw = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const arabicRaw = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
-  // Lower-cased, alias-augmented maps so lookups are resilient
   const labels = useMemo(() => withLabelAliases(toLowerMap(labelsRaw)), [labelsRaw]);
   const arabic = useMemo(() => withLabelAliases(toLowerMap(arabicRaw)), [arabicRaw]);
 
@@ -195,7 +204,6 @@ export default function MobileScreen() {
       .toString()
       .toUpperCase() === "TRUE";
 
-  // Build upcoming (Fajr/Shouruq + Jum‘ah handled by the hook)
   const { upcoming } = useMobileTimeline({
     now: useMemo(() => moment(now), [now]),
     todayRow,
@@ -205,7 +213,6 @@ export default function MobileScreen() {
     numberToShow: 6,
   });
 
-  // Add a robust lookupKey to each item for label resolution
   const upcomingWithKeys = useMemo(
     () =>
       (upcoming || []).map((p) => ({
@@ -215,14 +222,10 @@ export default function MobileScreen() {
     [upcoming]
   );
 
-  // Optional: quick debug (open /mobile?debug=labels)
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("debug=labels")) {
-      // eslint-disable-next-line no-console
       console.log("[labels]", labels);
-      // eslint-disable-next-line no-console
       console.log("[arabic]", arabic);
-      // eslint-disable-next-line no-console
       console.table(
         upcomingWithKeys.map((u) => ({
           key: u.key,
@@ -242,7 +245,6 @@ export default function MobileScreen() {
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
 
-  // Install/menu state + push status
   const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
   const push = usePushStatus();
 
@@ -264,6 +266,12 @@ export default function MobileScreen() {
       alert("Copy failed. Long-press the URL bar to copy.");
     }
   };
+
+  // Show a tiny SW banner when ?debug=sw or when scope is wrong
+  const showSWBanner =
+    typeof window !== "undefined" &&
+    (window.location.search.includes("debug=sw") ||
+      (swInfo.ready && swInfo.scope && !swInfo.scope.includes("/mobile/")));
 
   return (
     <div
@@ -296,6 +304,14 @@ export default function MobileScreen() {
 
         <main className="px-4 py-4 space-y-3">
           <Pill left={todayLong} right={nowStr} />
+
+          {showSWBanner && (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 px-3 py-2 text-[12px]">
+              <b>Service Worker:</b> {swInfo.ready ? "ready" : "not ready"} — <b>scope</b>:{" "}
+              <code>{swInfo.scope || "(none)"}</code>
+              {!swInfo.scope.includes("/mobile/") && " (expected: /mobile/)"}
+            </div>
+          )}
 
           <PushControls />
 

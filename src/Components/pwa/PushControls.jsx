@@ -132,6 +132,10 @@ export default function PushControls() {
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
 
+  // Diagnostics
+  const [diag, setDiag] = useState(null);
+  const [diagRunning, setDiagRunning] = useState(false);
+
   // Platform detection
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
@@ -199,12 +203,10 @@ export default function PushControls() {
           setEnabled(true);
           setSavedNote("Notifications enabled ✓");
         }
-      } catch {
-        /* silent */
+      } catch (e) {
+        setError(`Auto-subscribe failed: ${e?.name || "Error"} — ${e?.message || ""}`.trim());
       } finally {
-        try {
-          window.dispatchEvent(new CustomEvent("gb:push:changed"));
-        } catch {}
+        try { window.dispatchEvent(new CustomEvent("gb:push:changed")); } catch {}
       }
     })();
   }, [perm]);
@@ -241,7 +243,7 @@ export default function PushControls() {
       await refreshState();
       setTimeout(() => setSavedNote(""), 2000);
     } catch (err) {
-      setError(err?.message || "Failed to change notifications.");
+      setError(`${err?.name || "Error"} — ${err?.message || "Failed to change notifications."}`);
       await refreshState();
       e.target.checked = enabled; // sync UI back to actual state
     } finally {
@@ -262,8 +264,8 @@ export default function PushControls() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "Adhān now",
-          body: "Test message from your device",
+          title: "Greenbank Masjid",
+          body: "Test notification ✓",
           url: "/mobile/",
           sub,
         }),
@@ -278,6 +280,48 @@ export default function PushControls() {
     }
   };
 
+  const fixSubscription = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await subscribeToPush();
+      await refreshState();
+      setSavedNote("Notifications enabled ✓");
+      setTimeout(() => setSavedNote(""), 2000);
+    } catch (e) {
+      setError(`${e?.name || "Error"} — ${e?.message || ""}`.trim());
+      await refreshState();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runDiag = async () => {
+    setDiagRunning(true);
+    try {
+      const scope = (await navigator.serviceWorker.ready).scope || "(no scope)";
+      setDiag({
+        scope,
+        hasNotification,
+        hasSW,
+        hasPush,
+        vapidPrefix: VAPID_PUBLIC.slice(0, 16) || "(empty)",
+        perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
+      });
+    } catch {
+      setDiag({
+        scope: "(failed to read)",
+        hasNotification,
+        hasSW,
+        hasPush,
+        vapidPrefix: VAPID_PUBLIC.slice(0, 16) || "(empty)",
+        perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
+      });
+    } finally {
+      setDiagRunning(false);
+    }
+  };
+
   /* ----- Render guidance (iOS-first) ----- */
 
   if (!VAPID_PUBLIC) {
@@ -285,8 +329,7 @@ export default function PushControls() {
       <InfoBanner id="missing-vapid" tone="error">
         <div className="font-semibold text-[14px] mb-1">Missing VAPID public key</div>
         <div className="opacity-90">
-          Set <code>VITE_VAPID_PUBLIC_KEY</code> in your build environment and redeploy. The client can’t subscribe
-          without it.
+          Set <code>VITE_VAPID_PUBLIC_KEY</code> in your build environment and redeploy. The client can’t subscribe without it.
         </div>
       </InfoBanner>
     );
@@ -299,21 +342,6 @@ export default function PushControls() {
         <div className="opacity-90">
           Install the app from <b>Safari</b> to enable notifications:
           <br />— Open this page in Safari → <b>Share</b> → <b>Add to Home Screen</b> → open from the new icon.
-        </div>
-        <div className="mt-2 flex gap-2">
-          <button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(window.location.href);
-                alert("Link copied. Open it in Safari and install to Home Screen.");
-              } catch {
-                alert("Copy failed. Long-press the URL to copy.");
-              }
-            }}
-            className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-1.5 text-sky-300 hover:bg-sky-400/15"
-          >
-            Copy link for Safari
-          </button>
         </div>
       </InfoBanner>
     );
@@ -330,8 +358,7 @@ export default function PushControls() {
   if (!hasPush) {
     return (
       <InfoBanner id="no-push-api" tone="warn">
-        This app is installed, but the Push API isn’t available here. Ensure you’re on recent iOS and opened
-        the app from the Home Screen.
+        This app is installed, but the Push API isn’t available here. Ensure you’re on recent iOS and opened the app from the Home Screen.
       </InfoBanner>
     );
   }
@@ -344,6 +371,8 @@ export default function PushControls() {
       : perm === "granted"
       ? "Allowed, but not subscribed"
       : "Permission not granted";
+
+  const showFixRow = perm === "granted" && !enabled;
 
   return (
     <div className="mt-2 space-y-2" id="notif-toggle">
@@ -364,17 +393,45 @@ export default function PushControls() {
         {loading && <span className="text-xs opacity-75">…</span>}
       </label>
 
+      {showFixRow && (
+        <div className="flex gap-2">
+          <button
+            onClick={fixSubscription}
+            className="flex-1 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[14px] font-semibold text-emerald-300 hover:bg-emerald-400/15"
+            disabled={loading}
+          >
+            Fix subscription
+          </button>
+          <button
+            onClick={runDiag}
+            className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-[14px]"
+            disabled={diagRunning}
+          >
+            {diagRunning ? "Diagnosing…" : "Diagnose"}
+          </button>
+        </div>
+      )}
+
+      {diag && (
+        <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] leading-5">
+          <div><b>SW scope:</b> {diag.scope}</div>
+          <div><b>Push API:</b> {String(diag.hasPush)}</div>
+          <div><b>Notifications API:</b> {String(diag.hasNotification)}</div>
+          <div><b>Service Worker:</b> {String(diag.hasSW)}</div>
+          <div><b>Permission:</b> {diag.perm}</div>
+          <div><b>VAPID prefix:</b> {diag.vapidPrefix}</div>
+        </div>
+      )}
+
       {savedNote && <div className="text-xs text-emerald-300">{savedNote}</div>}
 
-      {enabled && (
-        <button
-          onClick={sendTest}
-          disabled={sending}
-          className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[15px] font-semibold text-emerald-300 hover:bg-emerald-400/15"
-        >
-          {sending ? "Sending…" : "Send test notification"}
-        </button>
-      )}
+      <button
+        onClick={sendTest}
+        disabled={sending || !enabled}
+        className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[15px] font-semibold text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {sending ? "Sending…" : enabled ? "Send test notification" : "Enable notifications to test"}
+      </button>
 
       {!!error && <div className="text-sm text-red-300">{error}</div>}
     </div>
