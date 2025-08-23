@@ -11,6 +11,9 @@ export default function KebabMenu({
   onCopyLink,
   notifStatusLabel = "—",
   notifStatusColor = "text-white/70",
+  // NEW:
+  debugEnabled = false,
+  onToggleDebug = null,
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -75,6 +78,25 @@ export default function KebabMenu({
                 className="w-full text-left px-3 py-2 hover:bg-white/10"
               >
                 Copy link for Safari (Install)
+              </button>
+            )}
+
+            {/* Divider */}
+            <div className="my-1 h-px bg-white/10" />
+
+            {/* NEW: Toggle troubleshooting tools */}
+            {onToggleDebug && (
+              <button
+                onClick={() => {
+                  onToggleDebug();
+                  setOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between"
+              >
+                <span>Troubleshooting tools</span>
+                <span className={`ml-3 text-xs ${debugEnabled ? "text-emerald-400" : "text-white/60"}`}>
+                  {debugEnabled ? "On" : "Off"}
+                </span>
               </button>
             )}
           </div>

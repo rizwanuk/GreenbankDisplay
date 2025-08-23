@@ -146,8 +146,14 @@ function computeLookupKey(p) {
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
 
-  // 🔧 SW health (ready/scope) — helps diagnose “allowed but not subscribed”
+  // 🔧 SW health (ready/scope)
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
+
+  // 🛠️ Toggle troubleshoot UI from the menu
+  const initialDebug =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "pwa";
+  const [showDebug, setShowDebug] = useState(!!initialDebug);
 
   // 🔁 Heartbeat to tick time
   useEffect(() => {
@@ -155,21 +161,21 @@ export default function MobileScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // 🧭 Canonicalize path: force /mobile → /mobile/ so SW scope matches
+  // 🧭 Canonicalize path: force /mobile → /mobile/
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname;
       if (p === "/mobile" || p === "/mobile/index.html") {
-        window.location.replace("/mobile/"); // replace so history won't keep the wrong path
+        window.location.replace("/mobile/");
       }
     }
   }, []);
 
-  // ✅ Register the service worker for /mobile/ on mount and capture scope
+  // ✅ Register SW on mount and capture scope
   useEffect(() => {
     (async () => {
       try {
-        await registerMobileSW(); // should register '/mobile/sw.js' with scope '/mobile/' (or root fallback)
+        await registerMobileSW();
         const reg = await navigator.serviceWorker.ready;
         setSwInfo({ ready: true, scope: reg?.scope || "" });
       } catch {
@@ -309,6 +315,9 @@ export default function MobileScreen() {
             onCopyLink={copyLinkFallback}
             notifStatusLabel={push.statusLabel}
             notifStatusColor={push.statusColor}
+            /* NEW: menu switch for troubleshooting UI */
+            debugEnabled={showDebug}
+            onToggleDebug={() => setShowDebug((v) => !v)}
           />
         </div>
 
@@ -323,7 +332,8 @@ export default function MobileScreen() {
             </div>
           )}
 
-          <PushControls />
+          {/* Pass the toggle down */}
+          <PushControls debug={showDebug} />
 
           <MobileCurrentCard
             labels={labels}
