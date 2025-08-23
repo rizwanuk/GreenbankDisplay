@@ -178,6 +178,37 @@ export default function PushControls() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 🔁 Auto-subscribe once permission is granted (fixes "Allowed, but not subscribed")
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!VAPID_PUBLIC) return;
+        if (perm !== "granted") return;
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (!existing) {
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
+          });
+          await fetch("/api/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(sub),
+          });
+          setEnabled(true);
+          setSavedNote("Notifications enabled ✓");
+        }
+      } catch {
+        /* silent */
+      } finally {
+        try {
+          window.dispatchEvent(new CustomEvent("gb:push:changed"));
+        } catch {}
+      }
+    })();
+  }, [perm]);
+
   const onCheckboxChange = async (e) => {
     setError("");
 
