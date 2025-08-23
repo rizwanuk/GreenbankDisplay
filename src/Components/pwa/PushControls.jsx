@@ -2,6 +2,11 @@
 import React, { useEffect, useState } from "react";
 
 const VAPID_PUBLIC = (import.meta?.env?.VITE_VAPID_PUBLIC_KEY || "").trim();
+// Debug: confirm the client can see the key (remove later if you want)
+if (typeof window !== "undefined") {
+  // eslint-disable-next-line no-console
+  console.debug("[push] client VAPID prefix:", VAPID_PUBLIC.slice(0, 16));
+}
 
 function b64UrlToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -14,16 +19,41 @@ async function subscribeToPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     throw new Error("Push notifications are not supported in this context.");
   }
-  if (!VAPID_PUBLIC) throw new Error("Missing VAPID public key.");
+  if (!VAPID_PUBLIC) {
+    throw new Error("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
+  }
 
-  const perm = await Notification.requestPermission();
-  if (perm !== "granted") throw new Error("Notifications permission was denied.");
+  // iOS requires the app to be installed (Home Screen) to allow notifications
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIOS = /iPad|iPhone|iPod/i.test(ua);
+  const isStandalone =
+    (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
+    (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
+  if (isIOS && !isStandalone) {
+    throw new Error("Install to Home Screen first (Safari → Share → Add to Home Screen).");
+  }
+
+  // Request permission only if not already granted
+  let perm = typeof Notification !== "undefined" ? Notification.permission : "default";
+  if (perm !== "granted") {
+    perm = await Notification.requestPermission();
+  }
+  if (perm !== "granted") {
+    throw new Error(
+      "Notifications permission was not granted. On iPhone, open Settings → Notifications → [Your Web App] and allow notifications."
+    );
+  }
 
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
-  });
+
+  // Reuse existing subscription if present (idempotent; avoids InvalidStateError)
+  const existing = await reg.pushManager.getSubscription();
+  const sub =
+    existing ||
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
+    }));
 
   await fetch("/api/push/subscribe", {
     method: "POST",
@@ -147,10 +177,24 @@ export default function PushControls() {
 
   const onCheckboxChange = async (e) => {
     setError("");
-    if (perm === "denied") {
-      alert("Notifications are blocked in your browser settings for this site. Please allow them first.");
+
+    // Guard: iOS must be installed to Home Screen to proceed
+    if (isIOS && !isStandalone) {
+      setError("Install to Home Screen first (Safari → Share → Add to Home Screen).");
+      e.target.checked = false;
       return;
     }
+    if (!VAPID_PUBLIC) {
+      setError("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
+      e.target.checked = false;
+      return;
+    }
+    if (perm === "denied") {
+      setError("Notifications are blocked. Open iOS Settings → Notifications → [Your Web App] and allow notifications.");
+      e.target.checked = false;
+      return;
+    }
+
     setLoading(true);
     try {
       if (e.target.checked) {
@@ -165,6 +209,7 @@ export default function PushControls() {
     } catch (err) {
       setError(err?.message || "Failed to change notifications.");
       await refreshState();
+      e.target.checked = enabled; // sync UI back to actual state
     } finally {
       setLoading(false);
     }
@@ -200,6 +245,18 @@ export default function PushControls() {
   };
 
   /* ----- Render guidance (iOS-first) ----- */
+
+  if (!VAPID_PUBLIC) {
+    return (
+      <InfoBanner id="missing-vapid" tone="error">
+        <div className="font-semibold text-[14px] mb-1">Missing VAPID public key</div>
+        <div className="opacity-90">
+          Set <code>VITE_VAPID_PUBLIC_KEY</code> in your build environment and redeploy. The client can’t subscribe
+          without it.
+        </div>
+      </InfoBanner>
+    );
+  }
 
   if (isIOS && !isStandalone) {
     return (
