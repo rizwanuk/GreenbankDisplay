@@ -26,7 +26,7 @@ async function swReadyWithTimeout(ms = 8000) {
   ]);
 }
 
-// NEW: Try to get any active registration (prefer /mobile/, else root/any)
+// Try to get any active registration (prefer /mobile/, else any/root)
 async function getAnyRegistration() {
   if (!("serviceWorker" in navigator)) return null;
   const regMobile = await navigator.serviceWorker.getRegistration("/mobile/").catch(() => null);
@@ -35,70 +35,55 @@ async function getAnyRegistration() {
   return all.find((r) => r.active) || regMobile || null;
 }
 
-async function subscribeToPush() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    throw new Error("Push notifications are not supported in this context.");
-  }
-  if (!VAPID_PUBLIC) {
-    throw new Error("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
-  }
-
-  // iOS requires the app to be installed (Home Screen)
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const isIOS = /iPad|iPhone|iPod/i.test(ua);
-  const isStandalone =
-    (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
-    (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
-  if (isIOS && !isStandalone) {
-    throw new Error("Install to Home Screen first (Safari → Share → Add to Home Screen).");
-  }
-
-  // Permission must be granted before subscribe
-  let perm = typeof Notification !== "undefined" ? Notification.permission : "default";
-  if (perm !== "granted") {
-    perm = await Notification.requestPermission();
-  }
-  if (perm !== "granted") {
-    throw new Error(
-      "Notifications permission was not granted. On iPhone, open Settings → Notifications → [Your Web App] and allow notifications."
-    );
-  }
-
-  // Use any active registration first; fall back to ready()
+// Ensure there's a controlling SW; register /mobile/ first, then root fallback
+async function ensureSW(swLog = []) {
+  const log = (m) => swLog.push(m);
+  if (!("serviceWorker" in navigator)) throw new Error("Service workers not supported here.");
   let reg = await getAnyRegistration();
-  if (!reg) reg = await swReadyWithTimeout();
-
-  // Reuse existing subscription if present (idempotent)
-  const existing = await reg.pushManager.getSubscription();
-  const sub =
-    existing ||
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
-    }));
-
-  await fetch("/api/push/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(sub),
-  });
-
-  return sub;
-}
-
-async function unsubscribeFromPush() {
-  const reg = (await getAnyRegistration()) || (await swReadyWithTimeout().catch(() => null));
-  const sub = await reg?.pushManager?.getSubscription?.();
-  if (!sub) return;
-  try {
-    await fetch("/api/push/unsubscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
-  } finally {
-    await sub.unsubscribe();
+  if (reg && navigator.serviceWorker.controller) {
+    log("Already controlled by SW.");
+    return reg;
   }
+
+  const waitForController = (ms = 8000) =>
+    new Promise((resolve) => {
+      if (navigator.serviceWorker.controller) return resolve(true);
+      const t = setTimeout(() => resolve(false), ms);
+      const onCtrl = () => {
+        clearTimeout(t);
+        navigator.serviceWorker.removeEventListener("controllerchange", onCtrl);
+        resolve(true);
+      };
+      navigator.serviceWorker.addEventListener("controllerchange", onCtrl, { once: true });
+    });
+
+  // 1) Try /mobile/
+  try {
+    log("Registering /mobile/sw.js …");
+    reg = await navigator.serviceWorker.register("/mobile/sw.js", { scope: "/mobile/" });
+    try { await navigator.serviceWorker.ready; } catch {}
+    const gotCtrl = await waitForController(4000);
+    log(gotCtrl ? "Controller obtained via /mobile/." : "Still no controller after /mobile/.");
+  } catch (e) {
+    log("Register /mobile/ failed: " + (e?.message || e));
+  }
+
+  if (navigator.serviceWorker.controller) {
+    return (await getAnyRegistration()) || reg;
+  }
+
+  // 2) Fallback: root
+  try {
+    log("Registering /sw.js at root …");
+    reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    try { await navigator.serviceWorker.ready; } catch {}
+    const gotCtrl = await waitForController(6000);
+    log(gotCtrl ? "Controller obtained via root." : "Still no controller after root.");
+  } catch (e) {
+    log("Register root failed: " + (e?.message || e));
+  }
+
+  return (await getAnyRegistration()) || reg || null;
 }
 
 /* ---------- Small, reusable, closable banner ---------- */
@@ -154,6 +139,7 @@ export default function PushControls() {
   // Diagnostics
   const [diag, setDiag] = useState(null);
   const [diagRunning, setDiagRunning] = useState(false);
+  const [swLog, setSwLog] = useState([]);
 
   // Platform detection
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
@@ -168,15 +154,13 @@ export default function PushControls() {
   const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
   const broadcast = () => {
-    try {
-      window.dispatchEvent(new CustomEvent("gb:push:changed"));
-    } catch {}
+    try { window.dispatchEvent(new CustomEvent("gb:push:changed")); } catch {}
   };
 
   const refreshState = async () => {
     try {
       setPerm(typeof Notification !== "undefined" ? Notification.permission : "default");
-      const reg = (await getAnyRegistration()) || (await swReadyWithTimeout().catch(() => null));
+      const reg = (await getAnyRegistration()) || (await ensureSW([]).catch(() => null));
       const sub = await reg?.pushManager?.getSubscription?.();
       setEnabled(!!sub);
     } catch {
@@ -201,13 +185,12 @@ export default function PushControls() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-subscribe once permission is granted (fixes "Allowed, but not subscribed")
+  // Auto-subscribe once permission is granted
   useEffect(() => {
     (async () => {
       try {
-        if (!VAPID_PUBLIC) return;
-        if (perm !== "granted") return;
-        const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
+        if (!VAPID_PUBLIC || perm !== "granted") return;
+        const reg = (await getAnyRegistration()) || (await ensureSW([]));
         const existing = await reg.pushManager.getSubscription();
         if (!existing) {
           const sub = await reg.pushManager.subscribe({
@@ -225,7 +208,7 @@ export default function PushControls() {
       } catch (e) {
         setError(`Auto-subscribe failed: ${e?.name || "Error"} — ${e?.message || ""}`.trim());
       } finally {
-        try { window.dispatchEvent(new CustomEvent("gb:push:changed")); } catch {}
+        broadcast();
       }
     })();
   }, [perm]);
@@ -292,7 +275,7 @@ export default function PushControls() {
   const sendTest = async () => {
     try {
       setSending(true);
-      const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
+      const reg = (await getAnyRegistration()) || (await ensureSW([]));
       const sub = await reg.pushManager.getSubscription();
       if (!sub) {
         alert("Enable notifications first.");
@@ -321,14 +304,21 @@ export default function PushControls() {
   const fixSubscription = async () => {
     setError("");
     setLoading(true);
+    const logs = [];
+    setSwLog([]);
     try {
-      const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
-      // if we got here, a registration exists/controls this page
+      // Ensure an active/controlling SW first (logs explain what's happening)
+      const reg = await ensureSW(logs);
+      setSwLog(logs.slice());
+      if (!reg || !navigator.serviceWorker.controller) {
+        throw new Error("Service worker still not controlling this page.");
+      }
       await subscribeToPush();
       await refreshState();
       setSavedNote("Notifications enabled ✓");
       setTimeout(() => setSavedNote(""), 2000);
     } catch (e) {
+      setSwLog((l) => [...l, "Fix failed: " + (e?.message || e)]);
       setError(`${e?.name || "Error"} — ${e?.message || ""}`.trim());
       await refreshState();
     } finally {
@@ -338,12 +328,16 @@ export default function PushControls() {
 
   const runDiag = async () => {
     setDiagRunning(true);
+    const logs = [];
+    setSwLog([]);
     try {
       let scope = "(no scope)";
       try {
-        const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
+        const reg = (await getAnyRegistration()) || (await ensureSW(logs));
         scope = reg?.scope || "(no scope)";
-      } catch {}
+      } catch (e) {
+        logs.push("Diag ensureSW error: " + (e?.message || e));
+      }
       setDiag({
         scope,
         hasNotification,
@@ -353,6 +347,7 @@ export default function PushControls() {
         perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
       });
     } finally {
+      setSwLog((l) => (l.length ? l : logs));
       setDiagRunning(false);
     }
   };
@@ -469,6 +464,55 @@ export default function PushControls() {
         </div>
       )}
 
+      {/* SW helpers appear when not controlled */}
+      {(!diag || (diag && diag.scope === "(no scope)")) && (
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setError("");
+              const logs = [];
+              setSwLog([]);
+              try {
+                const reg = await ensureSW(logs);
+                setSwLog(logs.slice());
+                if (reg && navigator.serviceWorker.controller) {
+                  setSavedNote("Service worker installed ✓");
+                  setTimeout(() => setSavedNote(""), 2000);
+                } else {
+                  setError("SW still not controlling. Try Reset SW and reopen from Home Screen.");
+                }
+              } catch (e) {
+                setSwLog((l) => [...l, "Install failed: " + (e?.message || e)]);
+                setError(`${e?.name || "Error"} — ${e?.message || ""}`.trim());
+              }
+            }}
+            className="flex-1 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-[14px] font-semibold text-sky-300 hover:bg-sky-400/15"
+          >
+            Install service worker now
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const r of regs) await r.unregister();
+                if (window.caches) {
+                  const keys = await caches.keys();
+                  await Promise.all(keys.map((k) => caches.delete(k)));
+                }
+                localStorage.removeItem("gb:sw:forced-reload");
+                alert("Service worker(s) unregistered. Close the app, reopen from Home Screen, then tap Fix subscription.");
+              } catch (e) {
+                alert("Reset failed: " + (e?.message || e));
+              }
+            }}
+            className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-[14px] font-semibold text-red-300 hover:bg-red-400/15"
+          >
+            Reset SW
+          </button>
+        </div>
+      )}
+
       {diag && (
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] leading-5">
           <div><b>SW scope:</b> {diag.scope}</div>
@@ -477,6 +521,14 @@ export default function PushControls() {
           <div><b>Service Worker:</b> {String(diag.hasSW)}</div>
           <div><b>Permission:</b> {diag.perm}</div>
           <div><b>VAPID prefix:</b> {diag.vapidPrefix}</div>
+          {swLog.length > 0 && (
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <div className="font-semibold mb-1">SW log</div>
+              <ul className="list-disc pl-4 space-y-0.5 opacity-90">
+                {swLog.map((l, i) => (<li key={i}>{l}</li>))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
