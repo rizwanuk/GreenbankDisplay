@@ -139,7 +139,6 @@ function computeLookupKey(p) {
     }
   }
   if (isFriday && k === "dhuhr") k = "jummah";
-
   return k;
 }
 
@@ -150,16 +149,27 @@ export default function MobileScreen() {
   // 🔧 SW health (ready/scope) — helps diagnose “allowed but not subscribed”
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
 
+  // 🔁 Heartbeat to tick time
   useEffect(() => {
     const id = setInterval(() => setHb((h) => h + 1), 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  // 🧭 Canonicalize path: force /mobile → /mobile/ so SW scope matches
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname;
+      if (p === "/mobile" || p === "/mobile/index.html") {
+        window.location.replace("/mobile/"); // replace so history won't keep the wrong path
+      }
+    }
   }, []);
 
   // ✅ Register the service worker for /mobile/ on mount and capture scope
   useEffect(() => {
     (async () => {
       try {
-        await registerMobileSW(); // should register '/mobile/sw.js' with scope '/mobile/'
+        await registerMobileSW(); // should register '/mobile/sw.js' with scope '/mobile/' (or root fallback)
         const reg = await navigator.serviceWorker.ready;
         setSwInfo({ ready: true, scope: reg?.scope || "" });
       } catch {

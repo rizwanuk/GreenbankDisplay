@@ -1,19 +1,38 @@
 {
-  "name": "Greenbank Masjid",
-  "short_name": "Greenbank",
+  "name": "Greenbank Masjid - Mobile",
+  "short_name": "Masjid Mobile",
+  "description": "Prayer times and mobile prayer screen for Greenbank Masjid, with optional notifications.",
   "id": "/mobile/",
   "start_url": "/mobile/",
   "scope": "/mobile/",
+  "lang": "en-GB",
+  "dir": "ltr",
   "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "portrait-primary",
   "background_color": "#0b0f1a",
   "theme_color": "#0b0f1a",
+
   "icons": [
     { "src": "/mobile/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/mobile/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
     { "src": "/mobile/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/mobile/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+
+    { "src": "/mobile/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/mobile/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
+
   "screenshots": [
     { "src": "/mobile/screenshots/wide-1280x720.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide" }
+  ],
+
+  "categories": ["productivity", "utilities", "religion"],
+  "prefer_related_applications": false,
+
+  "shortcuts": [
+    {
+      "name": "Open Mobile Screen",
+      "short_name": "Open",
+      "url": "/mobile/"
+    }
   ]
 }
