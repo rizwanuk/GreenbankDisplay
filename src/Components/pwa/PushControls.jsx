@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 // eslint-disable-next-line no-undef
 const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY || "").trim();
 
-// Debug: confirm the client can see the key (remove later if you want)
+// Debug (remove later if you like)
 if (typeof window !== "undefined") {
   // eslint-disable-next-line no-console
   console.debug("[push] client VAPID prefix:", VAPID_PUBLIC.slice(0, 16));
@@ -18,6 +18,14 @@ function b64UrlToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
+// Wait for SW ready, but don't hang forever (iOS edge cases)
+async function swReadyWithTimeout(ms = 4000) {
+  return await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Service worker not ready (timeout)")), ms)),
+  ]);
+}
+
 async function subscribeToPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     throw new Error("Push notifications are not supported in this context.");
@@ -26,7 +34,7 @@ async function subscribeToPush() {
     throw new Error("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
   }
 
-  // iOS requires the app to be installed (Home Screen) to allow notifications
+  // iOS requires the app to be installed (Home Screen)
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
   const isStandalone =
@@ -36,7 +44,7 @@ async function subscribeToPush() {
     throw new Error("Install to Home Screen first (Safari → Share → Add to Home Screen).");
   }
 
-  // Request permission only if not already granted
+  // Permission must be granted before subscribe
   let perm = typeof Notification !== "undefined" ? Notification.permission : "default";
   if (perm !== "granted") {
     perm = await Notification.requestPermission();
@@ -47,9 +55,9 @@ async function subscribeToPush() {
     );
   }
 
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await swReadyWithTimeout();
 
-  // Reuse existing subscription if present (idempotent; avoids InvalidStateError)
+  // Reuse existing subscription if present (idempotent)
   const existing = await reg.pushManager.getSubscription();
   const sub =
     existing ||
@@ -68,8 +76,8 @@ async function subscribeToPush() {
 }
 
 async function unsubscribeFromPush() {
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
+  const reg = await swReadyWithTimeout().catch(() => null);
+  const sub = await reg?.pushManager?.getSubscription?.();
   if (!sub) return;
   try {
     await fetch("/api/push/unsubscribe", {
@@ -157,7 +165,7 @@ export default function PushControls() {
   const refreshState = async () => {
     try {
       setPerm(typeof Notification !== "undefined" ? Notification.permission : "default");
-      const reg = await navigator.serviceWorker?.ready;
+      const reg = await swReadyWithTimeout().catch(() => null);
       const sub = await reg?.pushManager?.getSubscription?.();
       setEnabled(!!sub);
     } catch {
@@ -182,13 +190,13 @@ export default function PushControls() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔁 Auto-subscribe once permission is granted (fixes "Allowed, but not subscribed")
+  // Auto-subscribe once permission is granted (fixes "Allowed, but not subscribed")
   useEffect(() => {
     (async () => {
       try {
         if (!VAPID_PUBLIC) return;
         if (perm !== "granted") return;
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await swReadyWithTimeout();
         const existing = await reg.pushManager.getSubscription();
         if (!existing) {
           const sub = await reg.pushManager.subscribe({
@@ -251,10 +259,29 @@ export default function PushControls() {
     }
   };
 
+  // NEW: explicit button to request permission when it's "default"
+  const requestPermissionAndSubscribe = async () => {
+    try {
+      setError("");
+      const status = await Notification.requestPermission();
+      setPerm(status);
+      if (status === "granted") {
+        await subscribeToPush();
+        await refreshState();
+        setSavedNote("Notifications enabled ✓");
+        setTimeout(() => setSavedNote(""), 2000);
+      } else if (status === "denied") {
+        setError("Notifications are blocked. Open iOS Settings → Notifications → [Your Web App] and allow notifications.");
+      }
+    } catch (e) {
+      setError(`${e?.name || "Error"} — ${e?.message || ""}`.trim());
+    }
+  };
+
   const sendTest = async () => {
     try {
       setSending(true);
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await swReadyWithTimeout();
       const sub = await reg.pushManager.getSubscription();
       if (!sub) {
         alert("Enable notifications first.");
@@ -284,6 +311,7 @@ export default function PushControls() {
     setError("");
     setLoading(true);
     try {
+      await swReadyWithTimeout();
       await subscribeToPush();
       await refreshState();
       setSavedNote("Notifications enabled ✓");
@@ -299,18 +327,10 @@ export default function PushControls() {
   const runDiag = async () => {
     setDiagRunning(true);
     try {
-      const scope = (await navigator.serviceWorker.ready).scope || "(no scope)";
+      let scope = "(no scope)";
+      try { scope = (await swReadyWithTimeout()).scope || "(no scope)"; } catch {}
       setDiag({
         scope,
-        hasNotification,
-        hasSW,
-        hasPush,
-        vapidPrefix: VAPID_PUBLIC.slice(0, 16) || "(empty)",
-        perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
-      });
-    } catch {
-      setDiag({
-        scope: "(failed to read)",
         hasNotification,
         hasSW,
         hasPush,
@@ -376,6 +396,28 @@ export default function PushControls() {
 
   return (
     <div className="mt-2 space-y-2" id="notif-toggle">
+      {/* If permission is default, give a big actionable button */}
+      {perm === "default" && (
+        <button
+          onClick={requestPermissionAndSubscribe}
+          className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[15px] font-semibold text-emerald-300 hover:bg-emerald-400/15"
+        >
+          Enable notifications
+        </button>
+      )}
+
+      {/* If denied, explain how to unblock */}
+      {perm === "denied" && (
+        <InfoBanner id="ios-unblock" tone="error">
+          <div className="font-semibold text-[14px] mb-1">Notifications are blocked</div>
+          <div className="opacity-90">
+            iPhone → <b>Settings</b> → <b>Notifications</b> → <b>[Your Web App]</b> → <b>Allow Notifications</b> ON.
+            If you don’t see it listed, delete the Home-Screen app, clear Safari Website Data, then Add to Home Screen again.
+          </div>
+        </InfoBanner>
+      )}
+
+      {/* Toggle (useful once subscribed, or to turn off) */}
       <label className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2">
         <input
           type="checkbox"
