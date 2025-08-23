@@ -19,7 +19,7 @@ function b64UrlToUint8Array(base64String) {
 }
 
 // Wait for SW ready, but don't hang forever (iOS edge cases)
-async function swReadyWithTimeout(ms = 4000) {
+async function swReadyWithTimeout(ms = 8000) {
   return await Promise.race([
     navigator.serviceWorker.ready,
     new Promise((_, reject) => setTimeout(() => reject(new Error("Service worker not ready (timeout)")), ms)),
