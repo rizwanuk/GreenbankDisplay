@@ -26,6 +26,15 @@ async function swReadyWithTimeout(ms = 8000) {
   ]);
 }
 
+// NEW: Try to get any active registration (prefer /mobile/, else root/any)
+async function getAnyRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  const regMobile = await navigator.serviceWorker.getRegistration("/mobile/").catch(() => null);
+  if (regMobile?.active) return regMobile;
+  const all = await navigator.serviceWorker.getRegistrations().catch(() => []);
+  return all.find((r) => r.active) || regMobile || null;
+}
+
 async function subscribeToPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     throw new Error("Push notifications are not supported in this context.");
@@ -55,7 +64,9 @@ async function subscribeToPush() {
     );
   }
 
-  const reg = await swReadyWithTimeout();
+  // Use any active registration first; fall back to ready()
+  let reg = await getAnyRegistration();
+  if (!reg) reg = await swReadyWithTimeout();
 
   // Reuse existing subscription if present (idempotent)
   const existing = await reg.pushManager.getSubscription();
@@ -76,7 +87,7 @@ async function subscribeToPush() {
 }
 
 async function unsubscribeFromPush() {
-  const reg = await swReadyWithTimeout().catch(() => null);
+  const reg = (await getAnyRegistration()) || (await swReadyWithTimeout().catch(() => null));
   const sub = await reg?.pushManager?.getSubscription?.();
   if (!sub) return;
   try {
@@ -165,7 +176,7 @@ export default function PushControls() {
   const refreshState = async () => {
     try {
       setPerm(typeof Notification !== "undefined" ? Notification.permission : "default");
-      const reg = await swReadyWithTimeout().catch(() => null);
+      const reg = (await getAnyRegistration()) || (await swReadyWithTimeout().catch(() => null));
       const sub = await reg?.pushManager?.getSubscription?.();
       setEnabled(!!sub);
     } catch {
@@ -196,7 +207,7 @@ export default function PushControls() {
       try {
         if (!VAPID_PUBLIC) return;
         if (perm !== "granted") return;
-        const reg = await swReadyWithTimeout();
+        const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
         const existing = await reg.pushManager.getSubscription();
         if (!existing) {
           const sub = await reg.pushManager.subscribe({
@@ -259,7 +270,7 @@ export default function PushControls() {
     }
   };
 
-  // NEW: explicit button to request permission when it's "default"
+  // explicit button to request permission when it's "default"
   const requestPermissionAndSubscribe = async () => {
     try {
       setError("");
@@ -281,7 +292,7 @@ export default function PushControls() {
   const sendTest = async () => {
     try {
       setSending(true);
-      const reg = await swReadyWithTimeout();
+      const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
       const sub = await reg.pushManager.getSubscription();
       if (!sub) {
         alert("Enable notifications first.");
@@ -311,7 +322,8 @@ export default function PushControls() {
     setError("");
     setLoading(true);
     try {
-      await swReadyWithTimeout();
+      const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
+      // if we got here, a registration exists/controls this page
       await subscribeToPush();
       await refreshState();
       setSavedNote("Notifications enabled ✓");
@@ -328,7 +340,10 @@ export default function PushControls() {
     setDiagRunning(true);
     try {
       let scope = "(no scope)";
-      try { scope = (await swReadyWithTimeout()).scope || "(no scope)"; } catch {}
+      try {
+        const reg = (await getAnyRegistration()) || (await swReadyWithTimeout());
+        scope = reg?.scope || "(no scope)";
+      } catch {}
       setDiag({
         scope,
         hasNotification,
