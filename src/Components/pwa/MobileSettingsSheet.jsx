@@ -2,21 +2,42 @@ import React, { useEffect, useMemo, useState } from "react";
 import PushControls from "./PushControls";
 import useInstallPrompt from "../../hooks/useInstallPrompt";
 
-/** Small checkbox row */
+/** Accessible, full-row clickable checkbox with a visible tick */
 function CheckRow({ id, label, checked, onChange, hint }) {
   return (
     <div className="py-2">
-      <label htmlFor={id} className="flex items-center gap-3">
+      <label
+        htmlFor={id}
+        className="flex items-center gap-3 cursor-pointer select-none"
+        role="checkbox"
+        aria-checked={checked}
+      >
+        {/* Real checkbox for a11y, visually hidden */}
         <input
           id={id}
           type="checkbox"
-          className="h-4 w-4 accent-white/90"
+          className="sr-only"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
         />
+        {/* Custom visual box with tick */}
+        <span
+          className={[
+            "inline-flex h-5 w-5 items-center justify-center rounded-md border transition",
+            checked
+              ? "bg-white text-[#0b0f1a] border-white"
+              : "bg-transparent text-transparent border-white/40",
+          ].join(" ")}
+          aria-hidden="true"
+        >
+          {/* Tick icon */}
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
+            <path d="M7.6 13.2L4.4 10l-1.1 1.1 4.3 4.3L17 6.9 15.9 5.8z" />
+          </svg>
+        </span>
         <span className="text-sm">{label}</span>
       </label>
-      {hint ? <p className="text-xs text-white/50 pl-7 mt-1">{hint}</p> : null}
+      {hint ? <p className="text-xs text-white/50 pl-8 mt-1">{hint}</p> : null}
     </div>
   );
 }
@@ -36,14 +57,16 @@ function readThemeNamesFromSettings(rows) {
   return Array.from(new Set(names));
 }
 
+// 👉 adjust to your backend route
+const PREFS_ENDPOINT = "/api/push/prefs";
+
 export default function MobileSettingsSheet({
   open,
-  onClose, // <- parent handles history/back semantics
+  onClose,
   settingsRows,
   currentThemeName,
   onChangeTheme, // (name) => void
   categoryKey = "mobile.notif.categories",
-
   // About
   about = { version: "", timezone: "", lastUpdated: "" },
 }) {
@@ -117,6 +140,64 @@ export default function MobileSettingsSheet({
     } catch {}
   }, [minutesBefore]);
 
+  // 🔔 Test notification (local via SW)
+  const sendTestNotification = async () => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification("Greenbank Masjid", {
+        body: "This is a test notification.",
+        icon: "/mobile/icons/icon-192.png",
+        badge: "/mobile/icons/badge-72.png",
+      });
+    } catch {
+      alert("Could not show a test notification. Check permissions and SW registration.");
+    }
+  };
+
+  // 🌐 Auto-sync preferences to backend whenever they change (if a push subscription exists)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!mounted || !sub) return;
+
+        const payload = {
+          endpoint: sub.endpoint,
+          keys: sub.toJSON()?.keys || null,
+          prefs: {
+            startEnabled,
+            jamaahEnabled,
+            minutesBefore,
+            categories: cats,
+          },
+          clientId:
+            localStorage.getItem("mobile.clientId") ||
+            (() => {
+              const id = Math.random().toString(36).slice(2);
+              try {
+                localStorage.setItem("mobile.clientId", id);
+              } catch {}
+              return id;
+            })(),
+        };
+
+        await fetch(PREFS_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "include",
+        });
+      } catch {
+        // ignore on client
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [startEnabled, jamaahEnabled, minutesBefore, cats]);
+
   if (!open) return null;
 
   return (
@@ -179,7 +260,7 @@ export default function MobileSettingsSheet({
               </section>
             )}
 
-            {/* Notifications main toggle */}
+            {/* Notifications */}
             <section className="mt-3">
               <h3 className="text-sm font-semibold text-white/90">Notifications</h3>
               <p className="text-xs text-white/60 mt-1">
@@ -188,6 +269,15 @@ export default function MobileSettingsSheet({
 
               <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
                 <PushControls debug={false} />
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={sendTestNotification}
+                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
+                  >
+                    Send test notification
+                  </button>
+                </div>
               </div>
 
               {/* Start & Jama'ah options */}
@@ -208,7 +298,7 @@ export default function MobileSettingsSheet({
                 />
 
                 {/* Minutes before Jama'ah */}
-                <div className="mt-2 pl-7">
+                <div className="mt-2 pl-8">
                   <label htmlFor="notif-jamaah-mins" className="text-sm block mb-1">
                     Minutes before Jama‘ah
                   </label>
