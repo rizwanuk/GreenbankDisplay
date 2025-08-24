@@ -3,7 +3,7 @@
 import "../index.css";
 import React, { useEffect, useMemo, useState } from "react";
 import moment from "moment";
-import momentHijri from "moment-hijri"; // for Hijri formatting (iD/iM/iYYYY)
+import momentHijri from "moment-hijri";
 
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
@@ -14,12 +14,9 @@ import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 import MobileUpcomingList from "../Components/MobileUpcomingList";
 
-import useInstallPrompt from "../hooks/useInstallPrompt";
-import KebabMenu from "../Components/pwa/KebabMenu";
-import PushControls from "../Components/pwa/PushControls";
-import usePushStatus from "../hooks/usePushStatus"; // live push status
+import usePushStatus from "../hooks/usePushStatus";
+import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
 
-// ✅ SW registrar for /mobile/
 import { registerMobileSW } from "../pwa/registerMobileSW";
 
 /* --------------------------- helpers ---------------------------- */
@@ -127,17 +124,27 @@ function computeLookupKey(p) {
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
 
-  // 🔧 SW health (ready/scope)
+  // Settings sheet controls
+  const [showSettings, setShowSettings] = useState(false);
+  const [themeOverride, setThemeOverride] = useState(() => {
+    try {
+      return localStorage.getItem("selectedTheme") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  // SW status
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
 
-  // 🛠️ Toggle troubleshoot UI from the menu
+  // Debug flag (kept for ?debug=pwa)
   const initialDebug =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("debug") === "pwa";
-  const [showDebug, setShowDebug] = useState(!!initialDebug);
+  const [showDebug] = useState(!!initialDebug);
 
-  // Live push status (drives header menu)
-  const push = usePushStatus();
+  // Live push status (kept if you want to surface state later)
+  usePushStatus();
 
   // Heartbeat tick
   useEffect(() => {
@@ -230,27 +237,6 @@ export default function MobileScreen() {
   }).format(now);
   const nowStr = fmt(now, !is24Hour);
 
-  const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
-
-  const scrollToNotifications = () => {
-    document.getElementById("notif-toggle")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
-  const doInstall = async () => {
-    if (isIOS && !isIOSSafari) {
-      alert("Open this page in Safari, then tap Share → Add to Home Screen.");
-      return;
-    }
-    await install();
-  };
-  const copyLinkFallback = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      alert("Link copied. Open it in Safari to install.");
-    } catch {
-      alert("Copy failed. Long-press the URL bar to copy.");
-    }
-  };
-
   const showSWBanner =
     typeof window !== "undefined" &&
     (window.location.search.includes("debug=sw") ||
@@ -274,19 +260,92 @@ export default function MobileScreen() {
   const iYear = h.format("iYYYY");
 
   const MONTH_KEYS = [
-    "muharram","safar","rabiAwal","rabiThani","jumadaAwal","jumadaThani",
-    "rajab","shaban","ramadan","shawwal","dhulQadah","dhulHijjah"
+    "muharram",
+    "safar",
+    "rabiAwal",
+    "rabiThani",
+    "jumadaAwal",
+    "jumadaThani",
+    "rajab",
+    "shaban",
+    "ramadan",
+    "shawwal",
+    "dhulQadah",
+    "dhulHijjah",
   ];
   const DEFAULT_I_MONTHS = [
-    "Muharram","Safar","Rabīʿ al-ʾAwwal","Rabīʿ al-Ākhir",
-    "Jumādā al-Ūlā","Jumādā al-Ākhirah","Rajab","Shaʿbān",
-    "Ramaḍān","Shawwāl","Dhū al-Qaʿdah","Dhū al-Ḥijjah"
+    "Muharram",
+    "Safar",
+    "Rabīʿ al-ʾAwwal",
+    "Rabīʿ al-Ākhir",
+    "Jumādā al-Ūlā",
+    "Jumādā al-Ākhirah",
+    "Rajab",
+    "Shaʿbān",
+    "Ramaḍān",
+    "Shawwāl",
+    "Dhū al-Qaʿdah",
+    "Dhū al-Ḥijjah",
   ];
   const monthFromSheet = settingsMap[`labels.${MONTH_KEYS[iMonthIndex0]}`];
-  const iMonth = (typeof monthFromSheet === "string" && monthFromSheet.trim())
-    ? monthFromSheet.trim()
-    : DEFAULT_I_MONTHS[iMonthIndex0];
+  const iMonth =
+    typeof monthFromSheet === "string" && monthFromSheet.trim()
+      ? monthFromSheet.trim()
+      : DEFAULT_I_MONTHS[iMonthIndex0];
   const hijriDateString = `${iDay} ${iMonth} ${iYear} AH`;
+
+  // About info (version from env, timezone, last updated from sheet)
+  const metaRow = Array.isArray(settingsRows)
+    ? settingsRows.find((r) => r?.Group === "meta" && r?.Key === "lastUpdated")
+    : null;
+  const about = {
+    version: import.meta?.env?.VITE_APP_VERSION || "",
+    timezone: tz,
+    lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
+  };
+
+  // ---------- Settings open/close helpers with history state ----------
+  const requestOpenSettings = () => {
+    setShowSettings(true);
+  };
+
+  const requestCloseSettings = () => {
+    try {
+      // If we opened a modal history entry, use back() to keep nav consistent
+      if (window.history.state && window.history.state.modal === "settings") {
+        window.history.back();
+      } else {
+        setShowSettings(false);
+      }
+    } catch {
+      setShowSettings(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showSettings) return;
+    const state = { modal: "settings" };
+    const url = new URL(window.location.href);
+    url.searchParams.set("panel", "settings");
+    window.history.pushState(state, "", url.toString());
+
+    const onPop = () => setShowSettings(false);
+    const onKey = (e) => {
+      if (e.key === "Escape") requestCloseSettings();
+    };
+
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("keydown", onKey);
+      // Clean URL param
+      const u = new URL(window.location.href);
+      u.searchParams.delete("panel");
+      window.history.replaceState({}, "", u.toString());
+    };
+  }, [showSettings]);
 
   return (
     <div
@@ -304,33 +363,25 @@ export default function MobileScreen() {
             <div className="text-xs opacity-75">Mobile view</div>
           </div>
 
-          <KebabMenu
-            canInstallMenu={canInstallMenu}
-            installed={installed}
-            isIOS={isIOS}
-            isIOSSafari={isIOSSafari}
-            onInstall={doInstall}
-            onNotifications={scrollToNotifications}
-            onCopyLink={copyLinkFallback}
-            notifStatusLabel={push.statusLabel}
-            notifStatusColor={push.statusColor}
-            debugEnabled={showDebug}
-            onToggleDebug={() => setShowDebug((v) => !v)}
-          />
+          {/* Single settings button */}
+          <button
+            aria-label="Settings"
+            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+            onClick={requestOpenSettings}
+          >
+            ⚙️
+          </button>
         </div>
 
         <main className="px-4 py-4 space-y-3">
-          {/* ✅ Combined pill: Gregorian + Islamic dates (top), time (bottom) */}
+          {/* Dates pill */}
           <div
             className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.06] shadow-sm
                        px-4 py-3 leading-snug"
           >
-            {/* Top row: Gregorian + Islamic dates */}
             <div className="w-full text-center text-[14px] font-semibold">
               {todayLong} · <span className="text-white/80">{hijriDateString}</span>
             </div>
-
-            {/* Bottom row: Time */}
             <div
               className="w-full text-center text-[15px] font-semibold mt-1"
               style={{ fontVariantNumeric: "tabular-nums" }}
@@ -339,22 +390,20 @@ export default function MobileScreen() {
             </div>
           </div>
 
-          {showDebug && showSWBanner && (
+          {showSWBanner && (
             <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 px-3 py-2 text-[12px]">
               <b>Service Worker:</b> {swInfo.ready ? "ready" : "not ready"} — <b>scope</b>:{" "}
-              <code>{swInfo.scope || "(none)"}</code>
-              {!swInfo.scope.includes("/mobile/") && " (expected: /mobile/)"}
+              <code>{swInfo.scope || "(none)"} </code>
             </div>
           )}
 
-          <PushControls debug={showDebug} />
-
+          {/* Cards */}
           <MobileCurrentCard
             labels={labels}
             arabicLabels={arabic}
             is24Hour={is24Hour}
             todayRow={todayRow}
-            yesterdayRow={yRow}
+            yesterdayRow={refYesterday}
             settingsMap={settingsMap}
           />
 
@@ -376,6 +425,21 @@ export default function MobileScreen() {
           />
         </main>
       </div>
+
+      {/* Mobile-optimised, scrollable Settings sheet */}
+      <MobileSettingsSheet
+        open={showSettings}
+        onClose={requestCloseSettings}
+        settingsRows={settingsRows}
+        currentThemeName={themeOverride}
+        onChangeTheme={(name) => {
+          try {
+            localStorage.setItem("selectedTheme", name || "");
+          } catch {}
+          setThemeOverride(name || "");
+        }}
+        about={about}
+      />
     </div>
   );
 }
