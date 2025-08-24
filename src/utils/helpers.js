@@ -1,4 +1,4 @@
-// utils/helpers.js
+// src/utils/helpers.js
 import moment from "moment";
 
 // Build a key-value map from settings
@@ -68,6 +68,58 @@ export function getTheme(settingsMap) {
   const infoCard       = readGroup(settingsMap, `${base}.infoCard`);
   const weatherCard    = readGroup(settingsMap, `${base}.weatherCard`);
   const slideshow      = readGroup(settingsMap, `${base}.slideshow`);
+
+  // Normalise fonts where present
+  [
+    header,
+    clock,
+    dateCard,
+    currentPrayer,
+    upcomingPrayer,
+    nextPrayer,
+    infoCard,
+    weatherCard,
+    slideshow,
+  ].forEach((obj) => {
+    if (obj && obj.fontEng) obj.fontEng = normaliseFontToken(obj.fontEng);
+    if (obj && obj.fontAra) obj.fontAra = normaliseFontToken(obj.fontAra);
+  });
+
+  return {
+    header,
+    clock,
+    dateCard,
+    currentPrayer,
+    upcomingPrayer,
+    nextPrayer,
+    infoCard,
+    weatherCard,
+    slideshow,
+  };
+}
+
+// ----- NEW: Mobile-aware theme loader (themeMobile.* overrides theme.*) -----
+export function getMobileTheme(settingsMap) {
+  if (!settingsMap) return {};
+  const themeName = settingsMap["toggles.theme"] || "Theme_1";
+  const basePrefix = `theme.${themeName}`;
+  const mobilePrefix = `themeMobile.${themeName}`;
+
+  const readMerged = (section) => {
+    const base = readGroup(settingsMap, `${basePrefix}.${section}`);
+    const mobile = readGroup(settingsMap, `${mobilePrefix}.${section}`);
+    return { ...base, ...mobile }; // mobile wins
+  };
+
+  const header         = readMerged("header");
+  const clock          = readMerged("clock");
+  const dateCard       = readMerged("dateCard");
+  const currentPrayer  = readMerged("currentPrayer");
+  const upcomingPrayer = readMerged("upcomingPrayer");
+  const nextPrayer     = readMerged("nextPrayer");
+  const infoCard       = readMerged("infoCard");
+  const weatherCard    = readMerged("weatherCard");
+  const slideshow      = readMerged("slideshow");
 
   // Normalise fonts where present
   [
