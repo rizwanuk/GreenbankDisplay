@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 import useSettings from "./hooks/useSettings";
 import { parseSettings } from "./utils/parseSettings";
@@ -81,7 +81,10 @@ export default function EmbedScreen() {
   if (!timetable || !rawSettings) return <div className="text-black p-4">Loading...</div>;
 
   const today = now.clone();
+
+  // ✅ Hijri date string now uses the centralised logic (offset + 30-day normalization)
   const { hijriDateString } = useHijriDate(settings);
+
   const { label: makroohLabel } = useMakroohTimes(settings, now);
 
   const todayRow = timetable.find(
@@ -153,7 +156,8 @@ export default function EmbedScreen() {
     messageStyle = "bg-cyan-600 text-white";
   }
 
-  const lastUpdatedRaw = settings?.meta?.lastupdated;
+  // ✅ Fix lastUpdated: parseSettings now preserves case → meta.lastUpdated
+  const lastUpdatedRaw = settings?.meta?.lastUpdated;
   const lastUpdated = lastUpdatedRaw
     ? moment.utc(lastUpdatedRaw).local().format("D MMM YYYY, h:mm A")
     : "";

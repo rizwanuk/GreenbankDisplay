@@ -1,44 +1,70 @@
-export function parseSettings(rows) {
-  const settingsObj = {
-    meta: {},
-    labels: {},
-    arabic: {},       // ✅ Arabic labels stored here
-    prayers: {},
-    themes: {},
-    toggles: {},
-    timings: {},
-    messages: {},
-    months: {},
-  };
+// /src/utils/parseSettings.js
+//
+// Builds a nested settings object from rows like:
+// { Group: "islamicCalendar", Key: "normalizeTo30DayMonths", Value: "TRUE" }
+//
+// Exports BOTH a named and default function:
+//   import { parseSettings } from "@/utils/parseSettings";
+//   import parseSettings from "@/utils/parseSettings";
 
-  rows.forEach((row) => {
-    const groupRaw = row.Group?.trim();
-    const group = groupRaw?.toLowerCase();
-    const keyRaw = row.Key?.trim();
-    const key = keyRaw?.toLowerCase();
-    const value = row.Value?.trim();
+function coerceValue(raw) {
+  if (raw === undefined || raw === null) return raw;
 
-    if (!group || !key || value === undefined) return;
+  const s = typeof raw === "string" ? raw.trim() : raw;
 
-    if (group === 'labels') {
-      settingsObj.labels[key] = value;
-    } else if (group === 'labels.arabic') {
-      if (!settingsObj.prayers[key]) settingsObj.prayers[key] = {};
-      settingsObj.prayers[key].ar = value;
+  if (typeof s !== "string") return s;
 
-      settingsObj.arabic[key] = value;  // ✅ Accessible via settings.arabic[key]
-    } else if (group === 'jummahtimes') {
-      if (!settingsObj.timings.jummahTimes) {
-        settingsObj.timings.jummahTimes = {};
-      }
-      settingsObj.timings.jummahTimes[key] = value;
-    } else {
-      if (!settingsObj[group]) {
-        settingsObj[group] = {};
-      }
-      settingsObj[group][key] = value;
+  const lower = s.toLowerCase();
+
+  // Booleans
+  if (lower === "true") return true;
+  if (lower === "false") return false;
+
+  // Null/undefined sentinels (optional)
+  if (lower === "null") return null;
+  if (lower === "undefined") return undefined;
+
+  // Numbers
+  if (s !== "" && !isNaN(s)) {
+    const num = Number(s);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  // JSON-looking strings
+  const first = s.charAt(0);
+  if (first === "{" || first === "[") {
+    try {
+      return JSON.parse(s);
+    } catch {
+      // fall through
     }
-  });
+  }
 
-  return settingsObj;
+  return s;
 }
+
+/**
+ * Parse settings rows from Google Sheets into a nested object.
+ * @param {Array<Object>} rows - Array with columns: Group, Key, Value
+ * @returns {Object} settings - settings[Group][Key] = coerced Value
+ */
+export function parseSettings(rows = []) {
+  const settings = {};
+
+  for (const row of rows) {
+    const group = row?.Group?.trim?.();
+    const key = row?.Key?.trim?.();
+    if (!group || !key) continue;
+
+    const value = coerceValue(row?.Value);
+
+    if (!Object.prototype.hasOwnProperty.call(settings, group)) {
+      settings[group] = {};
+    }
+    settings[group][key] = value;
+  }
+
+  return settings;
+}
+
+export default parseSettings;

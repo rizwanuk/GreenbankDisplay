@@ -200,6 +200,12 @@ export default function SlideshowScreen() {
     // (No weather on slideshow by design)
   }, [remoteCfg]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Compute a readable "Last updated" string from the Sheet's timestamp
+  const lastUpdatedSheet = settingsMap["meta.lastUpdated"];
+  const lastUpdatedStr = lastUpdatedSheet
+    ? moment.utc(lastUpdatedSheet).local().format("D MMM YYYY, h:mm A")
+    : "";
+
   return (
     <div className="relative w-screen h-screen bg-black text-white overflow-auto">
       {/* NOTE: mode-* is applied to <html> via useEffect above; no transform/zoom used */}
@@ -261,7 +267,9 @@ export default function SlideshowScreen() {
         {/* Footer tick + optional remote error */}
         <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-3">
           <span className="text-green-400">●</span>
-          <span>Last updated: {now.format("HH:mm:ss")}</span>
+          <span>
+            Last updated{lastUpdatedStr ? `: ${lastUpdatedStr}` : ": —"}
+          </span>
           {remoteErr ? (
             <span className="text-red-300">• Remote: {String(remoteErr)}</span>
           ) : null}
