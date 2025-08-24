@@ -2,14 +2,37 @@
 import moment from 'moment-hijri';
 import { getTime as parseTime } from '../helpers/time';
 
-// 1) Hijri date with offset and custom month label
+/* ────────────────────────────────────────────────────────────────────────────
+   1) Hijri date with offset and 30-day normalization (matches DateCard logic)
+   - Respects: settings.islamicCalendar.offset (±days)
+   - Respects: settings.islamicCalendar.normalizeTo30DayMonths (TRUE/FALSE)
+   - If normalization is on and library reports iD=1, we:
+       • use the previous day’s moment (so month/year are previous month)
+       • force the displayed day to "30"
+   - Month label prefers settings.labels.{muharram|safar|rabiAwal|...}, else iMMMM
+──────────────────────────────────────────────────────────────────────────── */
 export function useHijriDate(settings) {
   const offset = parseInt(settings?.islamicCalendar?.offset || 0, 10);
-  const hijriMoment = moment().add(offset, 'days');
+  const normalizeTo30 =
+    String(settings?.islamicCalendar?.normalizeTo30DayMonths ?? 'FALSE')
+      .toUpperCase() === 'TRUE';
 
-  const hijriDay = hijriMoment.format('iD');
-  const hijriMonthIndex = parseInt(hijriMoment.format('iM'), 10); // 1–12
-  const hijriYear = hijriMoment.format('iYYYY');
+  // Start from "now" + offset in Hijri chronology
+  let m = moment().add(offset, 'days');
+
+  // If the library thinks it's day 1, and normalization is on,
+  // show the 30th of the previous month.
+  const isDayOne = m.format('iD') === '1';
+  let forcedDay = null;
+
+  if (normalizeTo30 && isDayOne) {
+    m = m.clone().subtract(1, 'day'); // previous month
+    forcedDay = '30';                  // force "30" even if lib thought prev had only 29
+  }
+
+  const hijriDay = forcedDay ?? m.format('iD');
+  const hijriMonthIndex = parseInt(m.format('iM'), 10); // 1–12
+  const hijriYear = m.format('iYYYY');
 
   const hijriMonthKey = [
     'muharram', 'safar', 'rabiAwal', 'rabiThani',
@@ -17,15 +40,17 @@ export function useHijriDate(settings) {
     'ramadan', 'shawwal', 'dhulQadah', 'dhulHijjah',
   ][hijriMonthIndex - 1];
 
-  const customMonthName =
-    settings?.labels?.[hijriMonthKey] || hijriMoment.format('iMMMM');
+  const customMonthName = settings?.labels?.[hijriMonthKey] || m.format('iMMMM');
 
   const hijriDateString = `${hijriDay} ${customMonthName} ${hijriYear}`;
 
-  return { hijriDateString, hijriMoment };
+  // Return both the string and the (possibly shifted) moment
+  return { hijriDateString, hijriMoment: m };
 }
 
-// 2) Makrooh checker
+/* ────────────────────────────────────────────────────────────────────────────
+   2) Makrooh checker
+──────────────────────────────────────────────────────────────────────────── */
 export function useMakroohTimes(settings, now) {
   const zawalStart = moment(settings?.timings?.zawalStart, 'HH:mm');
   const zawalEnd = moment(settings?.timings?.zawalEnd, 'HH:mm');
@@ -158,7 +183,7 @@ export function getTime({ prayerKey, type, timetable, settings, now }) {
 
   if (prayerKey === 'dhuhr' && type.toLowerCase() === 'iqamah' && isFriday) {
     return getJummahTime(settings, now);
-  }
+    }
 
   const fullKey = `${timetableKey} ${type}`;
   const rawKey = Object.keys(todayRow).find((k) => k.toLowerCase() === fullKey.toLowerCase());

@@ -110,17 +110,27 @@ function App() {
   // Toggles / labels
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
   const islamicOffset = parseInt(settingsMap["islamicCalendar.offset"] || 0, 10);
+  const normalizeTo30DayMonths =
+    String(settingsMap["islamicCalendar.normalizeTo30DayMonths"] || "FALSE").toUpperCase() === "TRUE";
+
   const L = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const A = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
-  // Hijri months
+  // Hijri months (prefer Google Sheet spellings, fall back to nice defaults)
   const hijriMonthKeys = [
     "muharram","safar","rabiAwal","rabiThani","jumadaAwal","jumadaThani",
     "rajab","shaban","ramadan","shawwal","dhulQadah","dhulHijjah"
   ];
-  const islamicMonths = hijriMonthKeys.map(
-    (key) => L[key] || key.charAt(0).toUpperCase() + key.slice(1)
-  );
+  const DEFAULT_I_MONTHS = [
+    "Muharram","Safar","Rabīʿ al-ʾAwwal","Rabīʿ al-Ākhir",
+    "Jumādā al-Ūlā","Jumādā al-Ākhirah","Rajab","Shaʿbān",
+    "Ramaḍān","Shawwāl","Dhū al-Qaʿdah","Dhū al-Ḥijjah"
+  ];
+  const islamicMonths = hijriMonthKeys.map((key, idx) => {
+    const fromSheet = settingsMap[`labels.${key}`];
+    if (typeof fromSheet === "string" && fromSheet.trim()) return fromSheet.trim();
+    return DEFAULT_I_MONTHS[idx];
+  });
 
   // Timetable helpers
   const getRow = (m) =>
@@ -187,7 +197,6 @@ function App() {
   useEffect(() => {
     if (!remoteCfg) return;
 
-    // optional kill-switch
     const enabled = String(remoteCfg.enabled ?? "TRUE").toUpperCase() !== "FALSE";
     if (!enabled) return;
 
@@ -239,6 +248,7 @@ function App() {
                 theme={themeDateCard}
                 islamicMonths={islamicMonths}
                 islamicOffset={islamicOffset}
+                normalizeTo30DayMonths={normalizeTo30DayMonths}
               />
 
               <NextPrayerCard
