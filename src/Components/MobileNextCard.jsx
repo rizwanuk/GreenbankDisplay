@@ -113,6 +113,7 @@ function buildItemsForDay(row, baseMoment, labels, arabicLabels, settingsMap) {
 }
 
 export default function MobileNextCard({
+  theme = {},           // ✅ THEME: bgColor, textColor, border/borderColor, nameSize, nameSizeArabic, countdownSize
   todayRow,
   tomorrowRow,
   labels = {},
@@ -209,9 +210,12 @@ export default function MobileNextCard({
 
   // ==== UI with left accent "Next" ====
   const accentColor = "bg-cyan-600";
+  const borderClass = theme.border || theme.borderColor || "border-white/10";
+  const textClass = theme.textColor || "text-white";
+  const bgClass = theme.bgColor || "bg-white/10";
 
   return (
-    <div className="flex rounded-2xl border border-white/10 bg-white/10 text-white">
+    <div className={["flex rounded-2xl border", borderClass, bgClass, textClass].join(" ")}>
       {/* Left accent with vertical "Next" */}
       <div className={`w-8 sm:w-10 ${accentColor} rounded-l-2xl flex items-center justify-center`}>
         <span
@@ -225,17 +229,19 @@ export default function MobileNextCard({
       {/* Card body */}
       <div className="flex-1 px-3 py-3 text-center">
         <div className="flex items-center justify-center gap-2 mb-1">
-          <div className="text-2xl font-semibold">
+          <div className={["font-semibold", theme.nameSize || "text-2xl"].join(" ")}>
             {displayLabel}
           </div>
           {displayArabic ? (
-            <div className="text-xl font-arabic" lang="ar" dir="rtl">
+            <div className={[theme.nameSizeArabic || "text-xl", "font-arabic"].join(" ")} lang="ar" dir="rtl">
               {displayArabic}
             </div>
           ) : null}
         </div>
 
-        <div className="text-[13px] sm:text-sm opacity-90">{countdown}</div>
+        <div className={[theme.countdownSize || "text-[13px] sm:text-sm", "opacity-90"].join(" ")}>
+          {countdown}
+        </div>
       </div>
     </div>
   );

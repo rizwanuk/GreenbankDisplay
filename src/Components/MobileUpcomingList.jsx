@@ -90,28 +90,30 @@ function resolveEnglishLabel(p, labels) {
 /* ---------- UI pieces ---------- */
 
 // Header: 3 equal columns (Salah / Start / Jam’ah)
-const UpcomingHeaderRow = () => (
-  <div className="grid grid-cols-3 items-center px-3 py-1.5 text-[11px] uppercase">
-    <div className="font-sans tracking-wide opacity-70 whitespace-nowrap">Salah</div>
-    <div className="text-center tabular-nums tracking-normal opacity-70 whitespace-nowrap">
+const UpcomingHeaderRow = ({ headerSizeClass }) => (
+  <div className="grid grid-cols-3 items-center px-3 py-1.5 uppercase">
+    <div className={["font-sans tracking-wide opacity-70 whitespace-nowrap", headerSizeClass].join(" ")}>
+      Salah
+    </div>
+    <div className={["text-center tabular-nums tracking-normal opacity-70 whitespace-nowrap", headerSizeClass].join(" ")}>
       Start
     </div>
-    <div className="text-right tabular-nums tracking-normal opacity-70 whitespace-nowrap">
+    <div className={["text-right tabular-nums tracking-normal opacity-70 whitespace-nowrap", headerSizeClass].join(" ")}>
       Jam’ah
     </div>
   </div>
 );
 
-// Rows: 3 equal columns (name / start / jam’ah), single-line, bigger fonts
-const UpcomingRow = ({ name, start, jamaah, is24Hour }) => (
+// Rows: 3 equal columns (name / start / jam’ah)
+const UpcomingRow = ({ name, start, jamaah, is24Hour, rowSizeClass }) => (
   <div className="grid grid-cols-3 items-center px-3 py-2 odd:bg-white/[0.03]">
-    <div className="min-w-0 font-sans font-semibold text-[20px] leading-none whitespace-nowrap overflow-hidden text-ellipsis">
+    <div className={["min-w-0 font-sans font-semibold leading-none whitespace-nowrap overflow-hidden text-ellipsis", rowSizeClass].join(" ")}>
       {name}
     </div>
-    <div className="text-[19px] leading-none text-center whitespace-nowrap">
+    <div className={["leading-none text-center whitespace-nowrap", rowSizeClass].join(" ")}>
       <TimeWithSmallAmPm date={start} is24Hour={is24Hour} />
     </div>
-    <div className="text-[19px] leading-none text-right whitespace-nowrap">
+    <div className={["leading-none text-right whitespace-nowrap", rowSizeClass].join(" ")}>
       {jamaah ? <TimeWithSmallAmPm date={jamaah} is24Hour={is24Hour} /> : "—"}
     </div>
   </div>
@@ -119,12 +121,20 @@ const UpcomingRow = ({ name, start, jamaah, is24Hour }) => (
 
 /* ---------- Main component ---------- */
 export default function MobileUpcomingList({
+  theme = {},          // ✅ THEME: bgColor, textColor, border/borderColor, headerSize, rowSize
   upcoming = [],
   is24Hour = false,
   todayRef,
   tomorrowRef,
   labels = {},
 }) {
+  const borderClass = theme.border || theme.borderColor || "border-white/10";
+  const bgClass = theme.bgColor || "bg-white/[0.05]";
+  const textClass = theme.textColor || "text-white";
+
+  const headerSizeClass = theme.headerSize || "text-sm";
+  const rowSizeClass = theme.rowSize || "text-base";
+
   // Coerce dates and drop malformed entries
   const sanitized = (upcoming || [])
     .map((p) => {
@@ -139,8 +149,8 @@ export default function MobileUpcomingList({
 
   return (
     <section className="mt-2">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.05]">
-        <UpcomingHeaderRow />
+      <div className={["rounded-2xl border", borderClass, bgClass, textClass].join(" ")}>
+        <UpcomingHeaderRow headerSizeClass={headerSizeClass} />
         <div className="divide-y divide-white/10">
           {todayItems.length > 0 &&
             todayItems.map((p, i) => (
@@ -150,6 +160,7 @@ export default function MobileUpcomingList({
                 start={p.start}
                 jamaah={p.jamaah}
                 is24Hour={is24Hour}
+                rowSizeClass={rowSizeClass}
               />
             ))}
 
@@ -169,6 +180,7 @@ export default function MobileUpcomingList({
                   start={p.start}
                   jamaah={p.jamaah}
                   is24Hour={is24Hour}
+                  rowSizeClass={rowSizeClass}
                 />
               ))}
             </>
