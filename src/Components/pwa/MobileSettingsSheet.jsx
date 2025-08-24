@@ -1,554 +1,503 @@
-// src/Screens/MobileScreen.jsx
-
-import "../index.css";
+// src/Components/pwa/MobileSettingsSheet.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import moment from "moment";
-import momentHijri from "moment-hijri";
+import PushControls from "./PushControls";
+import useInstallPrompt from "../../hooks/useInstallPrompt";
+import { applySWUpdate } from "../../pwa/registerMobileSW";
 
-import usePrayerTimes from "../hooks/usePrayerTimes";
-import useSettings from "../hooks/useSettings";
-import { getEnglishLabels, getArabicLabels } from "../utils/labels";
-import useMobileTimeline from "../hooks/useMobileTimeline";
-
-import MobileCurrentCard from "../Components/MobileCurrentCard";
-import MobileNextCard from "../Components/MobileNextCard";
-import MobileUpcomingList from "../Components/MobileUpcomingList";
-
-import usePushStatus from "../hooks/usePushStatus";
-import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
-
-import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
-import { postSubscription, postSchedule } from "../pwa/pushApi";
-import { getTheme } from "../utils/helpers";
-
-/* --------------------------- helpers ---------------------------- */
-const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
-const fmt = (d, hour12 = false) =>
-  d
-    ? new Intl.DateTimeFormat("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12,
-        timeZone: tz,
-      }).format(d)
-    : "—";
-
-const pad2 = (n) => String(n).padStart(2, "0");
-
-const flattenSettings = (rows) => {
-  const map = {};
-  (rows || []).forEach((r) => {
-    const g = (r?.Group || "").trim();
-    const k = (r?.Key || "").trim();
-    const v = r?.Value != null ? String(r.Value).trim() : "";
-    if (!k || v === "") return;
-    map[k] = v;
-    if (g) map[`${g}.${k}`] = v;
-  });
-  return map;
-};
-
-function findRowForDate(rows, date = new Date()) {
-  if (!Array.isArray(rows) || !rows.length) return null;
-  const d = date.getDate(),
-    m = date.getMonth() + 1,
-    y = date.getFullYear();
-  const iso = `${y}-${pad2(m)}-${pad2(d)}`;
-  const dmySlash = `${pad2(d)}/${pad2(m)}/${y}`;
-  const dmyDash = `${pad2(d)}-${pad2(m)}-${y}`;
-
-  for (const r of rows) {
-    const dayVal = r.Day ?? r.day ?? r["Day "];
-    const monthVal = r.Month ?? r.month;
-    if (dayVal && monthVal) {
-      if (parseInt(dayVal, 10) === d && parseInt(monthVal, 10) === m) return r;
-    }
-    if (r.Date || r.date) {
-      const v = String(r.Date || r.date).trim();
-      if (v === iso || v === dmySlash || v === dmyDash) return r;
-    }
-  }
-  return null;
+/** Accessible, full-row clickable checkbox with a visible tick */
+function CheckRow({ id, label, checked, onChange, hint }) {
+  return (
+    <div className="py-2">
+      <label
+        htmlFor={id}
+        className="flex items-center gap-3 cursor-pointer select-none"
+        role="checkbox"
+        aria-checked={checked}
+      >
+        {/* Real checkbox for a11y, visually hidden */}
+        <input
+          id={id}
+          type="checkbox"
+          className="sr-only"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        {/* Custom visual box with tick */}
+        <span
+          className={[
+            "inline-flex h-5 w-5 items-center justify-center rounded-md border transition",
+            checked
+              ? "bg-white text-[#0b0f1a] border-white"
+              : "bg-transparent text-transparent border-white/40",
+          ].join(" ")}
+          aria-hidden="true"
+        >
+          {/* Tick icon */}
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor">
+            <path d="M7.6 13.2L4.4 10l-1.1 1.1 4.3 4.3L17 6.9 15.9 5.8z" />
+          </svg>
+        </span>
+        <span className="text-sm">{label}</span>
+      </label>
+      {hint ? <p className="text-xs text-white/50 pl-8 mt-1">{hint}</p> : null}
+    </div>
+  );
 }
 
-function toLowerMap(obj) {
-  const out = {};
-  if (!obj) return out;
-  for (const [k, v] of Object.entries(obj)) out[String(k).toLowerCase()] = v;
-  return out;
-}
-function withLabelAliases(map) {
-  const out = { ...map };
-  const aliasPairs = [
-    ["dhuhr", "zuhr"],
-    ["isha", "ishaa"],
-    ["maghrib", "magrib"],
-    ["sunrise", "shouruq"],
-    ["sunrise", "shuruq"],
-    ["sunrise", "shurooq"],
-    ["sunrise", "shourouq"],
-    ["jummah", "jumuah"],
-    ["jummah", "jumma"],
-  ];
-  for (const [canonical, alias] of aliasPairs) {
-    if (out[alias] && !out[canonical]) out[canonical] = out[alias];
-    if (out[canonical] && !out[alias]) out[alias] = out[canonical];
-  }
-  return out;
-}
-function normalizeKey(raw) {
-  let k = String(raw || "").toLowerCase().normalize("NFKD");
-  k = k.replace(/[’'‘]/g, "").replace(/\s+/g, "");
-  if (k === "ishaa") k = "isha";
-  if (k === "magrib") k = "maghrib";
-  if (k === "shouruq" || k === "shuruq" || k === "shurooq" || k === "shourouq" || k === "ishraq")
-    k = "sunrise";
-  if (k.startsWith("jum")) k = "jummah";
-  return k;
-}
-function computeLookupKey(p) {
-  let k = p?.lookupKey || p?.key || p?.name || "";
-  k = normalizeKey(k);
-  let isFriday = false;
-  const s = p?.start;
-  if (s) {
-    if (typeof s.getDay === "function") {
-      isFriday = s.getDay() === 5;
-    } else if (moment.isMoment(s)) {
-      isFriday = s.day() === 5;
-    }
-  }
-  if (isFriday && k === "dhuhr") k = "jummah";
-  return k;
+const DEFAULT_CATEGORIES = [
+  { key: "adhanReminders", label: "Adhān reminders" },
+  { key: "jummahAnnouncements", label: "Jum‘ah announcements" },
+  { key: "events", label: "Event updates" },
+  { key: "notices", label: "General notices" },
+];
+
+function readThemeNamesFromSettings(rows) {
+  const names = (rows || [])
+    .filter((r) => r?.Group && r.Group.startsWith("theme."))
+    .map((r) => r.Group.split(".")[1])
+    .filter(Boolean);
+  return Array.from(new Set(names));
 }
 
-// ---- background push helpers (schedule) ----
-function parseTimeHM(str, baseDate) {
-  if (!str) return null;
-  const v = String(str).trim();
-  let m = /^(\d{1,2}):(\d{2})$/i.exec(v);
-  let hour, minute;
-  if (m) {
-    hour = parseInt(m[1], 10);
-    minute = parseInt(m[2], 10);
-  } else {
-    const m2 =
-      /^(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)$/i.exec(v) ||
-      /^(\d{1,2}):(\d{2})([ap])$/i.exec(v);
-    if (!m2) return null;
-    hour = parseInt(m2[1], 10);
-    minute = parseInt(m2[2], 10);
-    const ap = m2[3].toLowerCase();
-    if (ap.startsWith("p") && hour < 12) hour += 12;
-    if (ap.startsWith("a") && hour === 12) hour = 0;
-  }
-  const d = new Date(baseDate);
-  d.setHours(hour, minute, 0, 0);
-  return d.getTime();
-}
-const PRAYERS = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
-function looksLikeJamaahKey(canonPrayer, k) {
-  const s = normalizeKey(k);
-  if (!s.includes(canonPrayer)) return false;
-  return /jama|iqam|congreg/.test(s);
-}
-function buildScheduleEntries(todayRow, dateRef) {
-  if (!todayRow) return [];
-  const entries = Object.entries(todayRow);
-  const startMap = {};
-  const jamaahMap = {};
-  for (const [key, val] of entries) {
-    const canon = normalizeKey(key);
-    if (PRAYERS.includes(canon)) startMap[canon] = val;
-    for (const p of PRAYERS) if (looksLikeJamaahKey(p, key)) jamaahMap[p] = val;
-  }
-  const list = [];
-  for (const p of PRAYERS) {
-    const startAt = parseTimeHM(startMap[p], dateRef);
-    if (!Number.isFinite(startAt)) continue;
-    const jamaahAt = parseTimeHM(jamaahMap[p], dateRef);
-    list.push({ prayer: p, startAt, jamaahAt, url: "/mobile/" });
-  }
-  return list;
-}
-function dayKey(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
+// 👉 adjust to your backend route if needed
+const PREFS_ENDPOINT = "/api/push/prefs";
 
-/* ============================= Component ============================= */
-export default function MobileScreen() {
-  const [hb, setHb] = useState(0);
+export default function MobileSettingsSheet({
+  open,
+  onClose,
+  settingsRows,
+  currentThemeName,
+  onChangeTheme, // (name) => void
+  categoryKey = "mobile.notif.categories",
+  // About (from MobileScreen)
+  about = { version: "", timezone: "", lastUpdated: "" },
+}) {
+  const allThemeNames = useMemo(() => readThemeNamesFromSettings(settingsRows), [settingsRows]);
 
-  // Settings sheet controls
-  const [showSettings, setShowSettings] = useState(false);
-  const [themeOverride, setThemeOverride] = useState(() => {
+  // Install app (PWA) — optional card
+  const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
+
+  // Categories persistence
+  const [cats, setCats] = useState(() => {
     try {
-      return localStorage.getItem("selectedTheme") || "";
+      const raw = localStorage.getItem(categoryKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && Array.isArray(parsed) ? parsed : DEFAULT_CATEGORIES.map((c) => c.key);
     } catch {
-      return "";
+      return DEFAULT_CATEGORIES.map((c) => c.key);
     }
   });
-
-  // SW status
-  const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
-
-  // Live push status (kept if you want to surface state later)
-  usePushStatus();
-
-  // Heartbeat tick
   useEffect(() => {
-    const id = setInterval(() => setHb((h) => h + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
+    try {
+      localStorage.setItem(categoryKey, JSON.stringify(cats));
+    } catch {}
+  }, [cats, categoryKey]);
 
-  // Canonicalize /mobile → /mobile/
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const p = window.location.pathname;
-      if (p === "/mobile" || p === "/mobile/index.html") {
-        window.location.replace("/mobile/");
-      }
-    }
-  }, []);
-
-  // Register SW, hook update prompt, and capture scope
-  useEffect(() => {
-    (async () => {
-      try {
-        await registerMobileSW((reg) => {
-          const ok = window.confirm("A new version is available. Update now?");
-          if (ok) applySWUpdate(reg);
-        });
-        const reg = await navigator.serviceWorker.ready;
-        setSwInfo({ ready: true, scope: reg?.scope || "" });
-      } catch {
-        setSwInfo({ ready: false, scope: "(failed)" });
-      }
-    })();
-  }, []);
-
-  const timetable = usePrayerTimes();
-  const settingsRows = useSettings();
-
-  const settingsMap = useMemo(() => flattenSettings(settingsRows), [settingsRows]);
-
-  // THEME: pick from sheet or local override, then build theme object
-  const defaultTheme = settingsMap["toggles.theme"] || "Theme_1";
-  const activeTheme = themeOverride || defaultTheme;
-  const mapWithThemeOverride = useMemo(
-    () => ({ ...settingsMap, "toggles.theme": activeTheme }),
-    [settingsMap, activeTheme]
-  );
-  const themeAll = useMemo(() => getTheme(mapWithThemeOverride), [mapWithThemeOverride]);
-
-  const themeHeader = themeAll.header || {};
-  const themeDateCard = themeAll.dateCard || {};
-  const themeCurrentPrayer = themeAll.currentPrayer || {};
-  const themeNextPrayer = themeAll.nextPrayer || {};
-  const themeUpcomingPrayer = themeAll.upcomingPrayer || {};
-
-  const labelsRaw = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
-  const arabicRaw = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
-
-  const labels = useMemo(() => withLabelAliases(toLowerMap(labelsRaw)), [labelsRaw]);
-  const arabic = useMemo(() => withLabelAliases(toLowerMap(arabicRaw)), [arabicRaw]);
-
-  const now = useMemo(() => new Date(), [hb]);
-  const refToday = useMemo(() => {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, [now]);
-  const refTomorrow = useMemo(() => {
-    const d = new Date(refToday);
-    d.setDate(refToday.getDate() + 1);
-    return d;
-  }, [refToday]);
-  const refYesterday = useMemo(() => {
-    const d = new Date(refToday);
-    d.setDate(refToday.getDate() - 1);
-    return d;
-  }, [refToday]);
-
-  const todayRow = useMemo(() => findRowForDate(timetable, refToday), [timetable, refToday]);
-  const yRow = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
-  const tRow = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
-
-  const is24Hour =
-    (settingsMap["toggles.clock24Hours"] || settingsMap["clock24Hours"] || "")
-      .toString()
-      .toUpperCase() === "TRUE";
-
-  const { upcoming } = useMobileTimeline({
-    now: useMemo(() => moment(now), [now]),
-    todayRow,
-    tomorrowRow: tRow,
-    yesterdayRow: yRow,
-    settingsMap,
-    numberToShow: 6,
-  });
-
-  const upcomingWithKeys = useMemo(
-    () =>
-      (upcoming || []).map((p) => ({
-        ...p,
-        lookupKey: computeLookupKey(p),
-      })),
-    [upcoming]
-  );
-
-  const todayLong = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    timeZone: tz,
-  }).format(now);
-  const nowStr = fmt(now, !is24Hour);
-
-  const showSWBanner =
-    typeof window !== "undefined" &&
-    (window.location.search.includes("debug=sw") ||
-      (swInfo.ready && swInfo.scope && !swInfo.scope.includes("/mobile/")));
-
-  /* -------- Islamic date (offset + 30-day normalization + Sheet labels) -------- */
-  const normalizeTo30 =
-    String(settingsMap["islamicCalendar.normalizeTo30DayMonths"] || "FALSE").toUpperCase() ===
-    "TRUE";
-  const islamicOffset = Number(settingsMap["islamicCalendar.offset"] || 0);
-
-  let h = momentHijri(now).add(islamicOffset, "days");
-  const isDayOne = h.format("iD") === "1";
-  let forcedDay = null;
-  if (normalizeTo30 && isDayOne) {
-    h = h.clone().subtract(1, "day"); // use previous month for month/year
-    forcedDay = "30"; // force day 30
-  }
-  const iDay = forcedDay ?? h.format("iD");
-  const iMonthIndex0 = parseInt(h.format("iM"), 10) - 1; // 0..11
-  const iYear = h.format("iYYYY");
-
-  const MONTH_KEYS = [
-    "muharram",
-    "safar",
-    "rabiAwal",
-    "rabiThani",
-    "jumadaAwal",
-    "jumadaThani",
-    "rajab",
-    "shaban",
-    "ramadan",
-    "shawwal",
-    "dhulQadah",
-    "dhulHijjah",
-  ];
-  const DEFAULT_I_MONTHS = [
-    "Muharram",
-    "Safar",
-    "Rabīʿ al-ʾAwwal",
-    "Rabīʿ al-Ākhir",
-    "Jumādā al-Ūlā",
-    "Jumādā al-Ākhirah",
-    "Rajab",
-    "Shaʿbān",
-    "Ramaḍān",
-    "Shawwāl",
-    "Dhū al-Qaʿdah",
-    "Dhū al-Ḥijjah",
-  ];
-  const monthFromSheet = settingsMap[`labels.${MONTH_KEYS[iMonthIndex0]}`];
-  const iMonth =
-    typeof monthFromSheet === "string" && monthFromSheet.trim()
-      ? monthFromSheet.trim()
-      : DEFAULT_I_MONTHS[iMonthIndex0];
-  const hijriDateString = `${iDay} ${iMonth} ${iYear} AH`;
-
-  // About info (version from env, timezone, last updated from sheet)
-  const metaRow = Array.isArray(settingsRows)
-    ? settingsRows.find((r) => r?.Group === "meta" && r?.Key === "lastUpdated")
-    : null;
-  const about = {
-    version: import.meta?.env?.VITE_APP_VERSION || "",
-    timezone: tz,
-    lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
+  const toggleCat = (key, enabled) => {
+    setCats((prev) => {
+      const set = new Set(prev);
+      if (enabled) set.add(key);
+      else set.delete(key);
+      return Array.from(set);
+    });
   };
 
-  // ---------- Settings open/close helpers ----------
-  const requestOpenSettings = () => setShowSettings(true);
-  const requestCloseSettings = () => {
+  // Start/Jama'ah notification preferences
+  const [startEnabled, setStartEnabled] = useState(() => {
     try {
-      if (window.history.state && window.history.state.modal === "settings") {
-        window.history.back();
-      } else {
-        setShowSettings(false);
-      }
+      return localStorage.getItem("mobile.notif.start.enabled") === "true";
     } catch {
-      setShowSettings(false);
+      return false;
+    }
+  });
+  const [jamaahEnabled, setJamaahEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("mobile.notif.jamaah.enabled") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [minutesBefore, setMinutesBefore] = useState(() => {
+    try {
+      const v = parseInt(localStorage.getItem("mobile.notif.jamaah.minutesBefore") || "10", 10);
+      return Number.isFinite(v) ? Math.max(0, Math.min(120, v)) : 10;
+    } catch {
+      return 10;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("mobile.notif.start.enabled", startEnabled ? "true" : "false");
+    } catch {}
+  }, [startEnabled]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("mobile.notif.jamaah.enabled", jamaahEnabled ? "true" : "false");
+    } catch {}
+  }, [jamaahEnabled]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("mobile.notif.jamaah.minutesBefore", String(minutesBefore));
+    } catch {}
+  }, [minutesBefore]);
+
+  // 🔔 Test notification (local via SW)
+  const sendTestNotification = async () => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification("Greenbank Masjid", {
+        body: "This is a test notification.",
+        icon: "/mobile/icons/icon-192.png",
+        badge: "/mobile/icons/icon-192.png",
+      });
+    } catch {
+      alert("Could not show a test notification. Check permissions and SW registration.");
     }
   };
 
+  // 🌐 Auto-sync preferences to backend whenever they change (if a push subscription exists)
   useEffect(() => {
-    if (!showSettings) return;
-    const state = { modal: "settings" };
-    const url = new URL(window.location.href);
-    url.searchParams.set("panel", "settings");
-    window.history.pushState(state, "", url.toString());
-
-    const onPop = () => setShowSettings(false);
-    const onKey = (e) => { if (e.key === "Escape") requestCloseSettings(); };
-
-    window.addEventListener("popstate", onPop);
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      window.removeEventListener("keydown", onKey);
-      const u = new URL(window.location.href);
-      u.searchParams.delete("panel");
-      window.history.replaceState({}, "", u.toString());
-    };
-  }, [showSettings]);
-
-  // --- Background push: post subscription once, and today's schedule once per day ---
-  useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
-        if (sub) await postSubscription();
-      } catch {}
-    })();
-  }, []);
-  useEffect(() => {
-    if (!todayRow) return;
-    const entries = buildScheduleEntries(todayRow, refToday);
-    if (!entries.length) return;
-    const dk = dayKey(refToday);
-    const stampKey = "mobile.schedule.lastSent";
-    const last = localStorage.getItem(stampKey);
-    if (last === dk) return;
-    (async () => {
-      const ok = await postSchedule(entries, dk);
-      if (ok) {
-        try { localStorage.setItem(stampKey, dk); } catch {}
+        if (!mounted || !sub) return;
+
+        const payload = {
+          endpoint: sub.endpoint,
+          keys: sub.toJSON()?.keys || null,
+          prefs: {
+            startEnabled,
+            jamaahEnabled,
+            minutesBefore,
+            categories: cats,
+          },
+          clientId:
+            localStorage.getItem("mobile.clientId") ||
+            (() => {
+              const id = Math.random().toString(36).slice(2);
+              try {
+                localStorage.setItem("mobile.clientId", id);
+              } catch {}
+              return id;
+            })(),
+        };
+
+        await fetch(PREFS_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "include",
+        });
+      } catch {
+        // ignore on client
       }
     })();
-  }, [todayRow, refToday]);
+    return () => {
+      mounted = false;
+    };
+  }, [startEnabled, jamaahEnabled, minutesBefore, cats]);
+
+  // -------- Update / Version controls --------
+  const [updState, setUpdState] = useState("idle"); // idle | checking | available | none | applying | error
+  const [updMsg, setUpdMsg] = useState("");
+  const [waitingReg, setWaitingReg] = useState(null);
+
+  const checkForUpdates = async () => {
+    setUpdState("checking");
+    setUpdMsg("Checking for updates…");
+    try {
+      // Prefer the mobile-scope registration
+      let reg = await navigator.serviceWorker.getRegistration("/mobile/");
+      if (!reg) {
+        // fallback to any registration
+        reg = await navigator.serviceWorker.ready;
+      }
+
+      if (!reg) {
+        setUpdState("error");
+        setUpdMsg("Service worker not registered.");
+        return;
+      }
+
+      // Trigger a network check for a new SW
+      await reg.update();
+
+      // If one is already waiting, we can apply immediately
+      if (reg.waiting) {
+        setWaitingReg(reg);
+        setUpdState("available");
+        setUpdMsg("Update available.");
+        return;
+      }
+
+      // Safari often shows "installing" → wait for it to become "installed"
+      const installing = reg.installing;
+      if (installing) {
+        await new Promise((resolve) => {
+          const onState = () => {
+            if (installing.state === "installed") {
+              installing.removeEventListener("statechange", onState);
+              resolve();
+            }
+          };
+          installing.addEventListener("statechange", onState);
+        });
+        if (reg.waiting) {
+          setWaitingReg(reg);
+          setUpdState("available");
+          setUpdMsg("Update available.");
+          return;
+        }
+      }
+
+      // No update found
+      setUpdState("none");
+      setUpdMsg("You’re on the latest version.");
+    } catch (e) {
+      setUpdState("error");
+      setUpdMsg(e?.message || "Update check failed.");
+    }
+  };
+
+  const applyUpdate = async () => {
+    if (!waitingReg) {
+      // Try to get a waiting reg again just in case
+      const reg = (await navigator.serviceWorker.getRegistration("/mobile/")) || (await navigator.serviceWorker.ready);
+      if (reg?.waiting) setWaitingReg(reg);
+      else {
+        setUpdState("none");
+        setUpdMsg("No update to apply.");
+        return;
+      }
+    }
+    try {
+      setUpdState("applying");
+      setUpdMsg("Applying update…");
+      await applySWUpdate(waitingReg || (await navigator.serviceWorker.ready));
+      // page will reload on controllerchange (handled in applySWUpdate)
+    } catch (e) {
+      setUpdState("error");
+      setUpdMsg(e?.message || "Failed to apply update.");
+    }
+  };
+
+  if (!open) return null;
 
   return (
-    <div
-      className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6"
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
-    >
-      <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
-        {/* Header */}
-        <div
-          className={[
-            "flex items-center justify-between px-4 py-3 border-b",
-            themeHeader.bgColor || "bg-[#0b0f1a]",
-            themeHeader.textColor || "text-white",
-            themeHeader.borderColor || "border-white/10",
-          ].join(" ")}
-        >
-          <div className="min-w-0">
-            <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
-            <div className="text-xs opacity-75">Mobile view</div>
-          </div>
-
-          {/* Single settings button */}
-          <button
-            aria-label="Settings"
-            className={[
-              "px-3 py-1.5 rounded-lg border",
-              themeHeader.cardBgColor || "bg-white/10",
-              themeHeader.cardHoverBgColor || "hover:bg-white/15",
-              themeHeader.cardBorderColor || "border-white/10",
-            ].join(" ")}
-            onClick={requestOpenSettings}
-          >
-            ⚙️
-          </button>
-        </div>
-
-        <main className="px-4 py-4 space-y-3">
-          {/* Dates pill */}
-          <div
-            className={[
-              "flex flex-col rounded-2xl border shadow-sm px-4 py-3 leading-snug",
-              themeDateCard.bgColor || "bg-white/[0.06]",
-              themeDateCard.textColor || "text-white",
-              themeDateCard.borderColor || "border-white/10",
-            ].join(" ")}
-          >
-            <div className="w-full text-center text-[14px] font-semibold">
-              {todayLong} · <span className="opacity-80">{hijriDateString}</span>
-            </div>
-            <div
-              className="w-full text-center text-[15px] font-semibold mt-1"
-              style={{ fontVariantNumeric: "tabular-nums" }}
-            >
-              {nowStr}
-            </div>
-          </div>
-
-          {showSWBanner && (
-            <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 px-3 py-2 text-[12px]">
-              <b>Service Worker:</b> {swInfo.ready ? "ready" : "not ready"} — <b>scope</b>:{" "}
-              <code>{swInfo.scope || "(none)"} </code>
-            </div>
-          )}
-
-          {/* Cards (pass theme pieces; components can opt to use them) */}
-          <MobileCurrentCard
-            theme={themeCurrentPrayer}
-            labels={labels}
-            arabicLabels={arabic}
-            is24Hour={is24Hour}
-            todayRow={todayRow}
-            yesterdayRow={yRow}
-            settingsMap={settingsMap}
-          />
-
-          <MobileNextCard
-            theme={themeNextPrayer}
-            todayRow={todayRow}
-            tomorrowRow={tRow}
-            labels={labels}
-            arabicLabels={arabic}
-            settingsMap={settingsMap}
-          />
-
-          <MobileUpcomingList
-            theme={themeUpcomingPrayer}
-            upcoming={upcomingWithKeys}
-            is24Hour={is24Hour}
-            todayRef={refToday}
-            tomorrowRef={refTomorrow}
-            labels={labels}
-            arabicLabels={arabic}
-          />
-        </main>
-      </div>
-
-      {/* Mobile-optimised, scrollable Settings sheet */}
-      <MobileSettingsSheet
-        open={showSettings}
-        onClose={requestCloseSettings}
-        settingsRows={settingsRows}
-        currentThemeName={activeTheme}
-        onChangeTheme={(name) => {
-          try {
-            localStorage.setItem("selectedTheme", name || "");
-          } catch {}
-          setThemeOverride(name || "");
-        }}
-        about={about}
+    <div className="fixed inset-0 z-[100]">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-label="Close settings"
       />
+      {/* Sheet (mobile-optimised width, sticky header, scrollable content) */}
+      <div className="absolute inset-x-0 bottom-0 text-white border-t border-white/10 shadow-2xl bg-transparent">
+        <div className="mx-auto w-full max-w-[420px] rounded-t-2xl bg-[#0b0f1a]">
+          {/* Header (sticky) */}
+          <div className="sticky top-0 z-10 bg-[#0b0f1a] border-b border-white/10">
+            <div className="px-4 pt-3">
+              <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-white/20" />
+              <div className="flex items-center justify-between pb-2">
+                <button
+                  aria-label="Back"
+                  onClick={onClose}
+                  className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+                >
+                  ← Back
+                </button>
+                <h2 className="text-lg font-semibold">Settings</h2>
+                <button
+                  className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+                  onClick={onClose}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="px-4 pb-4 max-h-[80vh] overflow-y-auto">
+            {/* Install app (optional) */}
+            {canInstallMenu && !installed && (
+              <section className="mt-3">
+                <h3 className="text-sm font-semibold text-white/90">Install app</h3>
+                <p className="text-xs text-white/60 mt-1">
+                  Install to your home screen for faster access and notification support.
+                </p>
+                <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3 flex items-center justify-between">
+                  <span className="text-sm">Add to Home Screen</span>
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
+                    onClick={install}
+                  >
+                    Install
+                  </button>
+                </div>
+                {isIOS && !isIOSSafari && (
+                  <p className="text-[11px] text-white/50 mt-1">
+                    Open in <b>Safari</b>, then Share → <b>Add to Home Screen</b>.
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* Notifications */}
+            <section className="mt-3">
+              <h3 className="text-sm font-semibold text-white/90">Notifications</h3>
+              <p className="text-xs text-white/60 mt-1">
+                Turn on push notifications and choose what you’d like to receive.
+              </p>
+
+              <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                <PushControls debug={false} />
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={sendTestNotification}
+                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
+                  >
+                    Send test notification
+                  </button>
+                </div>
+              </div>
+
+              {/* Start & Jama'ah options */}
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
+                <CheckRow
+                  id="notif-start"
+                  label="Start time notifications"
+                  checked={startEnabled}
+                  onChange={setStartEnabled}
+                  hint="Receive a notification at the start time of each prayer."
+                />
+                <CheckRow
+                  id="notif-jamaah"
+                  label="Jama‘ah time notifications"
+                  checked={jamaahEnabled}
+                  onChange={setJamaahEnabled}
+                  hint="Receive a notification before the congregational (Jama‘ah) time."
+                />
+
+                {/* Minutes before Jama'ah */}
+                <div className="mt-2 pl-8">
+                  <label htmlFor="notif-jamaah-mins" className="text-sm block mb-1">
+                    Minutes before Jama‘ah
+                  </label>
+                  <input
+                    id="notif-jamaah-mins"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={120}
+                    step={1}
+                    value={minutesBefore}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value || "0", 10);
+                      if (Number.isFinite(v)) {
+                        const clamped = Math.max(0, Math.min(120, v));
+                        setMinutesBefore(clamped);
+                      }
+                    }}
+                    className="w-24 bg-white/10 border border-white/15 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Categories */}
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
+                {DEFAULT_CATEGORIES.map((c) => (
+                  <CheckRow
+                    key={c.key}
+                    id={`cat-${c.key}`}
+                    label={c.label}
+                    checked={cats.includes(c.key)}
+                    onChange={(v) => toggleCat(c.key, v)}
+                  />
+                ))}
+                <p className="text-xs text-white/50 mt-1">
+                  Your selections are saved on this device.
+                </p>
+              </div>
+            </section>
+
+            {/* Theme */}
+            <section className="mt-4">
+              <h3 className="text-sm font-semibold text-white/90">Theme</h3>
+              <p className="text-xs text-white/60 mt-1">
+                Choose a theme for this screen. This uses the same theme set as your main display.
+              </p>
+              <div className="mt-2">
+                <select
+                  value={currentThemeName || ""}
+                  onChange={(e) => onChangeTheme(e.target.value)}
+                  className="w-full bg-white/10 border border-white/15 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                >
+                  {allThemeNames.length === 0 ? (
+                    <option value="">Default</option>
+                  ) : (
+                    allThemeNames.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <p className="text-xs text-white/50 mt-1">
+                  Saved to this device and applied immediately.
+                </p>
+              </div>
+            </section>
+
+            {/* Updates & About */}
+            <section className="mt-4 mb-2">
+              <h3 className="text-sm font-semibold text-white/90">App version & updates</h3>
+
+              <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+                <div className="flex items-center justify-between py-1">
+                  <span className="opacity-80">App version</span>
+                  <span className="font-medium">{about.version || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="opacity-80">Timezone</span>
+                  <span className="font-medium">{about.timezone || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="opacity-80">Last updated</span>
+                  <span className="font-medium">{about.lastUpdated || "—"}</span>
+                </div>
+
+                {/* Update controls */}
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
+                    onClick={checkForUpdates}
+                    disabled={updState === "checking" || updState === "applying"}
+                  >
+                    {updState === "checking" ? "Checking…" : "Check for updates"}
+                  </button>
+
+                  {updState === "available" && (
+                    <button
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
+                      onClick={applyUpdate}
+                      disabled={updState === "applying"}
+                    >
+                      {updState === "applying" ? "Updating…" : "Update now"}
+                    </button>
+                  )}
+                </div>
+
+                {updMsg && <p className="text-xs text-white/60 mt-2">{updMsg}</p>}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
