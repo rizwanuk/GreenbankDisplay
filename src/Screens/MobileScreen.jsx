@@ -3,6 +3,7 @@
 import "../index.css";
 import React, { useEffect, useMemo, useState } from "react";
 import moment from "moment";
+import momentHijri from "moment-hijri"; // for Hijri formatting (iD/iM/iYYYY)
 
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
@@ -16,25 +17,10 @@ import MobileUpcomingList from "../Components/MobileUpcomingList";
 import useInstallPrompt from "../hooks/useInstallPrompt";
 import KebabMenu from "../Components/pwa/KebabMenu";
 import PushControls from "../Components/pwa/PushControls";
-import usePushStatus from "../hooks/usePushStatus"; // ⬅️ use the new hook
+import usePushStatus from "../hooks/usePushStatus"; // live push status
 
 // ✅ SW registrar for /mobile/
 import { registerMobileSW } from "../pwa/registerMobileSW";
-
-/* --------------------------- UI atoms --------------------------- */
-const Pill = ({ left, right, className = "" }) => (
-  <div
-    className={[
-      "flex items-center justify-between",
-      "rounded-xl border border-white/15 bg-white/10",
-      "px-3 py-2 text-[15px] leading-none",
-      className,
-    ].join(" ")}
-  >
-    <span className="font-semibold truncate">{left}</span>
-    <span className="opacity-90 ml-3">{right}</span>
-  </div>
-);
 
 /* --------------------------- helpers ---------------------------- */
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
@@ -270,6 +256,38 @@ export default function MobileScreen() {
     (window.location.search.includes("debug=sw") ||
       (swInfo.ready && swInfo.scope && !swInfo.scope.includes("/mobile/")));
 
+  /* -------- Islamic date (offset + 30-day normalization + Sheet labels) -------- */
+  const normalizeTo30 =
+    String(settingsMap["islamicCalendar.normalizeTo30DayMonths"] || "FALSE").toUpperCase() ===
+    "TRUE";
+  const islamicOffset = Number(settingsMap["islamicCalendar.offset"] || 0);
+
+  let h = momentHijri(now).add(islamicOffset, "days");
+  const isDayOne = h.format("iD") === "1";
+  let forcedDay = null;
+  if (normalizeTo30 && isDayOne) {
+    h = h.clone().subtract(1, "day"); // use previous month for month/year
+    forcedDay = "30"; // force day 30
+  }
+  const iDay = forcedDay ?? h.format("iD");
+  const iMonthIndex0 = parseInt(h.format("iM"), 10) - 1; // 0..11
+  const iYear = h.format("iYYYY");
+
+  const MONTH_KEYS = [
+    "muharram","safar","rabiAwal","rabiThani","jumadaAwal","jumadaThani",
+    "rajab","shaban","ramadan","shawwal","dhulQadah","dhulHijjah"
+  ];
+  const DEFAULT_I_MONTHS = [
+    "Muharram","Safar","Rabīʿ al-ʾAwwal","Rabīʿ al-Ākhir",
+    "Jumādā al-Ūlā","Jumādā al-Ākhirah","Rajab","Shaʿbān",
+    "Ramaḍān","Shawwāl","Dhū al-Qaʿdah","Dhū al-Ḥijjah"
+  ];
+  const monthFromSheet = settingsMap[`labels.${MONTH_KEYS[iMonthIndex0]}`];
+  const iMonth = (typeof monthFromSheet === "string" && monthFromSheet.trim())
+    ? monthFromSheet.trim()
+    : DEFAULT_I_MONTHS[iMonthIndex0];
+  const hijriDateString = `${iDay} ${iMonth} ${iYear} AH`;
+
   return (
     <div
       className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6"
@@ -302,7 +320,24 @@ export default function MobileScreen() {
         </div>
 
         <main className="px-4 py-4 space-y-3">
-          <Pill left={todayLong} right={nowStr} />
+          {/* ✅ Combined pill: Gregorian + Islamic dates (top), time (bottom) */}
+          <div
+            className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.06] shadow-sm
+                       px-4 py-3 leading-snug"
+          >
+            {/* Top row: Gregorian + Islamic dates */}
+            <div className="w-full text-center text-[14px] font-semibold">
+              {todayLong} · <span className="text-white/80">{hijriDateString}</span>
+            </div>
+
+            {/* Bottom row: Time */}
+            <div
+              className="w-full text-center text-[15px] font-semibold mt-1"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {nowStr}
+            </div>
+          </div>
 
           {showDebug && showSWBanner && (
             <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 px-3 py-2 text-[12px]">
