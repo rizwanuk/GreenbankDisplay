@@ -4,24 +4,18 @@ import React, { useEffect, useState } from "react";
 // eslint-disable-next-line no-undef
 const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY || "").trim();
 
-// Optional: allow ?debug=pwa in dev to expose tools
 const urlFlag =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("debug") === "pwa";
 // eslint-disable-next-line no-undef
 const isDev = typeof import.meta !== "undefined" && !!import.meta.env?.DEV;
 
+/* ---------------- helpers ---------------- */
 function b64UrlToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
-}
-async function swReadyWithTimeout(ms = 8000) {
-  return await Promise.race([
-    navigator.serviceWorker.ready,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Service worker not ready (timeout)")), ms)),
-  ]);
 }
 async function getAnyRegistration() {
   if (!("serviceWorker" in navigator)) return null;
@@ -40,11 +34,7 @@ async function ensureSW(swLog = []) {
     new Promise((resolve) => {
       if (navigator.serviceWorker.controller) return resolve(true);
       const t = setTimeout(() => resolve(false), ms);
-      const onCtrl = () => {
-        clearTimeout(t);
-        navigator.serviceWorker.removeEventListener("controllerchange", onCtrl);
-        resolve(true);
-      };
+      const onCtrl = () => { clearTimeout(t); navigator.serviceWorker.removeEventListener("controllerchange", onCtrl); resolve(true); };
       navigator.serviceWorker.addEventListener("controllerchange", onCtrl, { once: true });
     });
 
@@ -69,17 +59,20 @@ async function ensureSW(swLog = []) {
   return (await getAnyRegistration()) || reg || null;
 }
 
+/* keep rest of app in sync */
+const setLocalEnabled = (v) => { try { localStorage.setItem("gb:push:enabled", v ? "1" : "0"); } catch {} };
+const broadcast = () => { try { window.dispatchEvent(new CustomEvent("gb:push:changed")); } catch {} };
+
+/* small banner */
 function InfoBanner({ id, children, tone = "neutral" }) {
   const storageKey = `gb:notif:banner:${id}`;
   const [hidden, setHidden] = useState(false);
   useEffect(() => { try { if (localStorage.getItem(storageKey) === "1") setHidden(true); } catch {} }, [storageKey]);
   if (hidden) return null;
   const toneClasses =
-    tone === "warn"
-      ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
-      : tone === "error"
-      ? "border-red-400/30 bg-red-400/10 text-red-200"
-      : "border-white/15 bg-white/10 text-white/90";
+    tone === "warn" ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+    : tone === "error" ? "border-red-400/30 bg-red-400/10 text-red-200"
+    : "border-white/15 bg-white/10 text-white/90";
   return (
     <div className={`relative rounded-xl px-3 py-2 text-[13px] ${toneClasses}`}>
       <button
@@ -94,37 +87,43 @@ function InfoBanner({ id, children, tone = "neutral" }) {
   );
 }
 
+/* ================= component ================= */
 export default function PushControls({ debug = false }) {
   const DEBUG = !!debug || (isDev && urlFlag);
 
   const [enabled, setEnabled] = useState(false);
   const [perm, setPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "default");
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
 
-  // Debug-only diagnostics
+  // Debug state
   const [diag, setDiag] = useState(null);
   const [diagRunning, setDiagRunning] = useState(false);
   const [swLog, setSwLog] = useState([]);
 
+  // platform bits
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
   const isStandalone =
     (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) ||
     (typeof navigator !== "undefined" && (navigator.standalone === true || navigator.standalone === 1));
-  const hasNotification = typeof window !== "undefined" && "Notification" in window;
-  const hasSW = typeof navigator !== "undefined" && "serviceWorker" in navigator;
-  const hasPush = typeof window !== "undefined" && "PushManager" in window;
 
+  /* state refresh */
   const refreshState = async () => {
     try {
       setPerm(typeof Notification !== "undefined" ? Notification.permission : "default");
       const reg = (await getAnyRegistration()) || (await ensureSW([]).catch(() => null));
       const sub = await reg?.pushManager?.getSubscription?.();
-      setEnabled(!!sub);
-    } catch { setEnabled(false); }
+      const on = !!sub;
+      setEnabled(on);
+      setLocalEnabled(on);
+    } catch {
+      setEnabled(false);
+      setLocalEnabled(false);
+    } finally {
+      broadcast();
+    }
   };
 
   useEffect(() => {
@@ -136,6 +135,7 @@ export default function PushControls({ debug = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // auto-subscribe once permission granted
   useEffect(() => {
     (async () => {
       try {
@@ -148,23 +148,20 @@ export default function PushControls({ debug = false }) {
             applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
           });
           await fetch("/api/push/subscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(sub),
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub),
           });
-          setEnabled(true);
-          setSavedNote("Notifications enabled ✓");
         }
-      } catch (e) {
-        if (DEBUG) setError(`Auto-subscribe failed: ${e?.message || e}`);
+      } catch {}
+      finally {
+        await refreshState();
       }
     })();
   }, [perm]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* actions */
   const subscribeToPush = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window))
       throw new Error("Push notifications are not supported in this context.");
-    }
     if (!VAPID_PUBLIC) throw new Error("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
     if (isIOS && !isStandalone) throw new Error("Install to Home Screen first (Safari → Share → Add to Home Screen).");
 
@@ -184,26 +181,24 @@ export default function PushControls({ debug = false }) {
       }));
 
     await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sub),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub),
     });
 
+    await refreshState();
     return sub;
   };
 
   const unsubscribeFromPush = async () => {
     const reg = (await getAnyRegistration()) || (await ensureSW().catch(() => null));
     const sub = await reg?.pushManager?.getSubscription?.();
-    if (!sub) return;
+    if (!sub) { await refreshState(); return; }
     try {
       await fetch("/api/push/unsubscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: sub.endpoint }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }),
       });
     } finally {
       await sub.unsubscribe();
+      await refreshState();
     }
   };
 
@@ -213,7 +208,6 @@ export default function PushControls({ debug = false }) {
       e.target.checked = false;
       return setError("Notifications are blocked in iOS Settings → Notifications → [Your Web App].");
     }
-
     setLoading(true);
     try {
       if (e.target.checked) {
@@ -223,7 +217,6 @@ export default function PushControls({ debug = false }) {
         await unsubscribeFromPush();
         setSavedNote("Notifications disabled ✓");
       }
-      await refreshState();
       setTimeout(() => setSavedNote(""), 2000);
     } catch (err) {
       setError(err?.message || "Failed to change notifications.");
@@ -241,7 +234,6 @@ export default function PushControls({ debug = false }) {
       setPerm(status);
       if (status === "granted") {
         await subscribeToPush();
-        await refreshState();
         setSavedNote("Notifications enabled ✓");
         setTimeout(() => setSavedNote(""), 2000);
       }
@@ -250,54 +242,7 @@ export default function PushControls({ debug = false }) {
     }
   };
 
-  // Debug helpers
-  const sendTest = async () => {
-    try {
-      setSending(true);
-      const reg = (await getAnyRegistration()) || (await ensureSW([]));
-      const sub = await reg.pushManager.getSubscription();
-      if (!sub) return alert("Enable notifications first.");
-      const res = await fetch("/api/push/test-send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Greenbank Masjid", body: "Test notification ✓", url: "/mobile/", sub }),
-      });
-      const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error || "Send failed");
-      alert("Test notification sent.");
-    } catch (e) {
-      alert(e?.message || "Failed to send test notification.");
-    } finally {
-      setSending(false);
-    }
-  };
-  const runDiag = async () => {
-    if (!DEBUG) return;
-    setDiagRunning(true);
-    const logs = [];
-    setSwLog([]);
-    try {
-      let scope = "(no scope)";
-      try {
-        const reg = (await getAnyRegistration()) || (await ensureSW(logs));
-        scope = reg?.scope || "(no scope)";
-      } catch (e) {
-        logs.push("Diag ensureSW error: " + (e?.message || e));
-      }
-      setDiag({
-        scope,
-        hasPush,
-        hasNotification,
-        hasSW,
-        perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
-        vapidPrefix: VAPID_PUBLIC.slice(0, 16) || "(empty)",
-      });
-    } finally {
-      setSwLog((l) => (l.length ? l : logs));
-      setDiagRunning(false);
-    }
-  };
-
+  /* ---------- RENDER RULE: hide when enabled (unless debug) ---------- */
   if (!VAPID_PUBLIC) {
     return (
       <InfoBanner id="missing-vapid" tone="error">
@@ -305,6 +250,11 @@ export default function PushControls({ debug = false }) {
         <div className="opacity-90">Set <code>VITE_VAPID_PUBLIC_KEY</code> and redeploy.</div>
       </InfoBanner>
     );
+  }
+
+  // If notifications fully enabled, hide the card from the main screen.
+  if (enabled && perm === "granted" && !DEBUG) {
+    return null;
   }
 
   const statusText =
@@ -329,22 +279,25 @@ export default function PushControls({ debug = false }) {
         </button>
       )}
 
-      <label className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2">
-        <input
-          type="checkbox"
-          className="h-5 w-5 accent-emerald-400"
-          checked={enabled}
-          onChange={onCheckboxChange}
-          disabled={loading || perm === "denied"}
-          aria-checked={enabled}
-          aria-label="Enable notifications"
-        />
-        <div className="flex-1">
-          <div className="text-[15px] font-semibold">Notifications</div>
-          <div className="text-xs opacity-75">{statusText}</div>
-        </div>
-        {loading && <span className="text-xs opacity-75">…</span>}
-      </label>
+      {/* Toggle only visible when not fully enabled or when debugging */}
+      {(perm !== "granted" || !enabled || DEBUG) && (
+        <label className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2">
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-emerald-400"
+            checked={enabled}
+            onChange={onCheckboxChange}
+            disabled={loading || perm === "denied"}
+            aria-checked={enabled}
+            aria-label="Enable notifications"
+          />
+          <div className="flex-1">
+            <div className="text-[15px] font-semibold">Notifications</div>
+            <div className="text-xs opacity-75">{statusText}</div>
+          </div>
+          {loading && <span className="text-xs opacity-75">…</span>}
+        </label>
+      )}
 
       {showFixRow && (
         <button
@@ -363,88 +316,47 @@ export default function PushControls({ debug = false }) {
       {savedNote && <div className="text-xs text-emerald-300">{savedNote}</div>}
       {!!error && <div className="text-sm text-red-300">{error}</div>}
 
-      {/* ===== Debug-only UI (toggled by prop) ===== */}
+      {/* ===== Debug-only tools (still available via menu toggle) ===== */}
       {DEBUG && (
         <div className="space-y-2 mt-3">
-          <div className="flex gap-2">
-            <button
-              onClick={runDiag}
-              className="flex-1 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-[14px]"
-              disabled={diagRunning}
-            >
-              {diagRunning ? "Diagnosing…" : "Diagnose"}
-            </button>
-            <button
-              onClick={async () => {
-                const logs = []; setSwLog([]);
-                try {
-                  const reg = await ensureSW(logs);
-                  setSwLog(logs.slice());
-                  if (!reg || !navigator.serviceWorker.controller) throw new Error("SW still not controlling");
-                  alert("Service worker installed / controlling ✓");
-                } catch (e) {
-                  setSwLog((l) => [...l, "Install failed: " + (e?.message || e)]);
-                  alert(e?.message || "Install failed");
-                }
-              }}
-              className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-[14px] font-semibold text-sky-300 hover:bg-sky-400/15"
-            >
-              Install service worker now
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  const regs = await navigator.serviceWorker.getRegistrations();
-                  for (const r of regs) await r.unregister();
-                  if (window.caches) {
-                    const keys = await caches.keys();
-                    await Promise.all(keys.map((k) => caches.delete(k)));
-                  }
-                  localStorage.removeItem("gb:sw:forced-reload");
-                  alert("SWs unregistered. Close and reopen the app.");
-                } catch (e) {
-                  alert("Reset failed: " + (e?.message || e));
-                }
-              }}
-              className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-[14px] font-semibold text-red-300 hover:bg-red-400/15"
-            >
-              Reset SW
-            </button>
-          </div>
-
           <button
             onClick={async () => {
+              setDiagRunning(true);
+              const logs = [];
+              setSwLog([]);
               try {
-                setSending(true);
-                const reg = (await getAnyRegistration()) || (await ensureSW([]));
-                const sub = await reg.pushManager.getSubscription();
-                if (!sub) return alert("Enable notifications first.");
-                const res = await fetch("/api/push/test-send", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ title: "Greenbank Masjid", body: "Test notification ✓", url: "/mobile/", sub }),
+                let scope = "(no scope)";
+                try {
+                  const reg = (await getAnyRegistration()) || (await ensureSW(logs));
+                  scope = reg?.scope || "(no scope)";
+                } catch (e) {
+                  logs.push("Diag ensureSW error: " + (e?.message || e));
+                }
+                setDiag({
+                  scope,
+                  hasPush: "PushManager" in window,
+                  hasNotification: "Notification" in window,
+                  hasSW: "serviceWorker" in navigator,
+                  perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
+                  vapidPrefix: VAPID_PUBLIC.slice(0, 16) || "(empty)",
                 });
-                const json = await res.json();
-                if (!json?.ok) throw new Error(json?.error || "Send failed");
-                alert("Test notification sent.");
-              } catch (e) {
-                alert(e?.message || "Failed to send test notification.");
               } finally {
-                setSending(false);
+                setSwLog((l) => (l.length ? l : logs));
+                setDiagRunning(false);
               }
             }}
-            disabled={sending || !enabled}
-            className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[15px] font-semibold text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-[14px]"
+            disabled={diagRunning}
           >
-            {sending ? "Sending…" : enabled ? "Send test notification" : "Enable notifications to test"}
+            {diagRunning ? "Diagnosing…" : "Diagnose"}
           </button>
 
           {diag && (
             <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] leading-5">
               <div><b>SW scope:</b> {diag.scope}</div>
-              <div><b>Push API:</b> {String(hasPush)}</div>
-              <div><b>Notifications API:</b> {String(hasNotification)}</div>
-              <div><b>Service Worker:</b> {String(hasSW)}</div>
+              <div><b>Push API:</b> {String(diag.hasPush)}</div>
+              <div><b>Notifications API:</b> {String(diag.hasNotification)}</div>
+              <div><b>Service Worker:</b> {String(diag.hasSW)}</div>
               <div><b>Permission:</b> {diag.perm}</div>
               <div><b>VAPID prefix:</b> {diag.vapidPrefix}</div>
               {swLog.length > 0 && (
