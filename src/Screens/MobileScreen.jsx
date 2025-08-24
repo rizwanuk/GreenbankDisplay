@@ -18,6 +18,8 @@ import usePushStatus from "../hooks/usePushStatus";
 import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
 
 import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
+import { postSubscription, postSchedule } from "../pwa/pushApi";
+import { getMobileTheme } from "../utils/helpers";
 
 /* --------------------------- helpers ---------------------------- */
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
@@ -40,8 +42,8 @@ const flattenSettings = (rows) => {
     const k = (r?.Key || "").trim();
     const v = r?.Value != null ? String(r.Value).trim() : "";
     if (!k || v === "") return;
-    map[k] = v;
-    if (g) map[`${g}.${k}`] = v;
+    map[k] = v; // NOTE: groupless key (legacy; can collide)
+    if (g) map[`${g}.${k}`] = v; // group-qualified key
   });
   return map;
 };
@@ -120,6 +122,62 @@ function computeLookupKey(p) {
   return k;
 }
 
+// ---- background push helpers (schedule) ----
+function parseTimeHM(str, baseDate) {
+  if (!str) return null;
+  const v = String(str).trim();
+  let m = /^(\d{1,2}):(\d{2})$/i.exec(v);
+  let hour, minute;
+  if (m) {
+    hour = parseInt(m[1], 10);
+    minute = parseInt(m[2], 10);
+  } else {
+    const m2 =
+      /^(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)$/i.exec(v) ||
+      /^(\d{1,2}):(\d{2})([ap])$/i.exec(v);
+    if (!m2) return null;
+    hour = parseInt(m2[1], 10);
+    minute = parseInt(m2[2], 10);
+    const ap = m2[3].toLowerCase();
+    if (ap.startsWith("p") && hour < 12) hour += 12;
+    if (ap.startsWith("a") && hour === 12) hour = 0;
+  }
+  const d = new Date(baseDate);
+  d.setHours(hour, minute, 0, 0);
+  return d.getTime();
+}
+const PRAYERS = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+function looksLikeJamaahKey(canonPrayer, k) {
+  const s = normalizeKey(k);
+  if (!s.includes(canonPrayer)) return false;
+  return /jama|iqam|congreg/.test(s);
+}
+function buildScheduleEntries(todayRow, dateRef) {
+  if (!todayRow) return [];
+  const entries = Object.entries(todayRow);
+  const startMap = {};
+  const jamaahMap = {};
+  for (const [key, val] of entries) {
+    const canon = normalizeKey(key);
+    if (PRAYERS.includes(canon)) startMap[canon] = val;
+    for (const p of PRAYERS) if (looksLikeJamaahKey(p, key)) jamaahMap[p] = val;
+  }
+  const list = [];
+  for (const p of PRAYERS) {
+    const startAt = parseTimeHM(startMap[p], dateRef);
+    if (!Number.isFinite(startAt)) continue;
+    const jamaahAt = parseTimeHM(jamaahMap[p], dateRef);
+    list.push({ prayer: p, startAt, jamaahAt, url: "/mobile/" });
+  }
+  return list;
+}
+function dayKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 /* ============================= Component ============================= */
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
@@ -136,12 +194,6 @@ export default function MobileScreen() {
 
   // SW status
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
-
-  // Debug flag (kept for ?debug=pwa)
-  const initialDebug =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("debug") === "pwa";
-  const [showDebug] = useState(!!initialDebug);
 
   // Live push status (kept if you want to surface state later)
   usePushStatus();
@@ -182,12 +234,34 @@ export default function MobileScreen() {
   const settingsRows = useSettings();
 
   const settingsMap = useMemo(() => flattenSettings(settingsRows), [settingsRows]);
+
+  // ===== Theme selection (mobile-first) =====
+  const defaultTheme =
+    settingsMap["mobile.theme"] || settingsMap["toggles.theme"] || "Theme_1";
+  const activeTheme = themeOverride || defaultTheme;
+
+  const mapWithThemeOverride = useMemo(
+    () => ({ ...settingsMap, "toggles.theme": activeTheme }),
+    [settingsMap, activeTheme]
+  );
+
+  // ✅ Use mobile-aware helper (themeMobile.* overrides theme.*)
+  const themeAll = useMemo(() => getMobileTheme(mapWithThemeOverride), [mapWithThemeOverride]);
+
+  const themeHeader = themeAll.header || {};
+  const themeDateCard = themeAll.dateCard || {};
+  const themeCurrentPrayer = themeAll.currentPrayer || {};
+  const themeNextPrayer = themeAll.nextPrayer || {};
+  const themeUpcomingPrayer = themeAll.upcomingPrayer || {};
+
+  // ===== Labels =====
   const labelsRaw = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const arabicRaw = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
   const labels = useMemo(() => withLabelAliases(toLowerMap(labelsRaw)), [labelsRaw]);
   const arabic = useMemo(() => withLabelAliases(toLowerMap(arabicRaw)), [arabicRaw]);
 
+  // ===== Time refs =====
   const now = useMemo(() => new Date(), [hb]);
   const refToday = useMemo(() => {
     const d = new Date(now);
@@ -307,14 +381,10 @@ export default function MobileScreen() {
     lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
   };
 
-  // ---------- Settings open/close helpers with history state ----------
-  const requestOpenSettings = () => {
-    setShowSettings(true);
-  };
-
+  // ---------- Settings open/close helpers ----------
+  const requestOpenSettings = () => setShowSettings(true);
   const requestCloseSettings = () => {
     try {
-      // If we opened a modal history entry, use back() to keep nav consistent
       if (window.history.state && window.history.state.modal === "settings") {
         window.history.back();
       } else {
@@ -343,12 +413,39 @@ export default function MobileScreen() {
     return () => {
       window.removeEventListener("popstate", onPop);
       window.removeEventListener("keydown", onKey);
-      // Clean URL param
       const u = new URL(window.location.href);
       u.searchParams.delete("panel");
       window.history.replaceState({}, "", u.toString());
     };
   }, [showSettings]);
+
+  // --- Background push: post subscription once, and today's schedule once per day ---
+  useEffect(() => {
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await postSubscription();
+      } catch {}
+    })();
+  }, []);
+  useEffect(() => {
+    if (!todayRow) return;
+    const entries = buildScheduleEntries(todayRow, refToday);
+    if (!entries.length) return;
+    const dk = dayKey(refToday);
+    const stampKey = "mobile.schedule.lastSent";
+    const last = localStorage.getItem(stampKey);
+    if (last === dk) return;
+    (async () => {
+      const ok = await postSchedule(entries, dk);
+      if (ok) {
+        try {
+          localStorage.setItem(stampKey, dk);
+        } catch {}
+      }
+    })();
+  }, [todayRow, refToday]);
 
   return (
     <div
@@ -360,7 +457,14 @@ export default function MobileScreen() {
     >
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0b0f1a]">
+        <div
+          className={[
+            "flex items-center justify-between px-4 py-3 border-b",
+            themeHeader.bgColor || "bg-[#0b0f1a]",
+            themeHeader.textColor || "text-white",
+            themeHeader.border || themeHeader.borderColor || "border-white/10",
+          ].join(" ")}
+        >
           <div className="min-w-0">
             <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
             <div className="text-xs opacity-75">Mobile view</div>
@@ -369,7 +473,12 @@ export default function MobileScreen() {
           {/* Single settings button */}
           <button
             aria-label="Settings"
-            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+            className={[
+              "px-3 py-1.5 rounded-lg border",
+              themeHeader.cardBgColor || "bg-white/10",
+              themeHeader.cardHoverBgColor || "hover:bg-white/15",
+              themeHeader.cardBorderColor || "border-white/10",
+            ].join(" ")}
             onClick={requestOpenSettings}
           >
             ⚙️
@@ -379,11 +488,15 @@ export default function MobileScreen() {
         <main className="px-4 py-4 space-y-3">
           {/* Dates pill */}
           <div
-            className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.06] shadow-sm
-                       px-4 py-3 leading-snug"
+            className={[
+              "flex flex-col rounded-2xl border shadow-sm px-4 py-3 leading-snug",
+              themeDateCard.bgColor || "bg-white/[0.06]",
+              themeDateCard.textColor || "text-white",
+              themeDateCard.border || themeDateCard.borderColor || "border-white/10",
+            ].join(" ")}
           >
-            <div className="w-full text-center text-[14px] font-semibold">
-              {todayLong} · <span className="text-white/80">{hijriDateString}</span>
+            <div className={["w-full text-center font-semibold", themeDateCard.englishDateSize || "text-[14px]"].join(" ")}>
+              {todayLong} · <span className="opacity-80">{hijriDateString}</span>
             </div>
             <div
               className="w-full text-center text-[15px] font-semibold mt-1"
@@ -400,8 +513,9 @@ export default function MobileScreen() {
             </div>
           )}
 
-          {/* Cards */}
+          {/* Cards (pass theme pieces; components can opt to use them) */}
           <MobileCurrentCard
+            theme={themeCurrentPrayer}
             labels={labels}
             arabicLabels={arabic}
             is24Hour={is24Hour}
@@ -411,6 +525,7 @@ export default function MobileScreen() {
           />
 
           <MobileNextCard
+            theme={themeNextPrayer}
             todayRow={todayRow}
             tomorrowRow={tRow}
             labels={labels}
@@ -419,6 +534,7 @@ export default function MobileScreen() {
           />
 
           <MobileUpcomingList
+            theme={themeUpcomingPrayer}
             upcoming={upcomingWithKeys}
             is24Hour={is24Hour}
             todayRef={refToday}
@@ -434,7 +550,7 @@ export default function MobileScreen() {
         open={showSettings}
         onClose={requestCloseSettings}
         settingsRows={settingsRows}
-        currentThemeName={themeOverride}
+        currentThemeName={activeTheme}
         onChangeTheme={(name) => {
           try {
             localStorage.setItem("selectedTheme", name || "");
