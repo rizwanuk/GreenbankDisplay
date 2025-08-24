@@ -1,8 +1,11 @@
 // src/Components/pwa/PushControls.jsx
 import React, { useEffect, useState } from "react";
 
+// 🔑 Env
 // eslint-disable-next-line no-undef
 const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY || "").trim();
+// eslint-disable-next-line no-undef
+const API_BASE = (import.meta.env.VITE_PUSH_API_BASE || "").trim();
 
 const urlFlag =
   typeof window !== "undefined" &&
@@ -16,6 +19,18 @@ function b64UrlToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+function getClientId() {
+  try {
+    let id = localStorage.getItem("mobile.clientId");
+    if (!id) {
+      id = Math.random().toString(36).slice(2);
+      localStorage.setItem("mobile.clientId", id);
+    }
+    return id;
+  } catch {
+    return "anon";
+  }
 }
 async function getAnyRegistration() {
   if (!("serviceWorker" in navigator)) return null;
@@ -34,7 +49,11 @@ async function ensureSW(swLog = []) {
     new Promise((resolve) => {
       if (navigator.serviceWorker.controller) return resolve(true);
       const t = setTimeout(() => resolve(false), ms);
-      const onCtrl = () => { clearTimeout(t); navigator.serviceWorker.removeEventListener("controllerchange", onCtrl); resolve(true); };
+      const onCtrl = () => {
+        clearTimeout(t);
+        navigator.serviceWorker.removeEventListener("controllerchange", onCtrl);
+        resolve(true);
+      };
       navigator.serviceWorker.addEventListener("controllerchange", onCtrl, { once: true });
     });
 
@@ -142,17 +161,25 @@ export default function PushControls({ debug = false }) {
         if (!VAPID_PUBLIC || perm !== "granted") return;
         const reg = (await getAnyRegistration()) || (await ensureSW([]));
         const existing = await reg.pushManager.getSubscription();
-        if (!existing) {
-          const sub = await reg.pushManager.subscribe({
+        const sub =
+          existing ||
+          (await reg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
-          });
-          await fetch("/api/push/subscribe", {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub),
+          }));
+
+        // ➜ Post subscription to your server with clientId
+        if (API_BASE) {
+          await fetch(`${API_BASE}/api/push/subscribe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ clientId: getClientId(), subscription: sub.toJSON() }),
           });
         }
-      } catch {}
-      finally {
+      } catch {
+        // ignore, UI will reflect via refreshState
+      } finally {
         await refreshState();
       }
     })();
@@ -163,7 +190,8 @@ export default function PushControls({ debug = false }) {
     if (!("serviceWorker" in navigator) || !("PushManager" in window))
       throw new Error("Push notifications are not supported in this context.");
     if (!VAPID_PUBLIC) throw new Error("Missing VAPID public key (VITE_VAPID_PUBLIC_KEY).");
-    if (isIOS && !isStandalone) throw new Error("Install to Home Screen first (Safari → Share → Add to Home Screen).");
+    if (isIOS && !isStandalone)
+      throw new Error("Install to Home Screen first (Safari → Share → Add to Home Screen).");
 
     let p = typeof Notification !== "undefined" ? Notification.permission : "default";
     if (p !== "granted") p = await Notification.requestPermission();
@@ -180,9 +208,15 @@ export default function PushControls({ debug = false }) {
         applicationServerKey: b64UrlToUint8Array(VAPID_PUBLIC),
       }));
 
-    await fetch("/api/push/subscribe", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub),
-    });
+    // ➜ Post subscription to your server with clientId
+    if (API_BASE) {
+      await fetch(`${API_BASE}/api/push/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ clientId: getClientId(), subscription: sub.toJSON() }),
+      });
+    }
 
     await refreshState();
     return sub;
@@ -193,9 +227,15 @@ export default function PushControls({ debug = false }) {
     const sub = await reg?.pushManager?.getSubscription?.();
     if (!sub) { await refreshState(); return; }
     try {
-      await fetch("/api/push/unsubscribe", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }),
-      });
+      // Optional: tell server to drop (route not required — server cleans stale subs on 404/410)
+      // if (API_BASE) {
+      //   await fetch(`${API_BASE}/api/push/unsubscribe`, {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     credentials: "include",
+      //     body: JSON.stringify({ clientId: getClientId(), endpoint: sub.endpoint }),
+      //   });
+      // }
     } finally {
       await sub.unsubscribe();
       await refreshState();
@@ -247,7 +287,9 @@ export default function PushControls({ debug = false }) {
     return (
       <InfoBanner id="missing-vapid" tone="error">
         <div className="font-semibold text-[14px] mb-1">Missing VAPID public key</div>
-        <div className="opacity-90">Set <code>VITE_VAPID_PUBLIC_KEY</code> and redeploy.</div>
+        <div className="opacity-90">
+          Set <code>VITE_VAPID_PUBLIC_KEY</code> and redeploy.
+        </div>
       </InfoBanner>
     );
   }
@@ -303,8 +345,16 @@ export default function PushControls({ debug = false }) {
         <button
           onClick={async () => {
             setError(""); setSwLog([]);
-            try { await ensureSW([]); await subscribeToPush(); await refreshState(); setSavedNote("Notifications enabled ✓"); setTimeout(() => setSavedNote(""), 2000); }
-            catch (e) { setError(e?.message || String(e)); await refreshState(); }
+            try {
+              await ensureSW([]);
+              await subscribeToPush();
+              await refreshState();
+              setSavedNote("Notifications enabled ✓");
+              setTimeout(() => setSavedNote(""), 2000);
+            } catch (e) {
+              setError(e?.message || String(e));
+              await refreshState();
+            }
           }}
           className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-[14px] font-semibold text-emerald-300 hover:bg-emerald-400/15"
           disabled={loading}
@@ -316,7 +366,7 @@ export default function PushControls({ debug = false }) {
       {savedNote && <div className="text-xs text-emerald-300">{savedNote}</div>}
       {!!error && <div className="text-sm text-red-300">{error}</div>}
 
-      {/* ===== Debug-only tools (still available via menu toggle) ===== */}
+      {/* ===== Debug-only tools ===== */}
       {DEBUG && (
         <div className="space-y-2 mt-3">
           <button
@@ -339,6 +389,7 @@ export default function PushControls({ debug = false }) {
                   hasSW: "serviceWorker" in navigator,
                   perm: typeof Notification !== "undefined" ? Notification.permission : "unknown",
                   vapidPrefix: VAPID_PUBLIC.slice(0, 16) || "(empty)",
+                  apiBase: API_BASE || "(none)"
                 });
               } finally {
                 setSwLog((l) => (l.length ? l : logs));
@@ -359,6 +410,7 @@ export default function PushControls({ debug = false }) {
               <div><b>Service Worker:</b> {String(diag.hasSW)}</div>
               <div><b>Permission:</b> {diag.perm}</div>
               <div><b>VAPID prefix:</b> {diag.vapidPrefix}</div>
+              <div><b>API base:</b> {diag.apiBase}</div>
               {swLog.length > 0 && (
                 <div className="mt-2 border-t border-white/10 pt-2">
                   <div className="font-semibold mb-1">SW log</div>
