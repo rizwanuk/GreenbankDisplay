@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PushControls from "./PushControls";
 import useInstallPrompt from "../../hooks/useInstallPrompt";
+import { applySWUpdate } from "../../pwa/registerMobileSW";
 
 /** Accessible, full-row clickable checkbox with a visible tick */
 function CheckRow({ id, label, checked, onChange, hint }) {
@@ -67,7 +68,7 @@ export default function MobileSettingsSheet({
   currentThemeName,
   onChangeTheme, // (name) => void
   categoryKey = "mobile.notif.categories",
-  // About
+  // About (from MobileScreen)
   about = { version: "", timezone: "", lastUpdated: "" },
 }) {
   const allThemeNames = useMemo(() => readThemeNamesFromSettings(settingsRows), [settingsRows]);
@@ -147,7 +148,7 @@ export default function MobileSettingsSheet({
       await reg.showNotification("Greenbank Masjid", {
         body: "This is a test notification.",
         icon: "/mobile/icons/icon-192.png",
-        badge: "/mobile/icons/badge-72.png",
+        badge: "/mobile/icons/icon-192.png",
       });
     } catch {
       alert("Could not show a test notification. Check permissions and SW registration.");
@@ -197,6 +198,90 @@ export default function MobileSettingsSheet({
       mounted = false;
     };
   }, [startEnabled, jamaahEnabled, minutesBefore, cats]);
+
+  // -------- Update / Version controls --------
+  const [updState, setUpdState] = useState("idle"); // idle | checking | available | none | applying | error
+  const [updMsg, setUpdMsg] = useState("");
+  const [waitingReg, setWaitingReg] = useState(null);
+
+  const checkForUpdates = async () => {
+    setUpdState("checking");
+    setUpdMsg("Checking for updates…");
+    try {
+      // Prefer the mobile-scope registration
+      let reg = await navigator.serviceWorker.getRegistration("/mobile/");
+      if (!reg) {
+        // fallback to any registration
+        reg = await navigator.serviceWorker.ready;
+      }
+
+      if (!reg) {
+        setUpdState("error");
+        setUpdMsg("Service worker not registered.");
+        return;
+      }
+
+      // Trigger a network check for a new SW
+      await reg.update();
+
+      // If one is already waiting, we can apply immediately
+      if (reg.waiting) {
+        setWaitingReg(reg);
+        setUpdState("available");
+        setUpdMsg("Update available.");
+        return;
+      }
+
+      // Safari often shows "installing" → wait for it to become "installed"
+      const installing = reg.installing;
+      if (installing) {
+        await new Promise((resolve) => {
+          const onState = () => {
+            if (installing.state === "installed") {
+              installing.removeEventListener("statechange", onState);
+              resolve();
+            }
+          };
+          installing.addEventListener("statechange", onState);
+        });
+        if (reg.waiting) {
+          setWaitingReg(reg);
+          setUpdState("available");
+          setUpdMsg("Update available.");
+          return;
+        }
+      }
+
+      // No update found
+      setUpdState("none");
+      setUpdMsg("You’re on the latest version.");
+    } catch (e) {
+      setUpdState("error");
+      setUpdMsg(e?.message || "Update check failed.");
+    }
+  };
+
+  const applyUpdate = async () => {
+    if (!waitingReg) {
+      // Try to get a waiting reg again just in case
+      const reg = (await navigator.serviceWorker.getRegistration("/mobile/")) || (await navigator.serviceWorker.ready);
+      if (reg?.waiting) setWaitingReg(reg);
+      else {
+        setUpdState("none");
+        setUpdMsg("No update to apply.");
+        return;
+      }
+    }
+    try {
+      setUpdState("applying");
+      setUpdMsg("Applying update…");
+      await applySWUpdate(waitingReg || (await navigator.serviceWorker.ready));
+      // page will reload on controllerchange (handled in applySWUpdate)
+    } catch (e) {
+      setUpdState("error");
+      setUpdMsg(e?.message || "Failed to apply update.");
+    }
+  };
 
   if (!open) return null;
 
@@ -367,13 +452,16 @@ export default function MobileSettingsSheet({
               </div>
             </section>
 
-            {/* About */}
+            {/* Updates & About */}
             <section className="mt-4 mb-2">
-              <h3 className="text-sm font-semibold text-white/90">About</h3>
+              <h3 className="text-sm font-semibold text-white/90">App version & updates</h3>
+
               <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
                 <div className="flex items-center justify-between py-1">
                   <span className="opacity-80">App version</span>
-                  <span className="font-medium">{about.version || "—"}</span>
+                  <span className="font-medium">
+                    {about.version || "—"}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
                   <span className="opacity-80">Timezone</span>
@@ -383,6 +471,31 @@ export default function MobileSettingsSheet({
                   <span className="opacity-80">Last updated</span>
                   <span className="font-medium">{about.lastUpdated || "—"}</span>
                 </div>
+
+                {/* Update controls */}
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
+                    onClick={checkForUpdates}
+                    disabled={updState === "checking" || updState === "applying"}
+                  >
+                    {updState === "checking" ? "Checking…" : "Check for updates"}
+                  </button>
+
+                  {updState === "available" && (
+                    <button
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
+                      onClick={applyUpdate}
+                      disabled={updState === "applying"}
+                    >
+                      {updState === "applying" ? "Updating…" : "Update now"}
+                    </button>
+                  )}
+                </div>
+
+                {updMsg && (
+                  <p className="text-xs text-white/60 mt-2">{updMsg}</p>
+                )}
               </div>
             </section>
           </div>
