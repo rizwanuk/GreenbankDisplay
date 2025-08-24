@@ -1,7 +1,10 @@
-// public/sw.js — same content as /mobile/sw.js so root scope can control /mobile too
+// public/sw.js — same content as /mobile/sw.js so root scope can control / too
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener("message", (event) => {
+  if (event?.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
 
 async function readData(event) {
   if (!event.data) return {};

@@ -1,50 +1,44 @@
 // src/pwa/registerMobileSW.js
-async function waitForController(ms = 8000) {
-  if (navigator.serviceWorker.controller) return true;
-  return await new Promise((resolve) => {
-    const t = setTimeout(() => resolve(false), ms);
-    const onCtrl = () => {
-      clearTimeout(t);
-      navigator.serviceWorker.removeEventListener("controllerchange", onCtrl);
-      resolve(true);
-    };
-    navigator.serviceWorker.addEventListener("controllerchange", onCtrl, { once: true });
-  });
-}
+export async function registerMobileSW(onUpdateReady) {
+  if (!("serviceWorker" in navigator)) return null;
 
-async function tryRegister(url, scope) {
-  const reg = await navigator.serviceWorker.register(url, { scope });
-  try { await reg.update(); } catch {}
-  // give it time to activate + claim
-  try { await navigator.serviceWorker.ready; } catch {}
+  // Register the mobile SW with /mobile/ scope
+  const reg = await navigator.serviceWorker.register("/mobile/sw.js", { scope: "/mobile/" });
+
+  // If a new SW is already waiting (Safari can land here), notify
+  maybeNotify();
+
+  // Detect new SW versions
+  reg.addEventListener("updatefound", () => {
+    const sw = reg.installing;
+    if (!sw) return;
+    sw.addEventListener("statechange", () => {
+      // 'installed' + controller means an update to existing page
+      if (sw.state === "installed" && navigator.serviceWorker.controller) {
+        maybeNotify();
+      }
+    });
+  });
+
+  // Periodically check for updates (e.g. every 30 mins)
+  setInterval(() => reg.update(), 30 * 60 * 1000);
+
+  function maybeNotify() {
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      onUpdateReady?.(reg);
+    }
+  }
+
   return reg;
 }
 
-export async function registerMobileSW() {
-  if (!("serviceWorker" in navigator)) return null;
-
-  // 1) Prefer /mobile/ scope
-  try {
-    const reg = await tryRegister("/mobile/sw.js", "/mobile/");
-    if (navigator.serviceWorker.controller || (await waitForController(4000))) return reg;
-  } catch (e) {
-    console.warn("[sw] /mobile/ register failed:", e);
-  }
-
-  // 2) Fallback to root (controls /mobile too)
-  try {
-    const regRoot = await tryRegister("/sw.js", "/");
-    if (!navigator.serviceWorker.controller) {
-      const onceKey = "gb:sw:forced-reload";
-      if (!sessionStorage.getItem(onceKey)) {
-        sessionStorage.setItem(onceKey, "1");
-        location.reload(); // one-time reload to ensure control
-      }
-    }
-    await waitForController(6000);
-    return regRoot;
-  } catch (e) {
-    console.error("[sw] root register failed:", e);
-    throw e;
-  }
+export function applySWUpdate(reg) {
+  if (!reg?.waiting) return;
+  // When the new SW takes control, reload once
+  navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    () => window.location.reload(),
+    { once: true }
+  );
+  reg.waiting.postMessage({ type: "SKIP_WAITING" });
 }

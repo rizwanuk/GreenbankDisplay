@@ -17,7 +17,7 @@ import MobileUpcomingList from "../Components/MobileUpcomingList";
 import usePushStatus from "../hooks/usePushStatus";
 import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
 
-import { registerMobileSW } from "../pwa/registerMobileSW";
+import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
 
 /* --------------------------- helpers ---------------------------- */
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
@@ -162,11 +162,14 @@ export default function MobileScreen() {
     }
   }, []);
 
-  // Register SW and capture scope
+  // Register SW, hook update prompt, and capture scope
   useEffect(() => {
     (async () => {
       try {
-        await registerMobileSW();
+        await registerMobileSW((reg) => {
+          const ok = window.confirm("A new version is available. Update now?");
+          if (ok) applySWUpdate(reg);
+        });
         const reg = await navigator.serviceWorker.ready;
         setSwInfo({ ready: true, scope: reg?.scope || "" });
       } catch {
@@ -403,7 +406,7 @@ export default function MobileScreen() {
             arabicLabels={arabic}
             is24Hour={is24Hour}
             todayRow={todayRow}
-            yesterdayRow={refYesterday}
+            yesterdayRow={yRow}
             settingsMap={settingsMap}
           />
 

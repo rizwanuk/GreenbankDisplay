@@ -1,7 +1,15 @@
-// public/mobile/sw.js  — client-only service worker (no imports)
+// public/mobile/sw.js — client-only service worker (no imports)
 
+// Install/activate fast
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+
+// 🔁 Allow page to tell us to activate the new SW immediately
+self.addEventListener("message", (event) => {
+  if (event?.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 
 // Utility to safely read push payload
 async function readData(event) {
@@ -34,7 +42,7 @@ self.addEventListener("push", (event) => {
       let body  = isStr(data.body)  ? data.body.trim()  : "Prayer reminder";
       let url   = isStr(data.url)   ? data.url.trim()   : "/mobile/";
 
-      // Scrub suspicious payloads that trigger iOS's “string did not match expected pattern”
+      // Scrub suspicious payloads that trigger iOS errors
       if (looksBad(title)) title = "Greenbank Masjid";
       if (looksBad(body))  body  = "Prayer reminder";
 
