@@ -6,7 +6,7 @@
   "outputDirectory": "dist",
 
   "crons": [
-    { "path": "/api/push/cron", "schedule": "*/1 * * * *" }
+    { "path": "/api/push/cron", "schedule": "0 5 * * *" }
   ],
 
   "redirects": [
@@ -50,12 +50,9 @@
 
   "routes": [
     { "handle": "filesystem" },
-
     { "src": "/api/met/(.*)", "dest": "/api/met.js?path=$1" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
-
     { "src": "/embed", "dest": "/embed.html" },
-
     { "src": "/slideshow", "dest": "/index.html" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
