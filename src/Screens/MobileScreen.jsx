@@ -182,7 +182,7 @@ function dayKey(d) {
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
 
-  // Settings sheet controls
+  // Settings panel + theme override
   const [showSettings, setShowSettings] = useState(false);
   const [themeOverride, setThemeOverride] = useState(() => {
     try {
@@ -195,7 +195,7 @@ export default function MobileScreen() {
   // SW status
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
 
-  // Live push status (kept if you want to surface state later)
+  // Live push status
   usePushStatus();
 
   // Heartbeat tick
@@ -235,7 +235,7 @@ export default function MobileScreen() {
 
   const settingsMap = useMemo(() => flattenSettings(settingsRows), [settingsRows]);
 
-  // ===== Theme selection (mobile-first) =====
+  // ===== Theme selection (mobile-aware) =====
   const defaultTheme =
     settingsMap["mobile.theme"] || settingsMap["toggles.theme"] || "Theme_1";
   const activeTheme = themeOverride || defaultTheme;
@@ -245,7 +245,7 @@ export default function MobileScreen() {
     [settingsMap, activeTheme]
   );
 
-  // ✅ Use mobile-aware helper (themeMobile.* overrides theme.*)
+  // Use helper that respects themeMobile.* overrides
   const themeAll = useMemo(() => getMobileTheme(mapWithThemeOverride), [mapWithThemeOverride]);
 
   const themeHeader = themeAll.header || {};
@@ -283,6 +283,7 @@ export default function MobileScreen() {
   const yRow = useMemo(() => findRowForDate(timetable, refYesterday), [timetable, refYesterday]);
   const tRow = useMemo(() => findRowForDate(timetable, refTomorrow), [timetable, refTomorrow]);
 
+  // 24h/12h toggle (used by Upcoming list)
   const is24Hour =
     (settingsMap["toggles.clock24Hours"] || settingsMap["clock24Hours"] || "")
       .toString()
@@ -306,20 +307,21 @@ export default function MobileScreen() {
     [upcoming]
   );
 
+  // English date (line 1)
   const todayLong = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "2-digit",
     month: "long",
     timeZone: tz,
   }).format(now);
-  const nowStr = fmt(now, !is24Hour);
 
+  // Show SW banner if relevant
   const showSWBanner =
     typeof window !== "undefined" &&
     (window.location.search.includes("debug=sw") ||
       (swInfo.ready && swInfo.scope && !swInfo.scope.includes("/mobile/")));
 
-  /* -------- Islamic date (offset + 30-day normalization + Sheet labels) -------- */
+  /* -------- Islamic date (line 2) -------- */
   const normalizeTo30 =
     String(settingsMap["islamicCalendar.normalizeTo30DayMonths"] || "FALSE").toUpperCase() ===
     "TRUE";
@@ -395,30 +397,6 @@ export default function MobileScreen() {
     }
   };
 
-  useEffect(() => {
-    if (!showSettings) return;
-    const state = { modal: "settings" };
-    const url = new URL(window.location.href);
-    url.searchParams.set("panel", "settings");
-    window.history.pushState(state, "", url.toString());
-
-    const onPop = () => setShowSettings(false);
-    const onKey = (e) => {
-      if (e.key === "Escape") requestCloseSettings();
-    };
-
-    window.addEventListener("popstate", onPop);
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      window.removeEventListener("keydown", onKey);
-      const u = new URL(window.location.href);
-      u.searchParams.delete("panel");
-      window.history.replaceState({}, "", u.toString());
-    };
-  }, [showSettings]);
-
   // --- Background push: post subscription once, and today's schedule once per day ---
   useEffect(() => {
     (async () => {
@@ -449,13 +427,16 @@ export default function MobileScreen() {
 
   return (
     <div
-      className="min-h-screen bg-[#060a12] text-white font-poppins md:flex md:items-center md:justify-center md:p-6"
+      className={`min-h-screen text-white font-poppins md:flex md:items-center md:justify-center md:p-6 ${
+        // ✅ Theme-controlled page background with fallback
+        themeHeader.pageBgColor || themeHeader.bgColor || "bg-[#060a12]"
+      }`}
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:bg-[#0b0f1a] md:shadow-2xl md:overflow-hidden">
+      <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:shadow-2xl md:overflow-hidden">
         {/* Header */}
         <div
           className={[
@@ -486,7 +467,7 @@ export default function MobileScreen() {
         </div>
 
         <main className="px-4 py-4 space-y-3">
-          {/* Dates pill */}
+          {/* Dates pill (2 lines, larger defaults; still theme-overridable) */}
           <div
             className={[
               "flex flex-col rounded-2xl border shadow-sm px-4 py-3 leading-snug",
@@ -495,14 +476,21 @@ export default function MobileScreen() {
               themeDateCard.border || themeDateCard.borderColor || "border-white/10",
             ].join(" ")}
           >
-            <div className={["w-full text-center font-semibold", themeDateCard.englishDateSize || "text-[14px]"].join(" ")}>
-              {todayLong} · <span className="opacity-80">{hijriDateString}</span>
-            </div>
+            {/* Line 1: English date */}
             <div
-              className="w-full text-center text-[15px] font-semibold mt-1"
-              style={{ fontVariantNumeric: "tabular-nums" }}
+              className={`w-full text-center font-semibold ${
+                themeDateCard.englishDateSize || "text-[18px]"
+              }`}
             >
-              {nowStr}
+              {todayLong}
+            </div>
+            {/* Line 2: Hijri date */}
+            <div
+              className={`w-full text-center mt-1 opacity-90 ${
+                themeDateCard.hijriDateSize || "text-[16px]"
+              }`}
+            >
+              {hijriDateString}
             </div>
           </div>
 
