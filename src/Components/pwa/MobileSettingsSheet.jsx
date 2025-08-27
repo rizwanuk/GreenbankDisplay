@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PushControls from "./PushControls";
 import useInstallPrompt from "../../hooks/useInstallPrompt";
-import { applySWUpdate } from "../../pwa/registerMobileSW";
+import { checkForUpdates as swCheckForUpdates, applySWUpdate } from "../../pwa/registerMobileSW";
 
 /** Accessible, full-row clickable checkbox with a visible tick */
 function CheckRow({ id, label, checked, onChange, hint }) {
@@ -205,35 +205,39 @@ export default function MobileSettingsSheet({
   const [updMsg, setUpdMsg] = useState("");
   const [waitingReg, setWaitingReg] = useState(null);
 
-  const checkForUpdates = async () => {
+  // Unified "Check for updates":
+  // 1) Try the helper (auto-applies if an update is available)
+  // 2) If not updated, fall back to a manual check that can show "Update now"
+  const onCheckForUpdates = async () => {
     setUpdState("checking");
     setUpdMsg("Checking for updates…");
     try {
-      // Prefer the mobile-scope registration
-      let reg = await navigator.serviceWorker.getRegistration("/mobile/");
-      if (!reg) {
-        // fallback to any registration
-        reg = await navigator.serviceWorker.ready;
+      // Attempt helper (will auto-apply & reload if a waiting worker exists)
+      const res = await swCheckForUpdates();
+      if (res?.updated) {
+        setUpdState("applying");
+        setUpdMsg("Applying update…");
+        return; // page will reload via applySWUpdate inside the helper
       }
 
+      // Fallback manual detection (e.g., Safari nuances)
+      let reg = await navigator.serviceWorker.getRegistration("/mobile/");
+      if (!reg) reg = await navigator.serviceWorker.ready;
       if (!reg) {
         setUpdState("error");
         setUpdMsg("Service worker not registered.");
         return;
       }
 
-      // Trigger a network check for a new SW
-      await reg.update();
+      await reg.update().catch(() => {});
 
-      // If one is already waiting, we can apply immediately
-      if (reg.waiting) {
+      if (reg.waiting && navigator.serviceWorker.controller) {
         setWaitingReg(reg);
         setUpdState("available");
         setUpdMsg("Update available.");
         return;
       }
 
-      // Safari often shows "installing" → wait for it to become "installed"
       const installing = reg.installing;
       if (installing) {
         await new Promise((resolve) => {
@@ -245,7 +249,7 @@ export default function MobileSettingsSheet({
           };
           installing.addEventListener("statechange", onState);
         });
-        if (reg.waiting) {
+        if (reg.waiting && navigator.serviceWorker.controller) {
           setWaitingReg(reg);
           setUpdState("available");
           setUpdMsg("Update available.");
@@ -253,7 +257,6 @@ export default function MobileSettingsSheet({
         }
       }
 
-      // No update found
       setUpdState("none");
       setUpdMsg("You’re on the latest version.");
     } catch (e) {
@@ -263,9 +266,12 @@ export default function MobileSettingsSheet({
   };
 
   const applyUpdate = async () => {
-    if (!waitingReg) {
-      // Try to get a waiting reg again just in case
-      const reg = (await navigator.serviceWorker.getRegistration("/mobile/")) || (await navigator.serviceWorker.ready);
+    // If we don't have a stored waiting reg, try to grab one
+    let reg = waitingReg;
+    if (!reg) {
+      reg =
+        (await navigator.serviceWorker.getRegistration("/mobile/")) ||
+        (await navigator.serviceWorker.ready);
       if (reg?.waiting) setWaitingReg(reg);
       else {
         setUpdState("none");
@@ -276,8 +282,8 @@ export default function MobileSettingsSheet({
     try {
       setUpdState("applying");
       setUpdMsg("Applying update…");
-      await applySWUpdate(waitingReg || (await navigator.serviceWorker.ready));
-      // page will reload on controllerchange (handled in applySWUpdate)
+      await applySWUpdate(reg);
+      // reload will occur on controllerchange inside applySWUpdate
     } catch (e) {
       setUpdState("error");
       setUpdMsg(e?.message || "Failed to apply update.");
@@ -475,7 +481,7 @@ export default function MobileSettingsSheet({
                 <div className="mt-3 flex flex-col sm:flex-row gap-2">
                   <button
                     className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
-                    onClick={checkForUpdates}
+                    onClick={onCheckForUpdates}
                     disabled={updState === "checking" || updState === "applying"}
                   >
                     {updState === "checking" ? "Checking…" : "Check for updates"}

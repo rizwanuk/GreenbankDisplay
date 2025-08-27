@@ -5,9 +5,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import moment from "moment";
 import momentHijri from "moment-hijri";
 
-// ✅ ensure version shows in dev & prod
-import pkg from "../../package.json";
-
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
@@ -376,7 +373,7 @@ export default function MobileScreen() {
       : DEFAULT_I_MONTHS[iMonthIndex0];
   const hijriDateString = `${iDay} ${iMonth} ${iYear} AH`;
 
-  // About info (version from env, pkg.json, or git)
+  // About info (version from env or git)
   const metaRow = Array.isArray(settingsRows)
     ? settingsRows.find((r) => r?.Group === "meta" && r?.Key === "lastUpdated")
     : null;
@@ -384,7 +381,6 @@ export default function MobileScreen() {
   const about = {
     version:
       import.meta?.env?.VITE_APP_VERSION ||
-      (pkg && pkg.version) ||
       import.meta?.env?.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
       "dev",
     timezone: tz,
@@ -435,15 +431,13 @@ export default function MobileScreen() {
 
   return (
     <div
-      className={`min-h-screen text-white font-poppins md:flex md:items-center md:justify-center md:p-6 ${
-        // ✅ Theme-controlled page background with fallback
-        themeHeader.pageBgColor || themeHeader.bgColor || "bg-[#060a12]"
-      }`}
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
-    >
+  className="min-h-screen bg-black text-white font-poppins md:flex md:items-center md:justify-center md:p-6"
+  style={{
+    paddingTop: "env(safe-area-inset-top)",
+    paddingBottom: "env(safe-area-inset-bottom)",
+  }}
+>
+
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:shadow-2xl md:overflow-hidden">
         {/* Header */}
         <div

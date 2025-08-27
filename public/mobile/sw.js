@@ -1,74 +1,131 @@
-// public/mobile/sw.js — client-only service worker (no imports)
+/**
+ * Greenbank Mobile PWA Service Worker
+ * Scope: /mobile/
+ */
+const CACHE = 'gbm-mobile-v1';
 
-// Install/activate fast
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+// App shell / static assets to seed cache (add more if needed)
+const PRECACHE = [
+  '/mobile/',
+  '/mobile/manifest.webmanifest',
+  '/mobile/icons/icon-192.png',
+  '/mobile/icons/icon-512.png',
+];
 
-// 🔁 Allow page to tell us to activate the new SW immediately
-self.addEventListener("message", (event) => {
-  if (event?.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((c) => c.addAll(PRECACHE))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// Utility to safely read push payload
-async function readData(event) {
-  if (!event.data) return {};
-  try {
-    return event.data.json();
-  } catch (_) {
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      )
+      .then(() => self.clients.claim())
+  );
+});
+
+/**
+ * Strategy:
+ * - HTML/doc requests → network-first (fallback to cache if offline)
+ * - Static assets (css/js/img/fonts) → cache-first (update cache in background)
+ * - API/timetable calls → network-first with offline fallback
+ */
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // only handle requests within our scope
+  const inScope =
+    (self.registration.scope && url.href.startsWith(self.registration.scope)) ||
+    url.origin === location.origin;
+  if (!inScope) return;
+
+  const isDoc =
+    req.mode === 'navigate' || req.headers.get('accept')?.includes('text/html');
+  const isStatic = /\.(?:css|js|png|jpg|jpeg|webp|svg|ico|woff2?|ttf|otf)$/.test(
+    url.pathname
+  );
+  const isAPI = url.pathname.startsWith('/api/') || url.pathname.includes('/timetable');
+
+  if (isDoc || isAPI) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  if (isStatic) {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        const fetched = fetch(req)
+          .then((res) => {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+            return res;
+          })
+          .catch(() => cached);
+        return cached || fetched;
+      })
+    );
+    return;
+  }
+
+  // default: try cache, then network
+  event.respondWith(caches.match(req).then((cached) => cached || fetch(req)));
+});
+
+// Optional: push notifications
+self.addEventListener('push', (event) => {
+  const data = (() => {
     try {
-      const txt = await event.data.text();
-      return { body: txt };
+      return event.data ? event.data.json() : {};
     } catch {
       return {};
     }
-  }
-}
-
-// Defensive filter for odd error strings some gateways send back
-const looksBad = (s = "") =>
-  /expected (pattern|return)|error|exception|invalid|failed|stack/i.test(s);
-
-self.addEventListener("push", (event) => {
+  })();
+  const title = data.title || 'Prayer Reminder';
+  const body = data.body || '';
+  const url = data.url || '/mobile/';
   event.waitUntil(
-    (async () => {
-      const data = await readData(event);
-
-      // Ensure strings
-      const isStr = (v) => typeof v === "string" && v.trim().length > 0;
-
-      let title = isStr(data.title) ? data.title.trim() : "Greenbank Masjid";
-      let body  = isStr(data.body)  ? data.body.trim()  : "Prayer reminder";
-      let url   = isStr(data.url)   ? data.url.trim()   : "/mobile/";
-
-      // Scrub suspicious payloads that trigger iOS errors
-      if (looksBad(title)) title = "Greenbank Masjid";
-      if (looksBad(body))  body  = "Prayer reminder";
-
-      await self.registration.showNotification(title, {
-        body,
-        icon: "/mobile/icons/icon-192.png",
-        badge: "/mobile/icons/icon-192.png",
-        data: { url },
-      });
-    })()
+    self.registration.showNotification(title, {
+      body,
+      tag: data.tag,
+      icon: '/mobile/icons/icon-192.png',
+      badge: '/mobile/icons/icon-192.png',
+      data: { url },
+    })
   );
 });
 
-self.addEventListener("notificationclick", (event) => {
+self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification?.data && event.notification.data.url) || "/mobile/";
+  const url = event.notification.data?.url || '/mobile/';
   event.waitUntil(
-    (async () => {
-      const list = await clients.matchAll({ type: "window", includeUncontrolled: true });
-      const existing = list.find((c) => c.url.includes("/mobile/"));
-      if (existing) {
-        await existing.focus();
-        try { existing.navigate && existing.navigate(url); } catch {}
-        return;
-      }
-      await clients.openWindow(url);
-    })()
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const client = list.find((c) => c.url.includes('/mobile/'));
+      return client ? client.focus() : clients.openWindow(url);
+    })
   );
+});
+
+// Support skip-waiting triggered from the page
+self.addEventListener('message', (event) => {
+  const msg = event?.data;
+  if (msg === 'SKIP_WAITING' || (msg && msg.type === 'SKIP_WAITING')) {
+    self.skipWaiting();
+  }
 });
