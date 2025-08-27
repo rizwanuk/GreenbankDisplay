@@ -1,197 +1,170 @@
 // src/Components/MobileUpcomingList.jsx
-import React from "react";
-import moment from "moment";
 
-/* ---------- helpers ---------- */
-function pad2(n) {
-  return String(n).padStart(2, "0");
+import React, { useMemo } from "react";
+
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
+
+function fmtTimeParts(d, is24Hour) {
+  if (!d) return { time: "—", suffix: "" };
+  const date = d?._isAMomentObject ? d.toDate() : d;
+
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: !is24Hour,
+    timeZone: tz,
+  }).format(date);
+
+  if (is24Hour) return { time: formatted, suffix: "" };
+
+  const parts = formatted.split(" ");
+  return { time: parts[0], suffix: parts[1] || "" };
 }
 
-// Render time with am/pm as subscript (12h only)
-function TimeWithSmallAmPm({ date, is24Hour }) {
-  if (!date) return <>—</>;
-  const d =
-    date instanceof Date
-      ? date
-      : moment.isMoment(date)
-      ? date.toDate()
-      : typeof date === "number"
-      ? new Date(date)
-      : typeof date === "string"
-      ? new Date(date)
-      : null;
-  if (!(d instanceof Date) || isNaN(d.getTime())) return <>—</>;
+const toTitle = (s = "") => s.slice(0, 1).toUpperCase() + s.slice(1);
 
-  if (is24Hour) {
-    return (
-      <span className="tabular-nums whitespace-nowrap">
-        {pad2(d.getHours())}:{pad2(d.getMinutes())}
-      </span>
-    );
-  }
-
-  const h = d.getHours();
-  const h12 = h % 12 || 12;
-  const am = h < 12;
-  return (
-    <span className="tabular-nums whitespace-nowrap">
-      {h12}:{pad2(d.getMinutes())}
-      <span
-        style={{ verticalAlign: "sub" }}
-        className="text-[0.62em] ml-0.5 opacity-80 tracking-tight"
-      >
-        {am ? "am" : "pm"}
-      </span>
-    </span>
-  );
-}
-
-function toDate(x) {
-  if (!x) return null;
-  if (x instanceof Date) return x;
-  if (moment.isMoment(x)) return x.toDate();
-  if (typeof x === "number") return new Date(x);
-  if (typeof x === "string") {
-    const d = new Date(x);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return null;
-}
-function sameYMD(a, b) {
-  const da = toDate(a);
-  const db = toDate(b);
-  if (!da || !db) return false;
-  return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate()
-  );
-}
-
-const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-function normalizeKey(raw) {
-  let k = String(raw || "").toLowerCase().normalize("NFKD");
-  k = k.replace(/[’'‘]/g, "").replace(/\s+/g, "");
-  if (k === "ishaa") k = "isha";
-  if (k === "magrib") k = "maghrib";
-  if (["shouruq", "shuruq", "shurooq", "shourouq", "ishraq"].includes(k)) k = "sunrise";
-  if (k.startsWith("jum")) k = "jummah";
-  return k;
-}
-function resolveKey(p) {
-  const base = p?.lookupKey || p?.key || p?.name || "";
-  return normalizeKey(base);
-}
-function resolveEnglishLabel(p, labels) {
-  const key = resolveKey(p);
-  return labels?.[key] ?? (key === "sunrise" ? "Shouruq" : cap(key || p?.name || ""));
-}
-
-/* ---------- UI pieces ---------- */
-
-// Header: 3 equal columns (Salah / Start / Jam’ah)
-const UpcomingHeaderRow = ({ headerSizeClass }) => (
-  <div className="grid grid-cols-3 items-center px-3 py-1.5 uppercase">
-    <div className={["font-sans tracking-wide opacity-70 whitespace-nowrap", headerSizeClass].join(" ")}>
-      Salah
-    </div>
-    <div className={["text-center tabular-nums tracking-normal opacity-70 whitespace-nowrap", headerSizeClass].join(" ")}>
-      Start
-    </div>
-    <div className={["text-right tabular-nums tracking-normal opacity-70 whitespace-nowrap", headerSizeClass].join(" ")}>
-      Jam’ah
-    </div>
-  </div>
-);
-
-// Rows: 3 equal columns (name / start / jam’ah)
-const UpcomingRow = ({ name, start, jamaah, is24Hour, rowSizeClass }) => (
-  <div className="grid grid-cols-3 items-center px-3 py-2 odd:bg-white/[0.03]">
-    <div className={["min-w-0 font-sans font-semibold leading-none whitespace-nowrap overflow-hidden text-ellipsis", rowSizeClass].join(" ")}>
-      {name}
-    </div>
-    <div className={["leading-none text-center whitespace-nowrap", rowSizeClass].join(" ")}>
-      <TimeWithSmallAmPm date={start} is24Hour={is24Hour} />
-    </div>
-    <div className={["leading-none text-right whitespace-nowrap", rowSizeClass].join(" ")}>
-      {jamaah ? <TimeWithSmallAmPm date={jamaah} is24Hour={is24Hour} /> : "—"}
-    </div>
-  </div>
-);
-
-/* ---------- Main component ---------- */
 export default function MobileUpcomingList({
-  theme = {},          // ✅ THEME: bgColor, textColor, border/borderColor, headerSize, rowSize
+  theme = {},
   upcoming = [],
   is24Hour = false,
   todayRef,
   tomorrowRef,
   labels = {},
 }) {
-  const borderClass = theme.border || theme.borderColor || "border-white/10";
-  const bgClass = theme.bgColor || "bg-white/[0.05]";
-  const textClass = theme.textColor || "text-white";
+  const t = {
+    cardBg: theme.bgColor || "bg-white/[0.06]",
+    cardText: theme.textColor || "text-white",
+    cardBorder: theme.border || theme.borderColor || "border-white/10",
+    cardRadius: theme.radius || "rounded-2xl",
 
-  const headerSizeClass = theme.headerSize || "text-sm";
-  const rowSizeClass = theme.rowSize || "text-base";
+    headerBg: theme.headerBgColor || "bg-white/[0.04]",
+    headerText: theme.headerTextColor || "text-white/90",
+    headerBorder: theme.headerBorderColor || "border-white/10",
+    headerSize: theme.headerSize || "text-[14px]",
 
-  // Coerce dates and drop malformed entries
-  const sanitized = (upcoming || [])
-    .map((p) => {
-      const start = toDate(p.start);
-      const jamaah = toDate(p.jamaah);
-      return start ? { ...p, start, jamaah } : null;
-    })
-    .filter(Boolean);
+    rowSize: theme.rowSize || "text-[23px]",     // 🔼 prayer names even bigger
+    timeSize: theme.timeSize || "text-[18px]",   // times
+    suffixSize: theme.suffixSize || "text-[12px]", // am/pm smaller
+    rowPadY: theme.rowPadY || "py-2",
+    gapY: theme.gapY || "divide-y divide-white/10",
+    labelWeight: theme.labelWeight || "font-bold",
+    timeWeight: theme.timeWeight || "font-normal",
+    separatorSize: theme.separatorSize || "text-[15px] font-semibold uppercase tracking-wide",
+  };
 
-  const todayItems = sanitized.filter((p) => sameYMD(p.start, toDate(todayRef)));
-  const tomorrowItems = sanitized.filter((p) => sameYMD(p.start, toDate(tomorrowRef)));
+  const rows = useMemo(() => {
+    let seenTomorrow = false;
+    return (upcoming || []).map((p, idx) => {
+      const key = p.lookupKey || p.key || p.name || `row-${idx}`;
+      const label =
+        labels[key] ||
+        labels[(key || "").toLowerCase()] ||
+        toTitle(key || "—");
+
+      const isTomorrow =
+        tomorrowRef && p.start && new Date(p.start).getDate() === tomorrowRef.getDate();
+
+      let separator = null;
+      if (isTomorrow && !seenTomorrow) {
+        separator = "Tomorrow";
+        seenTomorrow = true;
+      }
+
+      return {
+        id: `${key}-${idx}`,
+        label,
+        start: p.start || null,
+        jamaah: p.jamaah || p.iqamah || null,
+        separator,
+      };
+    });
+  }, [upcoming, labels, tomorrowRef]);
 
   return (
-    <section className="mt-2">
-      <div className={["rounded-2xl border", borderClass, bgClass, textClass].join(" ")}>
-        <UpcomingHeaderRow headerSizeClass={headerSizeClass} />
-        <div className="divide-y divide-white/10">
-          {todayItems.length > 0 &&
-            todayItems.map((p, i) => (
-              <UpcomingRow
-                key={`t-${p.key || p.lookupKey || p.name || i}-${i}`}
-                name={resolveEnglishLabel(p, labels)}
-                start={p.start}
-                jamaah={p.jamaah}
-                is24Hour={is24Hour}
-                rowSizeClass={rowSizeClass}
-              />
-            ))}
+    <section
+      className={[
+        "border shadow-sm px-3 pt-3 pb-2",
+        t.cardBg,
+        t.cardText,
+        t.cardBorder,
+        t.cardRadius,
+      ].join(" ")}
+    >
+      {/* Header */}
+      <div
+        className={[
+          "grid grid-cols-3 items-center rounded-xl",
+          "px-3 py-2 mb-2",
+          t.headerBg,
+          t.headerText,
+          t.headerSize,
+        ].join(" ")}
+        style={{ lineHeight: 1.05 }}
+      >
+        <div className="truncate text-left">Salah</div>
+        <div className="truncate text-center">Start</div>
+        <div className="truncate text-center">Jama’ah</div>
+      </div>
 
-          {tomorrowItems.length > 0 && (
-            <>
-              <div className="flex items-center gap-3 px-3 my-1.5">
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                <span className="px-2 py-[3px] text-[11px] rounded-full bg-white/10 border border-white/15 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-                  Tomorrow
-                </span>
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      {/* Rows */}
+      <div className={t.gapY}>
+        {rows.map((r) => (
+          <React.Fragment key={r.id}>
+            {r.separator && (
+              <div className={`text-center mt-2 mb-1 ${t.separatorSize}`}>
+                {r.separator}
               </div>
-              {tomorrowItems.map((p, i) => (
-                <UpcomingRow
-                  key={`tm-${p.key || p.lookupKey || p.name || i}-${i}`}
-                  name={resolveEnglishLabel(p, labels)}
-                  start={p.start}
-                  jamaah={p.jamaah}
-                  is24Hour={is24Hour}
-                  rowSizeClass={rowSizeClass}
-                />
-              ))}
-            </>
-          )}
+            )}
+            <div
+              className={[
+                "grid grid-cols-3 items-center px-3",
+                t.rowPadY,
+                t.rowSize,
+              ].join(" ")}
+              style={{ lineHeight: 1.2 }}
+            >
+              {/* Prayer Name - left, bigger, bold */}
+              <div
+                className={[
+                  "truncate text-left",
+                  t.labelWeight,
+                ].join(" ")}
+                title={r.label}
+              >
+                {r.label}
+              </div>
 
-          {!todayItems.length && !tomorrowItems.length && (
-            <div className="px-3 py-4 text-sm opacity-70">No upcoming times.</div>
-          )}
-        </div>
-        <div className="h-2" />
+              {/* Start Time */}
+              <TimeCell time={r.start} is24Hour={is24Hour} t={t} />
+
+              {/* Jama'ah Time */}
+              <TimeCell time={r.jamaah} is24Hour={is24Hour} t={t} />
+            </div>
+          </React.Fragment>
+        ))}
       </div>
     </section>
+  );
+}
+
+function TimeCell({ time, is24Hour, t }) {
+  const { time: main, suffix } = fmtTimeParts(time, is24Hour);
+  return (
+    <div
+      className={[
+        "truncate text-center tabular-nums",
+        t.timeSize,
+        t.timeWeight,
+        "flex justify-center items-baseline gap-1",
+      ].join(" ")}
+      style={{ fontVariantNumeric: "tabular-nums" }}
+    >
+      <span>{main}</span>
+      {suffix && (
+        <span className={t.suffixSize} style={{ lineHeight: 1 }}>
+          {suffix}
+        </span>
+      )}
+    </div>
   );
 }
