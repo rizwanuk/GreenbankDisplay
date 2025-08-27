@@ -378,10 +378,13 @@ export default function MobileScreen() {
     ? settingsRows.find((r) => r?.Group === "meta" && r?.Key === "lastUpdated")
     : null;
   const about = {
-    version: import.meta?.env?.VITE_APP_VERSION || "",
-    timezone: tz,
-    lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
-  };
+  version:
+    import.meta?.env?.VITE_APP_VERSION ||
+    import.meta?.env?.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+    "dev",
+  timezone: tz,
+  lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
+};
 
   // ---------- Settings open/close helpers ----------
   const requestOpenSettings = () => setShowSettings(true);

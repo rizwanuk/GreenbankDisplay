@@ -5,6 +5,11 @@ import path from 'path';
 
 const EXEC_PATH = '/macros/s/AKfycby6WSnTpbeGWBfu_ckjtutNbw12b1SxhmnmZV5Up9tifw26OHummN0FNK395JamPhth-Q/exec';
 
+const pkgVersion = process.env.npm_package_version || '';
+const gitSha = process.env.VERCEL_GIT_COMMIT_SHA
+  ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
+  : '';
+
 export default defineConfig({
   base: '/',
   plugins: [react()],
@@ -18,7 +23,7 @@ export default defineConfig({
         rewrite: (p) => {
           const q = p.indexOf('?');
           const qs = q >= 0 ? p.slice(q) : '';
-          return EXEC_PATH + qs;           // -> /macros/.../exec?code=...
+          return EXEC_PATH + qs;
         },
         headers: {
           accept: 'application/json,text/javascript,*/*;q=0.1',
@@ -36,7 +41,7 @@ export default defineConfig({
     },
   },
   define: {
-    // Expose package.json version to the app
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.npm_package_version),
+    // Expose package version, or fallback to short Git SHA, or 'dev'
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkgVersion || gitSha || 'dev'),
   },
 });
