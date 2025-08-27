@@ -1,3 +1,4 @@
+// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -33,5 +34,9 @@ export default defineConfig({
         embed: path.resolve(__dirname, 'embed.html'),
       },
     },
+  },
+  define: {
+    // Expose package.json version to the app
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.npm_package_version),
   },
 });
