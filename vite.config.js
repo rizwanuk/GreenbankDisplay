@@ -2,10 +2,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { readFileSync } from 'fs';
 
 const EXEC_PATH = '/macros/s/AKfycby6WSnTpbeGWBfu_ckjtutNbw12b1SxhmnmZV5Up9tifw26OHummN0FNK395JamPhth-Q/exec';
 
-const pkgVersion = process.env.npm_package_version || '';
+// Read version straight from package.json (reliable on all CI)
+// Works whether the builder is npm, pnpm, or yarn
+const { version: pkgVersion } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+);
+
+// Short Git SHA if Vercel provides it
 const gitSha = process.env.VERCEL_GIT_COMMIT_SHA
   ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
   : '';
@@ -41,7 +48,7 @@ export default defineConfig({
     },
   },
   define: {
-    // Expose package version, or fallback to short Git SHA, or 'dev'
+    // Always set a non-empty version: package.json → git SHA → 'dev'
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkgVersion || gitSha || 'dev'),
   },
 });

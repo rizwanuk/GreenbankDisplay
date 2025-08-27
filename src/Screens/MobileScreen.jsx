@@ -5,6 +5,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import moment from "moment";
 import momentHijri from "moment-hijri";
 
+// ✅ ensure version shows in dev & prod
+import pkg from "../../package.json";
+
 import usePrayerTimes from "../hooks/usePrayerTimes";
 import useSettings from "../hooks/useSettings";
 import { getEnglishLabels, getArabicLabels } from "../utils/labels";
@@ -373,18 +376,20 @@ export default function MobileScreen() {
       : DEFAULT_I_MONTHS[iMonthIndex0];
   const hijriDateString = `${iDay} ${iMonth} ${iYear} AH`;
 
-  // About info (version from env, timezone, last updated from sheet)
+  // About info (version from env, pkg.json, or git)
   const metaRow = Array.isArray(settingsRows)
     ? settingsRows.find((r) => r?.Group === "meta" && r?.Key === "lastUpdated")
     : null;
+
   const about = {
-  version:
-    import.meta?.env?.VITE_APP_VERSION ||
-    import.meta?.env?.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
-    "dev",
-  timezone: tz,
-  lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
-};
+    version:
+      import.meta?.env?.VITE_APP_VERSION ||
+      (pkg && pkg.version) ||
+      import.meta?.env?.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+      "dev",
+    timezone: tz,
+    lastUpdated: metaRow ? moment(metaRow.Value).format("DD MMM YYYY, HH:mm:ss") : "",
+  };
 
   // ---------- Settings open/close helpers ----------
   const requestOpenSettings = () => setShowSettings(true);
