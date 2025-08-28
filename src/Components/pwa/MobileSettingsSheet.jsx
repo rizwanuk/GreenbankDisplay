@@ -79,7 +79,9 @@ export default function MobileSettingsSheet({
   const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
 
   // ---- Push status (permission + subscription present) ----
-  const [perm, setPerm] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+  const [perm, setPerm] = useState(() =>
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+  );
   const [hasSub, setHasSub] = useState(false);
   const [enabling, setEnabling] = useState(false);
   const [enableMsg, setEnableMsg] = useState("");
@@ -113,15 +115,32 @@ export default function MobileSettingsSheet({
       const res = await enablePush();
       if (res?.ok) {
         setEnableMsg("Notifications enabled ✅");
-      } else if (res?.permission !== "granted") {
-        setEnableMsg("Permission was not granted.");
       } else {
-        setEnableMsg("Could not register for push.");
+        const reason = res?.reason ? ` (${res.reason})` : "";
+        const detail = res?.detail ? ` — ${res.detail}` : "";
+        setEnableMsg(`Could not enable notifications${reason}${detail}`);
       }
     } catch (e) {
-      setEnableMsg(`Could not enable: ${e?.message || e}`);
+      setEnableMsg(`Could not enable notifications — ${e?.message || String(e)}`);
     } finally {
       setEnabling(false);
+      refreshPushState();
+    }
+  };
+
+  const onResetPush = async () => {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        setEnableMsg("Push not supported in this browser/mode.");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+      setEnableMsg("Push registration reset. Tap “Enable notifications” again.");
+    } catch (e) {
+      setEnableMsg(`Reset failed — ${e?.message || String(e)}`);
+    } finally {
       refreshPushState();
     }
   };
@@ -261,14 +280,12 @@ export default function MobileSettingsSheet({
   const [updMsg, setUpdMsg] = useState("");
   const [waitingReg, setWaitingReg] = useState(null);
 
-  // Unified "Check for updates":
-  // 1) Try the helper (auto-applies if an update is available)
-  // 2) If not updated, fall back to a manual check that can show "Update now"
+  // Unified "Check for updates"
   const onCheckForUpdates = async () => {
     setUpdState("checking");
     setUpdMsg("Checking for updates…");
     try {
-      // Attempt helper (will auto-apply & reload if a waiting worker exists)
+      // Attempt helper (auto-applies if an update is available)
       const res = await swCheckForUpdates();
       if (res?.updated) {
         setUpdState("applying");
@@ -348,7 +365,8 @@ export default function MobileSettingsSheet({
 
   if (!open) return null;
 
-  const pushSupported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
+  const pushSupported =
+    typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
 
   return (
     <div className="fixed inset-0 z-[100]">
@@ -414,8 +432,8 @@ export default function MobileSettingsSheet({
               </p>
 
               <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
-                {/* Enable button / status */}
-                <div className="flex items-center justify-between gap-2">
+                {/* Enable / status / reset */}
+                <div className="flex items-center gap-2 flex-wrap justify-between">
                   <div className="text-xs text-white/70">
                     Status:&nbsp;
                     <span className="font-medium">
@@ -431,29 +449,37 @@ export default function MobileSettingsSheet({
                     </span>
                   </div>
 
-                  {pushSupported && perm !== "granted" && (
-                    <button
-                      type="button"
-                      onClick={onEnableNotifications}
-                      disabled={enabling}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
-                    >
-                      {enabling ? "Enabling…" : "Enable notifications"}
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {pushSupported && (
+                      <button
+                        type="button"
+                        onClick={onEnableNotifications}
+                        disabled={enabling}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
+                      >
+                        {enabling
+                          ? "Working…"
+                          : perm === "granted"
+                          ? hasSub
+                            ? "Re-register"
+                            : "Register device"
+                          : "Enable notifications"}
+                      </button>
+                    )}
 
-                  {pushSupported && perm === "granted" && !hasSub && (
-                    <button
-                      type="button"
-                      onClick={onEnableNotifications}
-                      disabled={enabling}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
-                    >
-                      {enabling ? "Registering…" : "Register device"}
-                    </button>
-                  )}
+                    {pushSupported && (
+                      <button
+                        type="button"
+                        onClick={onResetPush}
+                        className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm"
+                      >
+                        Reset push
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {enableMsg && <p className="text-[11px] text-white/60 mt-1">{enableMsg}</p>}
+
+                {enableMsg && <p className="text-[11px] text-white/60 mt-2 break-words">{enableMsg}</p>}
 
                 {/* Existing push controls (sound, vibration etc) */}
                 <div className="mt-3">
