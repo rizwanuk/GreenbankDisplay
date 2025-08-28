@@ -2,6 +2,8 @@
 import webPush from "web-push";
 import { get, put } from "@vercel/blob";
 
+export const config = { runtime: "nodejs20.x" };
+
 const {
   CRON_TOKEN,
   VAPID_PUBLIC_KEY,
@@ -11,13 +13,13 @@ const {
   PUSH_BATCH_LIMIT = "500",
 } = process.env;
 
-function ensureVapid() {
+function setupVapid() {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     throw new Error("VAPID keys missing");
   }
   webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
-ensureVapid();
+setupVapid();
 
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
@@ -32,6 +34,7 @@ async function readJson(key, def = null) {
     const txt = await res.body?.text();
     return txt ? JSON.parse(txt) : def;
   } catch (e) {
+    // 404/403/etc → return default, don't crash
     return def;
   }
 }

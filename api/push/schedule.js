@@ -1,6 +1,8 @@
 // api/push/schedule.js
 import { put } from "@vercel/blob";
 
+export const config = { runtime: "nodejs20.x" };
+
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

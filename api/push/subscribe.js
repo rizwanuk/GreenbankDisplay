@@ -1,6 +1,8 @@
 // api/push/subscribe.js
 import { put, get } from "@vercel/blob";
 
+export const config = { runtime: "nodejs20.x" };
+
 const SUBS_KEY = "push/subscriptions.json";
 
 async function readBody(req) {
@@ -20,7 +22,7 @@ async function readSubs() {
     const txt = await res.body?.text();
     return txt ? JSON.parse(txt) : [];
   } catch (e) {
-    // not found yet or other fetch issue
+    // 404/403/etc → treat as empty list
     return [];
   }
 }
