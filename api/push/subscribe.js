@@ -3,9 +3,7 @@ export const config = { runtime: "nodejs" };
 
 // --- tiny utils ---
 async function readBodyJson(req) {
-  // If Vercel already parsed it:
   if (req.body && typeof req.body === "object") return req.body;
-  // Otherwise read the stream:
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const buf = Buffer.concat(chunks).toString("utf8");
@@ -15,7 +13,7 @@ async function readBodyJson(req) {
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
-    const r = await get(key, { allowPrivate: true });
+    const r = await get(key); // public store → no allowPrivate
     if (r?.body?.text) {
       const txt = await r.body.text();
       return txt ? JSON.parse(txt) : def;
@@ -32,7 +30,7 @@ async function readBlobJson(key, def = null) {
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "private",
+    access: "public",               // ⬅️ public store requires public
     contentType: "application/json",
   });
 }
@@ -56,7 +54,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "invalid_subscription" });
     }
 
-    // Load subs, upsert by endpoint
     const key = "push/subscriptions.json";
     let subs = (await readBlobJson(key, [])) || [];
     if (!Array.isArray(subs)) subs = [];

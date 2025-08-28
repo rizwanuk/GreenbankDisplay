@@ -28,19 +28,17 @@ const titleFor = (ev) =>
 const bodyFor = (ev) =>
   ev.kind === "jamaah" ? "Congregational prayer time." : "Prayer time has started.";
 
-// Robust Blob JSON read (supports body.text() or downloadUrl)
+// ----- Blob JSON (PUBLIC store) -----
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
-    const r = await get(key, { allowPrivate: true });
-
-    // Try body.text() if available
+    const r = await get(key); // public store → no allowPrivate
+    // Try streaming body (node side)
     if (r?.body?.text) {
       const txt = await r.body.text();
       return txt ? JSON.parse(txt) : def;
     }
-
-    // Fallback to downloadUrl/url
+    // Fallback to URL fetch
     const url = r?.downloadUrl || r?.url;
     if (url) {
       const fr = await fetch(url);
@@ -49,13 +47,13 @@ async function readBlobJson(key, def = null) {
     }
     return def;
   } catch {
-    return def; // treat not found/forbidden as default
+    return def; // treat not-found/forbidden as default
   }
 }
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "private",
+    access: "public",                // ✅ PUBLIC store requires "public"
     contentType: "application/json",
   });
 }

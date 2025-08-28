@@ -12,7 +12,7 @@ async function readBodyJson(req) {
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
-    const r = await get(key, { allowPrivate: true });
+    const r = await get(key); // public
     if (r?.body?.text) {
       const txt = await r.body.text();
       return txt ? JSON.parse(txt) : def;
@@ -29,7 +29,7 @@ async function readBlobJson(key, def = null) {
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "private",
+    access: "public",               // ⬅️ public
     contentType: "application/json",
   });
 }

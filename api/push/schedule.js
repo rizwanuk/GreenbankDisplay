@@ -19,7 +19,7 @@ async function readBodyJson(req) {
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "private",
+    access: "public",               // ⬅️ public
     contentType: "application/json",
   });
 }
