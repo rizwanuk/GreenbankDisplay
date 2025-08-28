@@ -1,28 +1,23 @@
 // src/pwa/pushApi.js
-// Client helpers for push notifications (mobile)
+// Client helpers for push notifications (mobile) + schedule posting
 
 function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
 function isStandalone() {
-  // iOS Safari + PWA
   return (
     window.matchMedia?.("(display-mode: standalone)")?.matches ||
-    // legacy iOS
     window.navigator.standalone === true
   );
 }
 
 function urlB64ToUint8Array(base64String) {
-  // Properly pad & convert URL-safe base64
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }
 
 async function getVapidPublicKey() {
@@ -48,7 +43,7 @@ async function postJSON(url, body) {
 
 /**
  * Enable push:
- * - iOS requires PWA (installed to home screen) + iOS 16.4+
+ * - iOS requires PWA (installed to Home Screen) + iOS 16.4+
  * - Permission prompt → subscribe with VAPID → POST to server
  * Returns: { ok, permission, reason?, detail? }
  */
@@ -61,20 +56,16 @@ export async function enablePush() {
       return { ok: false, reason: "no_sw", detail: "Service Worker not supported" };
     }
     if (!("PushManager" in window)) {
-      // This is common on iOS when not installed as PWA
       return { ok: false, reason: "no_pushmanager", detail: "Push not supported in this mode" };
     }
-
-    // iOS: must be installed to Home Screen
     if (isIOS() && !isStandalone()) {
       return {
         ok: false,
         reason: "ios_pwa_required",
-        detail: "On iPhone/iPad, please add to Home Screen and open the app from there.",
+        detail: "On iPhone/iPad, add to Home Screen and open the app from there.",
       };
     }
 
-    // Ask for permission (must be called from a user gesture)
     let perm = Notification.permission;
     if (perm !== "granted") {
       perm = await Notification.requestPermission();
@@ -85,10 +76,9 @@ export async function enablePush() {
 
     const reg = await navigator.serviceWorker.ready;
 
-    // If there is already a subscription, reuse & (re)post it
+    // Reuse existing sub if present
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
-      // Subscribe new
       const publicKey = await getVapidPublicKey();
       const appServerKey = urlB64ToUint8Array(publicKey);
       try {
@@ -97,21 +87,14 @@ export async function enablePush() {
           applicationServerKey: appServerKey,
         });
       } catch (e) {
-        // Some browsers keep a broken sub; try to recover by cleaning any existing one
         try {
           const existing = await reg.pushManager.getSubscription();
           if (existing) await existing.unsubscribe();
         } catch {}
-        return {
-          ok: false,
-          permission: perm,
-          reason: "subscribe_failed",
-          detail: e?.message || String(e),
-        };
+        return { ok: false, permission: perm, reason: "subscribe_failed", detail: e?.message || String(e) };
       }
     }
 
-    // Post to server
     const resp = await postJSON("/api/push/subscribe", { subscription: sub.toJSON() });
     if (!resp.ok) {
       return {
@@ -140,14 +123,26 @@ export async function disablePush() {
   }
 }
 
-// You already have postSchedule() elsewhere; leaving it as-is.
+/** Keep for compatibility: (re)post current subscription if present */
 export async function postSubscription() {
-  // kept for backwards-compat if other code calls it, but enablePush now posts directly.
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return false;
     const resp = await postJSON("/api/push/subscribe", { subscription: sub.toJSON() });
+    return !!resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Needed by MobileScreen.jsx: post today's schedule entries */
+export async function postSchedule(entries, dateKey) {
+  try {
+    const resp = await postJSON("/api/push/schedule", {
+      entries: Array.isArray(entries) ? entries : [],
+      dateKey: dateKey || undefined,
+    });
     return !!resp.ok;
   } catch {
     return false;
