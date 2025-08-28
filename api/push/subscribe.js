@@ -1,57 +1,77 @@
 // api/push/subscribe.js
-import { put, get } from "@vercel/blob";
-
 export const config = { runtime: "nodejs" };
 
-const SUBS_KEY = "push/subscriptions.json";
-
-async function readBody(req) {
-  if (req.body) return req.body;
-  const str = await new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c) => (data += c));
-    req.on("end", () => resolve(data));
-    req.on("error", reject);
-  });
-  try { return JSON.parse(str || "{}"); } catch { return {}; }
+// --- tiny utils ---
+async function readBodyJson(req) {
+  // If Vercel already parsed it:
+  if (req.body && typeof req.body === "object") return req.body;
+  // Otherwise read the stream:
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const buf = Buffer.concat(chunks).toString("utf8");
+  try { return JSON.parse(buf || "{}"); } catch { return {}; }
 }
 
-async function readSubs() {
+async function readBlobJson(key, def = null) {
   try {
-    const res = await get(SUBS_KEY, { allowPrivate: true });
-    const txt = await res.body?.text();
-    return txt ? JSON.parse(txt) : [];
+    const { get } = await import("@vercel/blob");
+    const r = await get(key, { allowPrivate: true });
+    if (r?.body?.text) {
+      const txt = await r.body.text();
+      return txt ? JSON.parse(txt) : def;
+    }
+    const url = r?.downloadUrl || r?.url;
+    if (!url) return def;
+    const fr = await fetch(url);
+    const txt = await fr.text();
+    return txt ? JSON.parse(txt) : def;
   } catch {
-    return [];
+    return def;
   }
 }
-
-async function writeSubs(list) {
-  await put(SUBS_KEY, JSON.stringify(list), {
+async function writeBlobJson(key, data) {
+  const { put } = await import("@vercel/blob");
+  return put(key, JSON.stringify(data), {
     access: "private",
     contentType: "application/json",
   });
 }
 
+function cors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 export default async function handler(req, res) {
+  cors(res);
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "method_not_allowed" });
+
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ ok: false, error: "Method not allowed" });
-    }
-    const body = await readBody(req);
+    const body = await readBodyJson(req);
     const sub = body?.subscription || body;
+
     if (!sub?.endpoint) {
-      return res.status(400).json({ ok: false, error: "Invalid subscription" });
+      return res.status(400).json({ ok: false, error: "invalid_subscription" });
     }
 
-    const subs = await readSubs();
-    const map = new Map(subs.map((s) => [s.endpoint, s]));
-    map.set(sub.endpoint, sub); // upsert
-    await writeSubs(Array.from(map.values()));
+    // Load subs, upsert by endpoint
+    const key = "push/subscriptions.json";
+    let subs = (await readBlobJson(key, [])) || [];
+    if (!Array.isArray(subs)) subs = [];
 
-    return res.json({ ok: true, count: map.size });
+    const idx = subs.findIndex((s) => s?.endpoint === sub.endpoint);
+    const nowIso = new Date().toISOString();
+    const record = { ...sub, updatedAt: nowIso };
+
+    if (idx >= 0) subs[idx] = record;
+    else subs.push(record);
+
+    await writeBlobJson(key, subs);
+
+    return res.json({ ok: true, count: subs.length });
   } catch (e) {
-    console.error("subscribe error:", e);
-    return res.status(500).json({ ok: false, error: "subscribe failed" });
+    return res.status(500).json({ ok: false, error: e?.message || "subscribe_failed" });
   }
 }

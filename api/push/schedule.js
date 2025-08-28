@@ -1,6 +1,4 @@
 // api/push/schedule.js
-import { put } from "@vercel/blob";
-
 export const config = { runtime: "nodejs" };
 
 function dayKey(d = new Date()) {
@@ -10,38 +8,32 @@ function dayKey(d = new Date()) {
   return `${y}-${m}-${dd}`;
 }
 
-async function readBody(req) {
-  if (req.body) return req.body;
-  const str = await new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c) => (data += c));
-    req.on("end", () => resolve(data));
-    req.on("error", reject);
+async function readBodyJson(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const buf = Buffer.concat(chunks).toString("utf8");
+  try { return JSON.parse(buf || "{}"); } catch { return {}; }
+}
+
+async function writeBlobJson(key, data) {
+  const { put } = await import("@vercel/blob");
+  return put(key, JSON.stringify(data), {
+    access: "private",
+    contentType: "application/json",
   });
-  try { return JSON.parse(str || "{}"); } catch { return {}; }
 }
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "method_not_allowed" });
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ ok: false, error: "Method not allowed" });
-    }
+    const body = await readBodyJson(req);
+    const entries = Array.isArray(body?.entries) ? body.entries : [];
+    const dk = body?.dateKey || dayKey();
 
-    const { entries, dateKey } = await readBody(req);
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return res.status(400).json({ ok: false, error: "No entries" });
-    }
-    const dk = dateKey || dayKey();
-    const key = `push/schedule-${dk}.json`;
-
-    await put(key, JSON.stringify({ dk, entries }), {
-      access: "private",
-      contentType: "application/json",
-    });
-
+    await writeBlobJson(`push/schedule-${dk}.json`, { dk, entries });
     return res.json({ ok: true, dk, count: entries.length });
   } catch (e) {
-    console.error("schedule error:", e);
-    return res.status(500).json({ ok: false, error: "schedule save failed" });
+    return res.status(500).json({ ok: false, error: e?.message || "schedule_failed" });
   }
 }
