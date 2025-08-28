@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "npx --yes vite@5.4.9 build",
+    "dev": "node scripts/generate-version.js && vite",
+    "build": "node scripts/generate-version.js && npx --yes vite@5.4.9 build",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
