@@ -11,6 +11,7 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@vercel/blob": "^1.1.1",
     "@vitejs/plugin-react": "4.3.1",
     "dayjs": "^1.11.9",
     "lucide-react": "^0.536.0",
