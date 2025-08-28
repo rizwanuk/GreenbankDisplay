@@ -1,7 +1,7 @@
 // api/push/subscribe.js
 import { put, get } from "@vercel/blob";
 
-export const config = { runtime: "nodejs20.x" };
+export const config = { runtime: "nodejs" };
 
 const SUBS_KEY = "push/subscriptions.json";
 
@@ -21,8 +21,7 @@ async function readSubs() {
     const res = await get(SUBS_KEY, { allowPrivate: true });
     const txt = await res.body?.text();
     return txt ? JSON.parse(txt) : [];
-  } catch (e) {
-    // 404/403/etc → treat as empty list
+  } catch {
     return [];
   }
 }
@@ -39,7 +38,6 @@ export default async function handler(req, res) {
     if (req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "Method not allowed" });
     }
-
     const body = await readBody(req);
     const sub = body?.subscription || body;
     if (!sub?.endpoint) {

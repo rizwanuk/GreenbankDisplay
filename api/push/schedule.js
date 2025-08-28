@@ -1,7 +1,7 @@
 // api/push/schedule.js
 import { put } from "@vercel/blob";
 
-export const config = { runtime: "nodejs20.x" };
+export const config = { runtime: "nodejs" };
 
 function dayKey(d = new Date()) {
   const y = d.getFullYear();

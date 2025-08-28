@@ -2,7 +2,7 @@
 import webPush from "web-push";
 import { get, put } from "@vercel/blob";
 
-export const config = { runtime: "nodejs20.x" };
+export const config = { runtime: "nodejs" };
 
 const {
   CRON_TOKEN,
@@ -33,8 +33,7 @@ async function readJson(key, def = null) {
     const res = await get(key, { allowPrivate: true });
     const txt = await res.body?.text();
     return txt ? JSON.parse(txt) : def;
-  } catch (e) {
-    // 404/403/etc → return default, don't crash
+  } catch {
     return def;
   }
 }
@@ -59,13 +58,11 @@ const bodyFor = (ev) =>
 
 export default async function handler(req, res) {
   try {
-    // --- Auth ---
     const token = req.query?.token || req.headers["x-cron-token"];
     if (!CRON_TOKEN || token !== CRON_TOKEN) {
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
 
-    // --- Time window ---
     const nowOverride = req.query?.now ? Number(req.query.now) : null;
     const now = Number.isFinite(nowOverride) ? nowOverride : Date.now();
     const tolMs = Math.max(1, parseInt(PUSH_TOLERANCE_MIN, 10)) * 60 * 1000;
