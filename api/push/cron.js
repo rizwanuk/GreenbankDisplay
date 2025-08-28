@@ -8,24 +8,26 @@ const {
   CRON_TOKEN,
   VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY,
-  VAPID_SUBJECT = "mailto:admin@example.com",
+  VAPID_SUBJECT = "mailto:rizwan@greenbankbristol.org",
   PUSH_TOLERANCE_MIN = "3",
   PUSH_BATCH_LIMIT = "500",
 } = process.env;
-
-function setupVapid() {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    throw new Error("VAPID keys missing");
-  }
-  webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
-setupVapid();
 
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+function getQuery(req) {
+  try {
+    const host = req.headers?.host || "localhost";
+    const u = new URL(req.url, `https://${host}`);
+    return Object.fromEntries(u.searchParams.entries());
+  } catch {
+    return {};
+  }
 }
 
 async function readJson(key, def = null) {
@@ -58,13 +60,26 @@ const bodyFor = (ev) =>
 
 export default async function handler(req, res) {
   try {
-    const token = req.query?.token || req.headers["x-cron-token"];
+    // --- Auth (support both header and query, robustly parsed) ---
+    const q = getQuery(req);
+    const hdrToken =
+      req.headers["x-cron-token"] ||
+      req.headers["X-Cron-Token"] ||
+      req.headers["x-cron_token"];
+    const token = q.token || hdrToken;
     if (!CRON_TOKEN || token !== CRON_TOKEN) {
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
 
-    const nowOverride = req.query?.now ? Number(req.query.now) : null;
-    const now = Number.isFinite(nowOverride) ? nowOverride : Date.now();
+    // --- Setup web-push inside try/catch so errors return JSON ---
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      return res.status(500).json({ ok: false, error: "VAPID keys missing" });
+    }
+    webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+    // --- Time window (tolerance) ---
+    const nowParam = Number(q.now);
+    const now = Number.isFinite(nowParam) ? nowParam : Date.now();
     const tolMs = Math.max(1, parseInt(PUSH_TOLERANCE_MIN, 10)) * 60 * 1000;
 
     const dk = dayKey(new Date(now));
@@ -72,10 +87,12 @@ export default async function handler(req, res) {
     const sentKey = `push/sent-${dk}.json`;
     const subsKey = `push/subscriptions.json`;
 
+    // --- Read data (tolerant to 403/404 etc) ---
     const schedule = await readJson(scheduleKey, { dk, entries: [] });
     const subs = await readJson(subsKey, []);
     let sent = (await readJson(sentKey, {})) || {};
 
+    // Quick outs
     if (!Array.isArray(schedule.entries) || schedule.entries.length === 0) {
       return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no schedule" });
     }
@@ -83,6 +100,7 @@ export default async function handler(req, res) {
       return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no subscribers" });
     }
 
+    // --- Determine due events within tolerance window ---
     const windowStart = now - tolMs;
     const windowEnd = now + tolMs;
 
@@ -100,6 +118,7 @@ export default async function handler(req, res) {
       return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no due events" });
     }
 
+    // --- Send notifications ---
     const cap = Math.max(1, parseInt(PUSH_BATCH_LIMIT, 10));
     let sentCount = 0;
     const errors = [];
@@ -126,7 +145,12 @@ export default async function handler(req, res) {
       sentCount += 1;
     }
 
-    await writeJson(sentKey, sent);
+    // Persist sent markers (if Blob write is blocked, we still return ok and log server-side)
+    try {
+      await writeJson(sentKey, sent);
+    } catch (e) {
+      console.error("sent write failed (continuing):", e?.message || e);
+    }
 
     return res.json({ ok: true, dk, checked: due.length, sentCount, errors });
   } catch (e) {
