@@ -7,11 +7,17 @@ const {
   VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY,
   VAPID_SUBJECT = "mailto:admin@example.com",
-  PUSH_TOLERANCE_MIN = "3",    // minutes window to catch times
-  PUSH_BATCH_LIMIT = "500"     // safety cap
+  PUSH_TOLERANCE_MIN = "3",
+  PUSH_BATCH_LIMIT = "500",
 } = process.env;
 
-webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+function ensureVapid() {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    throw new Error("VAPID keys missing");
+  }
+  webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+ensureVapid();
 
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
@@ -25,7 +31,7 @@ async function readJson(key, def = null) {
     const res = await get(key, { allowPrivate: true });
     const txt = await res.body?.text();
     return txt ? JSON.parse(txt) : def;
-  } catch {
+  } catch (e) {
     return def;
   }
 }
@@ -36,116 +42,95 @@ async function writeJson(key, data) {
   });
 }
 
-function within(now, target, tolMs) {
-  return Math.abs(target - now) <= tolMs;
-}
-
 function makeEventsFromEntry(e) {
-  // Creates normalized “events” so we can notify for start and jamaah separately
   const out = [];
-  if (Number.isFinite(e.startAt)) {
-    out.push({ kind: "start", at: e.startAt, prayer: e.prayer, url: e.url });
-  }
-  if (Number.isFinite(e.jamaahAt)) {
-    out.push({ kind: "jamaah", at: e.jamaahAt, prayer: e.prayer, url: e.url });
-  }
+  if (Number.isFinite(e.startAt)) out.push({ kind: "start", at: e.startAt, prayer: e.prayer, url: e.url });
+  if (Number.isFinite(e.jamaahAt)) out.push({ kind: "jamaah", at: e.jamaahAt, prayer: e.prayer, url: e.url });
   return out;
 }
 
-function titleFor(ev) {
-  const p = ev.prayer?.toUpperCase?.() || ev.prayer || "Prayer";
-  return ev.kind === "jamaah" ? `${p} Jama'ah` : `${p} Start`;
-}
-function bodyFor(ev) {
-  return ev.kind === "jamaah" ? "Congregational prayer time." : "Prayer time has started.";
-}
+const titleFor = (ev) =>
+  ev.kind === "jamaah" ? `${(ev.prayer || "").toUpperCase()} Jama'ah` : `${(ev.prayer || "").toUpperCase()} Start`;
+const bodyFor = (ev) =>
+  ev.kind === "jamaah" ? "Congregational prayer time." : "Prayer time has started.";
 
 export default async function handler(req, res) {
-  // --- Security: token required ---
-  const token = req.query?.token || req.headers["x-cron-token"];
-  if (!CRON_TOKEN || token !== CRON_TOKEN) {
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  }
+  try {
+    // --- Auth ---
+    const token = req.query?.token || req.headers["x-cron-token"];
+    if (!CRON_TOKEN || token !== CRON_TOKEN) {
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
 
-  // --- Time window (± tolerance) ---
-  const nowOverride = req.query?.now ? Number(req.query.now) : null; // for testing
-  const now = Number.isFinite(nowOverride) ? nowOverride : Date.now();
-  const tolMs = Math.max(1, parseInt(PUSH_TOLERANCE_MIN, 10)) * 60 * 1000;
+    // --- Time window ---
+    const nowOverride = req.query?.now ? Number(req.query.now) : null;
+    const now = Number.isFinite(nowOverride) ? nowOverride : Date.now();
+    const tolMs = Math.max(1, parseInt(PUSH_TOLERANCE_MIN, 10)) * 60 * 1000;
 
-  const dk = dayKey(new Date(now));
-  const scheduleKey = `push/schedule-${dk}.json`;
-  const sentKey = `push/sent-${dk}.json`;
-  const subsKey = `push/subscriptions.json`;
+    const dk = dayKey(new Date(now));
+    const scheduleKey = `push/schedule-${dk}.json`;
+    const sentKey = `push/sent-${dk}.json`;
+    const subsKey = `push/subscriptions.json`;
 
-  // Load schedule + subscriptions + sent-log
-  const schedule = await readJson(scheduleKey, { dk, entries: [] });
-  const subs = await readJson(subsKey, []);
-  let sent = (await readJson(sentKey, {})) || {};
+    const schedule = await readJson(scheduleKey, { dk, entries: [] });
+    const subs = await readJson(subsKey, []);
+    let sent = (await readJson(sentKey, {})) || {};
 
-  if (!Array.isArray(schedule.entries) || schedule.entries.length === 0) {
-    return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no schedule" });
-  }
-  if (!Array.isArray(subs) || subs.length === 0) {
-    return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no subscribers" });
-  }
+    if (!Array.isArray(schedule.entries) || schedule.entries.length === 0) {
+      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no schedule" });
+    }
+    if (!Array.isArray(subs) || subs.length === 0) {
+      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no subscribers" });
+    }
 
-  // Build due events (within tolerance window)
-  const windowStart = now - tolMs;
-  const windowEnd = now + tolMs;
+    const windowStart = now - tolMs;
+    const windowEnd = now + tolMs;
 
-  const due = [];
-  for (const entry of schedule.entries) {
-    for (const ev of makeEventsFromEntry(entry)) {
-      if (ev.at >= windowStart && ev.at <= windowEnd) {
-        const id = `${dk}:${ev.prayer}:${ev.kind}:${ev.at}`;
-        if (!sent[id]) {
-          due.push({ ...ev, id });
+    const due = [];
+    for (const entry of schedule.entries) {
+      for (const ev of makeEventsFromEntry(entry)) {
+        if (ev.at >= windowStart && ev.at <= windowEnd) {
+          const id = `${dk}:${ev.prayer}:${ev.kind}:${ev.at}`;
+          if (!sent[id]) due.push({ ...ev, id });
         }
       }
     }
+
+    if (due.length === 0) {
+      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no due events" });
+    }
+
+    const cap = Math.max(1, parseInt(PUSH_BATCH_LIMIT, 10));
+    let sentCount = 0;
+    const errors = [];
+
+    for (const ev of due) {
+      const payload = JSON.stringify({
+        title: titleFor(ev),
+        body: bodyFor(ev),
+        url: ev.url || "/mobile/",
+        tag: ev.id,
+      });
+
+      await Promise.all(
+        subs.slice(0, cap).map(async (sub) => {
+          try {
+            await webPush.sendNotification(sub, payload);
+          } catch (err) {
+            errors.push({ endpoint: sub?.endpoint, code: err?.statusCode, msg: err?.message });
+          }
+        })
+      );
+
+      sent[ev.id] = true;
+      sentCount += 1;
+    }
+
+    await writeJson(sentKey, sent);
+
+    return res.json({ ok: true, dk, checked: due.length, sentCount, errors });
+  } catch (e) {
+    console.error("cron error:", e);
+    return res.status(500).json({ ok: false, error: "cron failed" });
   }
-
-  if (due.length === 0) {
-    return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no due events" });
-  }
-
-  // Cap notifications to avoid overload
-  const cap = Math.max(1, parseInt(PUSH_BATCH_LIMIT, 10));
-  let sentCount = 0;
-  const errors = [];
-
-  for (const ev of due) {
-    const payload = JSON.stringify({
-      title: titleFor(ev),
-      body: bodyFor(ev),
-      url: ev.url || "/mobile/",
-      tag: ev.id, // dedupe tag
-    });
-
-    // Send to all subscribers
-    await Promise.all(
-      subs.slice(0, cap).map(async (sub) => {
-        try {
-          await webPush.sendNotification(sub, payload);
-        } catch (err) {
-          // Collect errors but continue; you can later prune gone subscribers on 410/404
-          errors.push({ endpoint: sub?.endpoint, code: err?.statusCode, msg: err?.message });
-        }
-      })
-    );
-
-    sent[ev.id] = true;
-    sentCount += 1;
-  }
-
-  // Persist sent-log
-  await writeJson(sentKey, sent);
-
-  res.json({
-    ok: true,
-    dk,
-    checked: due.length,
-    sentCount,
-    errors,
-  });
 }

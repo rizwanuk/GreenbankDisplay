@@ -3,15 +3,28 @@ import { put, get } from "@vercel/blob";
 
 const SUBS_KEY = "push/subscriptions.json";
 
+async function readBody(req) {
+  if (req.body) return req.body;
+  const str = await new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (c) => (data += c));
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+  try { return JSON.parse(str || "{}"); } catch { return {}; }
+}
+
 async function readSubs() {
   try {
     const res = await get(SUBS_KEY, { allowPrivate: true });
-    const text = await res.body?.text();
-    return text ? JSON.parse(text) : [];
-  } catch {
+    const txt = await res.body?.text();
+    return txt ? JSON.parse(txt) : [];
+  } catch (e) {
+    // not found yet or other fetch issue
     return [];
   }
 }
+
 async function writeSubs(list) {
   await put(SUBS_KEY, JSON.stringify(list), {
     access: "private",
@@ -20,18 +33,25 @@ async function writeSubs(list) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
   try {
-    const sub = req.body?.subscription || req.body; // allow raw subscription
-    if (!sub?.endpoint) return res.status(400).json({ ok: false, error: "Invalid subscription" });
+    if (req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "Method not allowed" });
+    }
+
+    const body = await readBody(req);
+    const sub = body?.subscription || body;
+    if (!sub?.endpoint) {
+      return res.status(400).json({ ok: false, error: "Invalid subscription" });
+    }
 
     const subs = await readSubs();
     const map = new Map(subs.map((s) => [s.endpoint, s]));
     map.set(sub.endpoint, sub); // upsert
     await writeSubs(Array.from(map.values()));
 
-    res.json({ ok: true, count: map.size });
+    return res.json({ ok: true, count: map.size });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e?.message || "subscribe failed" });
+    console.error("subscribe error:", e);
+    return res.status(500).json({ ok: false, error: "subscribe failed" });
   }
 }
