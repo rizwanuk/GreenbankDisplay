@@ -1,95 +1,96 @@
 // src/pwa/pushApi.js
 
-// Optional: configure a custom API base (defaults to /api)
-const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE) || "/api";
-
-/** Small helper for JSON POSTs */
-async function postJSON(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
+// --- tiny helpers -----------------------------------------------------------
+async function jsonFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    method: "GET",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {}),
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`POST ${path} failed: ${res.status} ${txt}`);
+    const msg = data?.error || res.statusText || "Request failed";
+    throw new Error(`${res.status} ${msg}`);
   }
-  return res.json().catch(() => ({}));
+  return data;
 }
 
-/** Get any controlling service worker registration */
-async function getRegistration() {
-  if (!("serviceWorker" in navigator)) return null;
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+// --- endpoints ---------------------------------------------------------------
+export async function getVapidPublicKey() {
+  const { publicKey } = await jsonFetch("/api/push/vapid");
+  if (!publicKey) throw new Error("No VAPID public key");
+  return publicKey;
+}
+
+// Called by your MobileScreen effect once per day (already wired)
+export async function postSchedule(entries, dateKey) {
   try {
-    return await navigator.serviceWorker.ready;
-  } catch {
-    // Fall back to any active registration
-    const all = await navigator.serviceWorker.getRegistrations().catch(() => []);
-    return all.find((r) => r.active) || null;
+    await jsonFetch("/api/push/schedule", {
+      method: "POST",
+      body: { entries, dateKey },
+    });
+    return true;
+  } catch (e) {
+    console.warn("postSchedule failed:", e?.message || e);
+    return false;
   }
 }
 
-/** Read the current push subscription (if any) */
-async function getSubscription() {
-  const reg = await getRegistration();
-  const sub = await reg?.pushManager?.getSubscription?.();
-  return sub || null;
-}
-
-/**
- * Send (or refresh) the user's push subscription to the server.
- * If you already have the subscription object, you can pass it in;
- * otherwise this will read it from the SW.
- */
+// Called after we obtain/refresh a PushSubscription
 export async function postSubscription(subscription) {
-  const sub = subscription || (await getSubscription());
-  if (!sub) return false;
-
-  // Include a tiny bit of context that can help your server
-  const ctx = {
-    ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
-    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London",
-  };
-
-  await postJSON("/push/subscribe", { ...sub.toJSON(), ctx });
-  return true;
+  try {
+    await jsonFetch("/api/push/subscribe", {
+      method: "POST",
+      body: { subscription },
+    });
+    return true;
+  } catch (e) {
+    console.warn("postSubscription failed:", e?.message || e);
+    return false;
+  }
 }
 
-/** Remove a subscription server-side (not used by MobileScreen, here for completeness) */
-export async function postUnsubscribe(subscription) {
-  const sub = subscription || (await getSubscription());
-  if (!sub) return false;
-  await postJSON("/push/unsubscribe", { endpoint: sub.endpoint });
-  return true;
+// Ensure we have a PushSubscription in the browser for the current SW reg
+export async function ensurePushSubscription(reg) {
+  // 1) permission
+  let permission = Notification.permission;
+  if (permission === "default") {
+    permission = await Notification.requestPermission();
+  }
+  if (permission !== "granted") {
+    return { ok: false, permission, subscription: null };
+  }
+
+  // 2) existing or create
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    const publicKey = await getVapidPublicKey();
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+  }
+
+  // 3) post to server
+  const ok = await postSubscription(sub);
+  return { ok, permission: "granted", subscription: sub };
 }
 
-/**
- * Post today's prayer schedule so your server can queue background notifications.
- * `entries` should be an array like:
- *   [{ prayer: "fajr", startAt: <ms>, jamaahAt: <ms|null>, url: "/mobile/" }, ...]
- * `stamp` is a day key like "2025-08-24" so we don't re-send twice.
- */
-export async function postSchedule(entries, stamp) {
-  if (!Array.isArray(entries) || entries.length === 0) return false;
-
-  const payload = {
-    stamp,               // e.g. 2025-08-24
-    entries,             // start/jamaah timestamps (ms since epoch)
-    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London",
-    ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
-  };
-
-  await postJSON("/push/schedule", payload);
-  return true;
-}
-
-/**
- * Optional: persist user notification preferences on the server.
- * Example `prefs`:
- *   { startEnabled: true, jamaahEnabled: true, minutesBeforeJamaah: 10, categories: ["adhan","events"] }
- */
-export async function postPreferences(prefs) {
-  await postJSON("/push/preferences", prefs || {});
-  return true;
+// Convenience: ask SW, ensure sub, post to server
+export async function enablePush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    throw new Error("Push not supported on this device/browser.");
+  }
+  const reg = await navigator.serviceWorker.ready;
+  return ensurePushSubscription(reg);
 }

@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import PushControls from "./PushControls";
 import useInstallPrompt from "../../hooks/useInstallPrompt";
 import { checkForUpdates as swCheckForUpdates, applySWUpdate } from "../../pwa/registerMobileSW";
+import { enablePush } from "../../pwa/pushApi";
 
 /** Accessible, full-row clickable checkbox with a visible tick */
 function CheckRow({ id, label, checked, onChange, hint }) {
@@ -77,6 +78,54 @@ export default function MobileSettingsSheet({
   // Install app (PWA) — optional card
   const { canInstallMenu, install, installed, isIOS, isIOSSafari } = useInstallPrompt();
 
+  // ---- Push status (permission + subscription present) ----
+  const [perm, setPerm] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+  const [hasSub, setHasSub] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+  const [enableMsg, setEnableMsg] = useState("");
+
+  async function refreshPushState() {
+    try {
+      setPerm(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
+      if (!("serviceWorker" in navigator)) {
+        setHasSub(false);
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setHasSub(!!sub);
+    } catch {
+      setHasSub(false);
+    }
+  }
+  useEffect(() => {
+    refreshPushState();
+    const onVis = () => refreshPushState();
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onEnableNotifications = async () => {
+    setEnabling(true);
+    setEnableMsg("");
+    try {
+      const res = await enablePush();
+      if (res?.ok) {
+        setEnableMsg("Notifications enabled ✅");
+      } else if (res?.permission !== "granted") {
+        setEnableMsg("Permission was not granted.");
+      } else {
+        setEnableMsg("Could not register for push.");
+      }
+    } catch (e) {
+      setEnableMsg(`Could not enable: ${e?.message || e}`);
+    } finally {
+      setEnabling(false);
+      refreshPushState();
+    }
+  };
+
   // Categories persistence
   const [cats, setCats] = useState(() => {
     try {
@@ -145,6 +194,13 @@ export default function MobileSettingsSheet({
   // 🔔 Test notification (local via SW)
   const sendTestNotification = async () => {
     try {
+      if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+        const p = await Notification.requestPermission();
+        if (p !== "granted") {
+          alert("Please allow notifications first.");
+          return;
+        }
+      }
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification("Greenbank Masjid", {
         body: "This is a test notification.",
@@ -292,14 +348,12 @@ export default function MobileSettingsSheet({
 
   if (!open) return null;
 
+  const pushSupported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
+
   return (
     <div className="fixed inset-0 z-[100]">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-        aria-label="Close settings"
-      />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-label="Close settings" />
       {/* Sheet (mobile-optimised width, sticky header, scrollable content) */}
       <div className="absolute inset-x-0 bottom-0 text-white border-t border-white/10 shadow-2xl bg-transparent">
         <div className="mx-auto w-full max-w-[420px] rounded-t-2xl bg-[#0b0f1a]">
@@ -360,7 +414,52 @@ export default function MobileSettingsSheet({
               </p>
 
               <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
-                <PushControls debug={false} />
+                {/* Enable button / status */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-white/70">
+                    Status:&nbsp;
+                    <span className="font-medium">
+                      {!pushSupported
+                        ? "Not supported"
+                        : perm === "granted"
+                        ? hasSub
+                          ? "Enabled"
+                          : "Granted (no subscription)"
+                        : perm === "denied"
+                        ? "Denied"
+                        : "Not enabled"}
+                    </span>
+                  </div>
+
+                  {pushSupported && perm !== "granted" && (
+                    <button
+                      type="button"
+                      onClick={onEnableNotifications}
+                      disabled={enabling}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
+                    >
+                      {enabling ? "Enabling…" : "Enable notifications"}
+                    </button>
+                  )}
+
+                  {pushSupported && perm === "granted" && !hasSub && (
+                    <button
+                      type="button"
+                      onClick={onEnableNotifications}
+                      disabled={enabling}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-sm"
+                    >
+                      {enabling ? "Registering…" : "Register device"}
+                    </button>
+                  )}
+                </div>
+                {enableMsg && <p className="text-[11px] text-white/60 mt-1">{enableMsg}</p>}
+
+                {/* Existing push controls (sound, vibration etc) */}
+                <div className="mt-3">
+                  <PushControls debug={false} />
+                </div>
+
                 <div className="mt-2">
                   <button
                     type="button"
@@ -425,9 +524,7 @@ export default function MobileSettingsSheet({
                     onChange={(v) => toggleCat(c.key, v)}
                   />
                 ))}
-                <p className="text-xs text-white/50 mt-1">
-                  Your selections are saved on this device.
-                </p>
+                <p className="text-xs text-white/50 mt-1">Your selections are saved on this device.</p>
               </div>
             </section>
 
@@ -453,9 +550,7 @@ export default function MobileSettingsSheet({
                     ))
                   )}
                 </select>
-                <p className="text-xs text-white/50 mt-1">
-                  Saved to this device and applied immediately.
-                </p>
+                <p className="text-xs text-white/50 mt-1">Saved to this device and applied immediately.</p>
               </div>
             </section>
 
