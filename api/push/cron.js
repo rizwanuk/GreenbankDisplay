@@ -1,4 +1,4 @@
-// api/push/cron.js
+// api/push/cron.js (DIAGNOSTIC VERSION)
 import webPush from "web-push";
 import { get, put } from "@vercel/blob";
 
@@ -8,17 +8,9 @@ const {
   CRON_TOKEN,
   VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY,
-  VAPID_SUBJECT = "mailto:rizwan@greenbankbristol.org",
+  VAPID_SUBJECT = "mailto:admin@example.com",
   PUSH_TOLERANCE_MIN = "3",
-  PUSH_BATCH_LIMIT = "500",
 } = process.env;
-
-function dayKey(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
 
 function getQuery(req) {
   try {
@@ -30,131 +22,98 @@ function getQuery(req) {
   }
 }
 
-async function readJson(key, def = null) {
-  try {
-    const res = await get(key, { allowPrivate: true });
-    const txt = await res.body?.text();
-    return txt ? JSON.parse(txt) : def;
-  } catch {
-    return def;
-  }
-}
-async function writeJson(key, data) {
-  await put(key, JSON.stringify(data), {
-    access: "private",
-    contentType: "application/json",
-  });
-}
-
-function makeEventsFromEntry(e) {
-  const out = [];
-  if (Number.isFinite(e.startAt)) out.push({ kind: "start", at: e.startAt, prayer: e.prayer, url: e.url });
-  if (Number.isFinite(e.jamaahAt)) out.push({ kind: "jamaah", at: e.jamaahAt, prayer: e.prayer, url: e.url });
-  return out;
-}
-
-const titleFor = (ev) =>
-  ev.kind === "jamaah" ? `${(ev.prayer || "").toUpperCase()} Jama'ah` : `${(ev.prayer || "").toUpperCase()} Start`;
-const bodyFor = (ev) =>
-  ev.kind === "jamaah" ? "Congregational prayer time." : "Prayer time has started.";
-
 export default async function handler(req, res) {
+  const diag = {
+    ok: false,
+    step: "start",
+    env: {
+      hasCronToken: !!CRON_TOKEN,
+      hasVapidPub: !!VAPID_PUBLIC_KEY,
+      hasVapidPriv: !!VAPID_PRIVATE_KEY,
+      tolMin: PUSH_TOLERANCE_MIN,
+    },
+    query: {},
+    auth: {},
+    vapidSetup: null,
+    blob: {
+      canGetSubs: null,
+      getSubsError: null,
+      canPutDiag: null,
+      putDiagError: null,
+    },
+  };
+
   try {
-    // --- Auth (support both header and query, robustly parsed) ---
+    // Parse query + auth
     const q = getQuery(req);
+    diag.query = q;
     const hdrToken =
       req.headers["x-cron-token"] ||
       req.headers["X-Cron-Token"] ||
       req.headers["x-cron_token"];
     const token = q.token || hdrToken;
-    if (!CRON_TOKEN || token !== CRON_TOKEN) {
-      return res.status(401).json({ ok: false, error: "unauthorized" });
+    diag.auth = {
+      provided: !!token,
+      matches: !!CRON_TOKEN && token === CRON_TOKEN,
+    };
+    if (!CRON_TOKEN) {
+      diag.step = "missing-cron-token-env";
+      return res.status(500).json(diag);
+    }
+    if (token !== CRON_TOKEN) {
+      diag.step = "unauthorized";
+      return res.status(401).json(diag);
     }
 
-    // --- Setup web-push inside try/catch so errors return JSON ---
+    // VAPID setup
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      return res.status(500).json({ ok: false, error: "VAPID keys missing" });
+      diag.vapidSetup = "missing-vapid-keys";
+      diag.step = "vapid-missing";
+      return res.status(500).json(diag);
     }
-    webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-
-    // --- Time window (tolerance) ---
-    const nowParam = Number(q.now);
-    const now = Number.isFinite(nowParam) ? nowParam : Date.now();
-    const tolMs = Math.max(1, parseInt(PUSH_TOLERANCE_MIN, 10)) * 60 * 1000;
-
-    const dk = dayKey(new Date(now));
-    const scheduleKey = `push/schedule-${dk}.json`;
-    const sentKey = `push/sent-${dk}.json`;
-    const subsKey = `push/subscriptions.json`;
-
-    // --- Read data (tolerant to 403/404 etc) ---
-    const schedule = await readJson(scheduleKey, { dk, entries: [] });
-    const subs = await readJson(subsKey, []);
-    let sent = (await readJson(sentKey, {})) || {};
-
-    // Quick outs
-    if (!Array.isArray(schedule.entries) || schedule.entries.length === 0) {
-      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no schedule" });
-    }
-    if (!Array.isArray(subs) || subs.length === 0) {
-      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no subscribers" });
-    }
-
-    // --- Determine due events within tolerance window ---
-    const windowStart = now - tolMs;
-    const windowEnd = now + tolMs;
-
-    const due = [];
-    for (const entry of schedule.entries) {
-      for (const ev of makeEventsFromEntry(entry)) {
-        if (ev.at >= windowStart && ev.at <= windowEnd) {
-          const id = `${dk}:${ev.prayer}:${ev.kind}:${ev.at}`;
-          if (!sent[id]) due.push({ ...ev, id });
-        }
-      }
-    }
-
-    if (due.length === 0) {
-      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no due events" });
-    }
-
-    // --- Send notifications ---
-    const cap = Math.max(1, parseInt(PUSH_BATCH_LIMIT, 10));
-    let sentCount = 0;
-    const errors = [];
-
-    for (const ev of due) {
-      const payload = JSON.stringify({
-        title: titleFor(ev),
-        body: bodyFor(ev),
-        url: ev.url || "/mobile/",
-        tag: ev.id,
-      });
-
-      await Promise.all(
-        subs.slice(0, cap).map(async (sub) => {
-          try {
-            await webPush.sendNotification(sub, payload);
-          } catch (err) {
-            errors.push({ endpoint: sub?.endpoint, code: err?.statusCode, msg: err?.message });
-          }
-        })
-      );
-
-      sent[ev.id] = true;
-      sentCount += 1;
-    }
-
-    // Persist sent markers (if Blob write is blocked, we still return ok and log server-side)
     try {
-      await writeJson(sentKey, sent);
+      webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+      diag.vapidSetup = "ok";
     } catch (e) {
-      console.error("sent write failed (continuing):", e?.message || e);
+      diag.vapidSetup = `error: ${e?.message || String(e)}`;
+      diag.step = "vapid-error";
+      return res.status(500).json(diag);
     }
 
-    return res.json({ ok: true, dk, checked: due.length, sentCount, errors });
+    // Blob GET check (subscriptions)
+    try {
+      const r = await get("push/subscriptions.json", { allowPrivate: true });
+      // some SDK versions return an object with 'body' (ReadableStream-like)
+      // others require fetching the downloadUrl. Try both paths safely.
+      try {
+        const txt = await r?.body?.text?.();
+        diag.blob.canGetSubs = !!txt || !!r?.downloadUrl || !!r?.url;
+      } catch {
+        diag.blob.canGetSubs = !!r?.downloadUrl || !!r?.url;
+      }
+    } catch (e) {
+      diag.blob.canGetSubs = false;
+      diag.blob.getSubsError = e?.message || String(e);
+    }
+
+    // Blob PUT check (write permission)
+    try {
+      await put("push/_diag.txt", `ok ${Date.now()}`, {
+        access: "private",
+        contentType: "text/plain",
+      });
+      diag.blob.canPutDiag = true;
+    } catch (e) {
+      diag.blob.canPutDiag = false;
+      diag.blob.putDiagError = e?.message || String(e);
+    }
+
+    diag.step = "done";
+    diag.ok = true;
+    return res.json(diag);
   } catch (e) {
-    console.error("cron error:", e);
-    return res.status(500).json({ ok: false, error: "cron failed" });
+    diag.step = "caught-exception";
+    diag.error = e?.message || String(e);
+    return res.status(500).json(diag);
   }
 }
