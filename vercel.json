@@ -5,9 +5,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
 
-  "crons": [
-    { "path": "/api/push/cron", "schedule": "0 5 * * *" }
-  ],
+  "crons": [],
 
   "redirects": [
     { "source": "/mobile", "destination": "/mobile/", "permanent": false }
@@ -17,33 +15,39 @@
     {
       "source": "/mobile/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, must-revalidate" },
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" },
         { "key": "Service-Worker-Allowed", "value": "/mobile/" }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, must-revalidate" },
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" },
         { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/mobile/",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
       ]
     },
     {
       "source": "/mobile/manifest.webmanifest",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, must-revalidate" }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
       ]
     },
     {
       "source": "/mobile/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, must-revalidate" }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, must-revalidate" }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
       ]
     }
   ],
