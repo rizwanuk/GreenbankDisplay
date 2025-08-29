@@ -1,110 +1,98 @@
 // src/pwa/registerMobileSW.js
 /* global navigator, window */
+import { APP_VERSION } from "../version";
+
+// wait for a single event once
+function once(target, type) {
+  return new Promise((resolve) => {
+    const fn = () => {
+      target.removeEventListener(type, fn);
+      resolve();
+    };
+    target.addEventListener(type, fn);
+  });
+}
 
 /**
  * Registers the /mobile/ Service Worker and wires update handling:
- * - Prompts (or auto-applies) when a new SW is ready
- * - Exposes checkForUpdates() to manually trigger an update from UI
+ * - Calls onUpdateReady(reg) when a new SW is waiting
  */
 export async function registerMobileSW(onUpdateReady) {
-  if (!('serviceWorker' in navigator)) return null;
+  if (!("serviceWorker" in navigator)) return null;
 
-  // Register the mobile SW with /mobile/ scope
-  const reg = await navigator.serviceWorker.register('/mobile/sw.js', { scope: '/mobile/' });
+  // Version-bust the URL to force a fresh fetch after each deploy
+  const swUrl = `/mobile/sw.js?v=${encodeURIComponent(APP_VERSION || "dev")}`;
+
+  const reg = await navigator.serviceWorker.register(swUrl, {
+    scope: "/mobile/",
+    updateViaCache: "none",
+  });
 
   // If a new SW is already waiting, notify
-  maybeNotify(reg, onUpdateReady);
+  if (reg.waiting && navigator.serviceWorker.controller && typeof onUpdateReady === "function") {
+    onUpdateReady(reg);
+  }
 
   // Detect new SW versions
-  reg.addEventListener('updatefound', () => {
+  reg.addEventListener("updatefound", () => {
     const sw = reg.installing;
     if (!sw) return;
-    sw.addEventListener('statechange', () => {
-      // 'installed' + controller means: update available for existing page
-      if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-        maybeNotify(reg, onUpdateReady);
+    sw.addEventListener("statechange", () => {
+      if (sw.state === "installed" && navigator.serviceWorker.controller && typeof onUpdateReady === "function") {
+        onUpdateReady(reg);
       }
     });
   });
 
-  // Periodically check for updates in the background (optional)
+  // Background checks every 30 mins (optional)
   setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
 
   return reg;
 }
 
-function maybeNotify(reg, onUpdateReady) {
-  if (reg.waiting && navigator.serviceWorker.controller) {
-    if (typeof onUpdateReady === 'function') {
-      onUpdateReady(reg);
-    }
-  }
-}
-
-/**
- * Applies an already-downloaded update immediately:
- * - Tells the waiting SW to SKIP_WAITING
- * - Reloads once the new controller takes over
- */
-export async function applySWUpdate(reg) {
-  const registration = reg || (await navigator.serviceWorker.getRegistration('/mobile/'));
-  if (!registration) return false;
-
-  if (registration.waiting) {
-    // When the new SW takes control, reload
-    const onCtrlChange = () => {
-      navigator.serviceWorker.removeEventListener('controllerchange', onCtrlChange);
-      window.location.reload();
-    };
-    navigator.serviceWorker.addEventListener('controllerchange', onCtrlChange);
-
-    // Be tolerant of either {type:'SKIP_WAITING'} or bare string
-    try {
-      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    } catch {}
-    try {
-      registration.waiting.postMessage('SKIP_WAITING');
-    } catch {}
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Manual "Check for updates" you can call from a button.
- * Forces a network check; if a new SW is found, it’s applied and the page reloads.
- */
+/** Manual "Check for updates" from the UI. */
 export async function checkForUpdates() {
-  if (!('serviceWorker' in navigator)) return { ok: false, reason: 'no-sw' };
+  if (!("serviceWorker" in navigator)) return { ok: false, reason: "no-sw" };
 
-  const reg =
-    (await navigator.serviceWorker.getRegistration('/mobile/')) ||
-    (await navigator.serviceWorker.getRegistration());
+  let reg = await navigator.serviceWorker.getRegistration("/mobile/");
+  if (!reg) reg = await navigator.serviceWorker.ready;
+  if (!reg) return { ok: false, reason: "no-registration" };
 
-  if (!reg) return { ok: false, reason: 'no-registration' };
-
-  // Ask the browser to check for an updated SW
   await reg.update().catch(() => {});
 
-  // If a new worker is waiting, apply immediately
-  if (reg.waiting) {
-    await applySWUpdate(reg);
-    return { ok: true, updated: true };
+  if (reg.waiting && navigator.serviceWorker.controller) {
+    return { ok: true, updated: true, reg };
   }
 
-  // If installing, wait for "installed", then apply
   if (reg.installing) {
     await new Promise((resolve) => {
-      reg.installing.addEventListener('statechange', (e) => {
-        if (e.target.state === 'installed') resolve();
+      reg.installing.addEventListener("statechange", (e) => {
+        if (e.target.state === "installed") resolve();
       });
     });
-    if (reg.waiting) {
-      await applySWUpdate(reg);
-      return { ok: true, updated: true };
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      return { ok: true, updated: true, reg };
     }
   }
 
   return { ok: true, updated: false };
+}
+
+/** Apply the already-downloaded update immediately and reload. */
+export async function applySWUpdate(reg) {
+  const r =
+    reg ||
+    (await navigator.serviceWorker.getRegistration("/mobile/")) ||
+    (await navigator.serviceWorker.ready);
+
+  if (!r || !r.waiting) return false;
+
+  const controllerChange = once(navigator.serviceWorker, "controllerchange");
+
+  try { r.waiting.postMessage({ type: "SKIP_WAITING" }); } catch {}
+  try { r.waiting.postMessage("SKIP_WAITING"); } catch {}
+
+  await controllerChange;
+  window.location.reload();
+  return true;
 }
