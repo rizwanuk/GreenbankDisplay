@@ -3,7 +3,6 @@ export const config = { runtime: "nodejs" };
 
 const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 
-/* -------------------- utils -------------------- */
 async function readBodyJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
   const chunks = [];
@@ -30,12 +29,11 @@ async function writeBlobJson(key, data) {
   return put(key, JSON.stringify(data), {
     access: "public",
     contentType: "application/json",
-    allowOverwrite: true,            // ✅ overwrite existing blob
+    allowOverwrite: true,
     ...(TOKEN ? { token: TOKEN } : {}),
   });
 }
 
-/* -------------------- handler -------------------- */
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "method_not_allowed" });
   if (!TOKEN) return res.status(500).json({ ok: false, error: "server_missing_blob_token" });
@@ -45,7 +43,6 @@ export default async function handler(req, res) {
     const endpoint = body?.endpoint;
     const prefs = body?.prefs || {};
     const clientId = body?.clientId || null;
-
     if (!endpoint) return res.status(400).json({ ok: false, error: "missing_endpoint" });
 
     const key = "push/prefs.json";

@@ -1,175 +1,93 @@
-// api/push/cron.js  (PRODUCTION)
+// api/push/cron.js
 export const config = { runtime: "nodejs" };
 
-const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+import webpush from "web-push";
 
-// ----- helpers -----
-function getQuery(req) {
-  try {
-    const host = req.headers?.host || "localhost";
-    const u = new URL(req.url, `https://${host}`);
-    return Object.fromEntries(u.searchParams.entries());
-  } catch {
-    return {};
-  }
-}
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT     = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
-function makeEventsFromEntry(e) {
-  const out = [];
-  if (Number.isFinite(e.startAt)) out.push({ kind: "start", at: e.startAt, prayer: e.prayer, url: e.url });
-  if (Number.isFinite(e.jamaahAt)) out.push({ kind: "jamaah", at: e.jamaahAt, prayer: e.prayer, url: e.url });
-  return out;
-}
-const titleFor = (ev) =>
-  ev.kind === "jamaah" ? `${(ev.prayer || "").toUpperCase()} Jama'ah` : `${(ev.prayer || "").toUpperCase()} Start`;
-const bodyFor = (ev) =>
-  ev.kind === "jamaah" ? "Congregational prayer time." : "Prayer time has started.";
 
-// ----- Blob JSON (PUBLIC store + token) -----
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
     const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
-    if (r?.body?.text) {
-      const txt = await r.body.text();
-      return txt ? JSON.parse(txt) : def;
-    }
     const url = r?.downloadUrl || r?.url;
-    if (url) {
-      const fr = await fetch(url);
-      const txt = await fr.text();
-      return txt ? JSON.parse(txt) : def;
-    }
-    return def;
+    if (!url) return def;
+    const txt = await (await fetch(url)).text();
+    return txt ? JSON.parse(txt) : def;
   } catch {
     return def;
   }
 }
+
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
     access: "public",
     contentType: "application/json",
+    allowOverwrite: true,
     ...(TOKEN ? { token: TOKEN } : {}),
   });
 }
 
 export default async function handler(req, res) {
-  const {
-    CRON_TOKEN,
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY,
-    VAPID_SUBJECT = "mailto:admin@example.com",
-    PUSH_TOLERANCE_MIN = "3",
-    PUSH_BATCH_LIMIT = "500",
-  } = process.env;
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "method_not_allowed" });
+  if (!TOKEN) return res.status(500).json({ ok: false, error: "server_missing_blob_token" });
 
   try {
-    // --- Auth ---
-    const q = getQuery(req);
-    const hdrToken =
-      req.headers["x-cron-token"] ||
-      req.headers["X-Cron-Token"] ||
-      req.headers["x-cron_token"];
-    const token = q.token || hdrToken;
-    if (!CRON_TOKEN || token !== CRON_TOKEN) {
-      return res.status(401).json({ ok: false, error: "unauthorized" });
-    }
+    const dk = (new URL(req.url, `https://${req.headers.host}`)).searchParams.get("dk") || dayKey();
 
-    // --- VAPID ---
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      return res.status(500).json({ ok: false, error: "VAPID keys missing" });
-    }
-    const webPush = (await import("web-push")).default;
-    webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    const schedule = (await readBlobJson(`push/schedule-${dk}.json`, { entries: [] })) || { entries: [] };
+    let subs = (await readBlobJson("push/subscriptions.json", [])) || [];
+    if (!Array.isArray(subs)) subs = [];
 
-    // --- Window & keys ---
-    const nowParam = Number(q.now);
-    const now = Number.isFinite(nowParam) ? nowParam : Date.now();
-    const tolMs = Math.max(1, parseInt(PUSH_TOLERANCE_MIN, 10)) * 60 * 1000;
+    const now = Date.now();
+    const due = (schedule.entries || []).filter(e => {
+      const ts = typeof e.ts === "number" ? e.ts : Date.parse(e.ts || "");
+      return Number.isFinite(ts) && ts <= now && now - ts < 10 * 60 * 1000;
+    });
 
-    const dk = dayKey(new Date(now));
-    const scheduleKey = `push/schedule-${dk}.json`;
-    const sentKey = `push/sent-${dk}.json`;
-    const subsKey = `push/subscriptions.json`;
+    const results = [];
+    const toRemove = new Set();
+    let sentCount = 0;
 
-    // --- Read data ---
-    const schedule = (await readBlobJson(scheduleKey, { dk, entries: [] })) || { dk, entries: [] };
-    let subs = (await readBlobJson(subsKey, [])) || [];
-    let sent = (await readBlobJson(sentKey, {})) || {};
+    for (const n of due) {
+      const payload = JSON.stringify({
+        title: n.title || "Greenbank Masjid",
+        body: n.body || "",
+        tag: n.tag || "announcement",
+        data: n.data || {},
+      });
 
-    if (!Array.isArray(schedule.entries) || schedule.entries.length === 0) {
-      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no schedule" });
-    }
-    if (!Array.isArray(subs) || subs.length === 0) {
-      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no subscribers" });
-    }
-
-    // --- Due events ---
-    const windowStart = now - tolMs;
-    const windowEnd = now + tolMs;
-
-    const due = [];
-    for (const entry of schedule.entries) {
-      for (const ev of makeEventsFromEntry(entry)) {
-        if (ev.at >= windowStart && ev.at <= windowEnd) {
-          const id = `${dk}:${ev.prayer}:${ev.kind}:${ev.at}`;
-          if (!sent[id]) due.push({ ...ev, id });
+      for (const sub of subs) {
+        try {
+          await webpush.sendNotification(sub, payload, { TTL: 300 });
+          sentCount++;
+          results.push({ endpoint: sub.endpoint, ok: true });
+        } catch (e) {
+          if (e?.statusCode === 410 || e?.statusCode === 404) toRemove.add(sub.endpoint);
+          results.push({ endpoint: sub.endpoint, ok: false, code: e?.statusCode, message: e?.body || e?.message });
         }
       }
     }
-    if (due.length === 0) {
-      return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no due events" });
-    }
 
-    // --- Send ---
-    const cap = Math.max(1, parseInt(PUSH_BATCH_LIMIT, 10));
-    let sentCount = 0;
-    const errors = [];
-    const toRemove = new Set();
-
-    for (const ev of due) {
-      const payload = JSON.stringify({
-        title: titleFor(ev),
-        body: bodyFor(ev),
-        url: ev.url || "/mobile/",
-        tag: ev.id,
-      });
-
-      await Promise.all(
-        subs.slice(0, cap).map(async (sub) => {
-          try {
-            await webPush.sendNotification(sub, payload);
-          } catch (err) {
-            const code = err?.statusCode || err?.code;
-            if (code === 404 || code === 410) toRemove.add(sub.endpoint);
-            errors.push({ endpoint: sub?.endpoint, code, msg: err?.message });
-          }
-        })
-      );
-
-      sent[ev.id] = true;
-      sentCount += 1;
-    }
-
-    // --- Persist ---
-    try { await writeBlobJson(sentKey, sent); } catch (e) { errors.push({ persist: "sent", msg: e?.message || String(e) }); }
     if (toRemove.size > 0) {
-      try {
-        subs = subs.filter((s) => !toRemove.has(s.endpoint));
-        await writeBlobJson(subsKey, subs);
-      } catch (e) {
-        errors.push({ persist: "subs", msg: e?.message || String(e) });
-      }
+      subs = subs.filter((s) => !toRemove.has(s.endpoint));
+      await writeBlobJson("push/subscriptions.json", subs);
     }
 
-    return res.json({ ok: true, dk, checked: due.length, sentCount, pruned: toRemove.size, errors });
+    return res.json({ ok: true, dk, checked: due.length, sentCount, pruned: toRemove.size, results });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || "cron failed" });
+    return res.status(500).json({ ok: false, error: e?.message || "cron_failed" });
   }
 }
