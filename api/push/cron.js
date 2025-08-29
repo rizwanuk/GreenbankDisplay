@@ -1,6 +1,8 @@
 // api/push/cron.js  (PRODUCTION)
 export const config = { runtime: "nodejs" };
 
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+
 // ----- helpers -----
 function getQuery(req) {
   try {
@@ -28,17 +30,15 @@ const titleFor = (ev) =>
 const bodyFor = (ev) =>
   ev.kind === "jamaah" ? "Congregational prayer time." : "Prayer time has started.";
 
-// ----- Blob JSON (PUBLIC store) -----
+// ----- Blob JSON (PUBLIC store + token) -----
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
-    const r = await get(key); // public store → no allowPrivate
-    // Try streaming body (node side)
+    const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
     if (r?.body?.text) {
       const txt = await r.body.text();
       return txt ? JSON.parse(txt) : def;
     }
-    // Fallback to URL fetch
     const url = r?.downloadUrl || r?.url;
     if (url) {
       const fr = await fetch(url);
@@ -47,14 +47,15 @@ async function readBlobJson(key, def = null) {
     }
     return def;
   } catch {
-    return def; // treat not-found/forbidden as default
+    return def;
   }
 }
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "public",                // ✅ PUBLIC store requires "public"
+    access: "public",
     contentType: "application/json",
+    ...(TOKEN ? { token: TOKEN } : {}),
   });
 }
 
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
 
-    // --- Setup web-push inside try/catch ---
+    // --- VAPID ---
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return res.status(500).json({ ok: false, error: "VAPID keys missing" });
     }
@@ -97,7 +98,7 @@ export default async function handler(req, res) {
     const sentKey = `push/sent-${dk}.json`;
     const subsKey = `push/subscriptions.json`;
 
-    // --- Read schedule/subs/sent (tolerant) ---
+    // --- Read data ---
     const schedule = (await readBlobJson(scheduleKey, { dk, entries: [] })) || { dk, entries: [] };
     let subs = (await readBlobJson(subsKey, [])) || [];
     let sent = (await readBlobJson(sentKey, {})) || {};
@@ -109,7 +110,7 @@ export default async function handler(req, res) {
       return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no subscribers" });
     }
 
-    // --- Determine due events ---
+    // --- Due events ---
     const windowStart = now - tolMs;
     const windowEnd = now + tolMs;
 
@@ -126,7 +127,7 @@ export default async function handler(req, res) {
       return res.json({ ok: true, dk, checked: 0, sentCount: 0, reason: "no due events" });
     }
 
-    // --- Send notifications ---
+    // --- Send ---
     const cap = Math.max(1, parseInt(PUSH_BATCH_LIMIT, 10));
     let sentCount = 0;
     const errors = [];
@@ -146,7 +147,6 @@ export default async function handler(req, res) {
             await webPush.sendNotification(sub, payload);
           } catch (err) {
             const code = err?.statusCode || err?.code;
-            // mark bad endpoints to prune
             if (code === 404 || code === 410) toRemove.add(sub.endpoint);
             errors.push({ endpoint: sub?.endpoint, code, msg: err?.message });
           }
@@ -157,13 +157,8 @@ export default async function handler(req, res) {
       sentCount += 1;
     }
 
-    // --- Persist sent markers; prune dead subs if any ---
-    try {
-      await writeBlobJson(sentKey, sent);
-    } catch (e) {
-      errors.push({ persist: "sent", msg: e?.message || String(e) });
-    }
-
+    // --- Persist ---
+    try { await writeBlobJson(sentKey, sent); } catch (e) { errors.push({ persist: "sent", msg: e?.message || String(e) }); }
     if (toRemove.size > 0) {
       try {
         subs = subs.filter((s) => !toRemove.has(s.endpoint));
@@ -175,7 +170,6 @@ export default async function handler(req, res) {
 
     return res.json({ ok: true, dk, checked: due.length, sentCount, pruned: toRemove.size, errors });
   } catch (e) {
-    // Always return JSON, never crash
     return res.status(500).json({ ok: false, error: e?.message || "cron failed" });
   }
 }

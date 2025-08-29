@@ -1,6 +1,8 @@
 // api/push/subscribe.js
 export const config = { runtime: "nodejs" };
 
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+
 // --- tiny utils ---
 async function readBodyJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -13,7 +15,7 @@ async function readBodyJson(req) {
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
-    const r = await get(key); // public store → no allowPrivate
+    const r = await get(key, TOKEN ? { token: TOKEN } : undefined); // public store
     if (r?.body?.text) {
       const txt = await r.body.text();
       return txt ? JSON.parse(txt) : def;
@@ -30,8 +32,9 @@ async function readBlobJson(key, def = null) {
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "public",               // ⬅️ public store requires public
+    access: "public",
     contentType: "application/json",
+    ...(TOKEN ? { token: TOKEN } : {}),
   });
 }
 

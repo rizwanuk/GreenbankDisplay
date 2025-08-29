@@ -1,6 +1,8 @@
 // api/push/schedule.js
 export const config = { runtime: "nodejs" };
 
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -19,8 +21,9 @@ async function readBodyJson(req) {
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "public",               // ⬅️ public
+    access: "public",
     contentType: "application/json",
+    ...(TOKEN ? { token: TOKEN } : {}),
   });
 }
 

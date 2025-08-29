@@ -1,6 +1,8 @@
 // api/push/prefs.js
 export const config = { runtime: "nodejs" };
 
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+
 async function readBodyJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
   const chunks = [];
@@ -12,7 +14,7 @@ async function readBodyJson(req) {
 async function readBlobJson(key, def = null) {
   try {
     const { get } = await import("@vercel/blob");
-    const r = await get(key); // public
+    const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
     if (r?.body?.text) {
       const txt = await r.body.text();
       return txt ? JSON.parse(txt) : def;
@@ -29,8 +31,9 @@ async function readBlobJson(key, def = null) {
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
-    access: "public",               // ⬅️ public
+    access: "public",
     contentType: "application/json",
+    ...(TOKEN ? { token: TOKEN } : {}),
   });
 }
 
