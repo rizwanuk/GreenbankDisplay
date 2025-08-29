@@ -8,17 +8,32 @@ function fmtTimeParts(d, is24Hour) {
   if (!d) return { time: "—", suffix: "" };
   const date = d?._isAMomentObject ? d.toDate() : d;
 
-  const formatted = new Intl.DateTimeFormat("en-GB", {
+  // For 24h, keep the normal 2-digit output and no suffix
+  if (is24Hour) {
+    const formatted = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: tz,
+    }).format(date);
+    return { time: formatted, suffix: "" };
+  }
+
+  // For 12h, build from parts and strip the leading zero on the hour
+  const parts = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: !is24Hour,
+    hour12: true,
     timeZone: tz,
-  }).format(date);
+  }).formatToParts(date);
 
-  if (is24Hour) return { time: formatted, suffix: "" };
+  let hour = parts.find((p) => p.type === "hour")?.value ?? "";
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "";
+  const dayPeriod = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
 
-  const parts = formatted.split(" ");
-  return { time: parts[0], suffix: parts[1] || "" };
+  if (hour && hour.length === 2 && hour.startsWith("0")) hour = hour.slice(1); // ← remove leading 0
+
+  return { time: `${hour}${minute ? ":" + minute : ""}`, suffix: dayPeriod };
 }
 
 const toTitle = (s = "") => s.slice(0, 1).toUpperCase() + s.slice(1);
@@ -42,8 +57,8 @@ export default function MobileUpcomingList({
     headerBorder: theme.headerBorderColor || "border-white/10",
     headerSize: theme.headerSize || "text-[14px]",
 
-    rowSize: theme.rowSize || "text-[23px]",     // 🔼 prayer names even bigger
-    timeSize: theme.timeSize || "text-[18px]",   // times
+    rowSize: theme.rowSize || "text-[23px]",       // prayer names bigger
+    timeSize: theme.timeSize || "text-[18px]",     // times
     suffixSize: theme.suffixSize || "text-[12px]", // am/pm smaller
     rowPadY: theme.rowPadY || "py-2",
     gapY: theme.gapY || "divide-y divide-white/10",
