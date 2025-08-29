@@ -2,32 +2,17 @@
 export const config = { runtime: "nodejs" };
 const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 
-async function getBlob(key) {
-  const out = { key, exists: false, url: null, textLen: 0, totalItems: 0, parseError: null };
+async function readBlobJson(key, def = null) {
   try {
-    const { get } = await import("@vercel/blob");
-    const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
-    const url = r?.downloadUrl || r?.url || null;
-    out.url = url;
-    if (!url) return out;
-    const resp = await fetch(url);
-    const txt = await resp.text();
-    out.textLen = txt.length;
-    if (txt) {
-      try {
-        const json = JSON.parse(txt);
-        out.totalItems = Array.isArray(json) ? json.length : 0;
-        out.exists = true;
-        // include first 1 item in a safe way
-        out.sample = Array.isArray(json) && json.length ? [json[0]] : [];
-      } catch (e) {
-        out.parseError = e.message;
-      }
-    }
-    return out;
-  } catch (e) {
-    out.error = e.message || String(e);
-    return out;
+    const { list } = await import("@vercel/blob");
+    const { blobs } = await list({ prefix: key }, TOKEN ? { token: TOKEN } : undefined);
+    const b = blobs?.find(x => x.pathname === key) || blobs?.[0];
+    const url = b?.url || b?.downloadUrl;
+    if (!url) return def;
+    const txt = await (await fetch(url)).text();
+    return txt ? JSON.parse(txt) : def;
+  } catch {
+    return def;
   }
 }
 
@@ -41,8 +26,38 @@ function dayKey(d = new Date()) {
 export default async function handler(req, res) {
   try {
     const dk = (new URL(req.url, `https://${req.headers.host}`)).searchParams.get("dk") || dayKey();
-    const subsMeta = await getBlob("push/subscriptions.json");
-    const schedMeta = await getBlob(`push/schedule-${dk}.json`);
+
+    // subscriptions meta
+    let subsMeta = { exists:false, url:null, totalItems:0, sample:[] };
+    try {
+      const { list } = await import("@vercel/blob");
+      const { blobs } = await list({ prefix: "push/subscriptions.json" }, TOKEN ? { token: TOKEN } : undefined);
+      const b = blobs?.find(x => x.pathname === "push/subscriptions.json") || blobs?.[0];
+      subsMeta.url = b?.url || b?.downloadUrl || null;
+      if (subsMeta.url) {
+        const arr = await readBlobJson("push/subscriptions.json", []);
+        subsMeta.exists = Array.isArray(arr);
+        subsMeta.totalItems = Array.isArray(arr) ? arr.length : 0;
+        subsMeta.sample = Array.isArray(arr) && arr.length ? [arr[0]] : [];
+      }
+    } catch {}
+
+    // schedule meta
+    let schedMeta = { exists:false, url:null, totalItems:0, sample:[] };
+    try {
+      const { list } = await import("@vercel/blob");
+      const key = `push/schedule-${dk}.json`;
+      const { blobs } = await list({ prefix: key }, TOKEN ? { token: TOKEN } : undefined);
+      const b = blobs?.find(x => x.pathname === key) || blobs?.[0];
+      schedMeta.url = b?.url || b?.downloadUrl || null;
+      if (schedMeta.url) {
+        const o = await readBlobJson(key, { entries: [] });
+        const arr = o?.entries || [];
+        schedMeta.exists = Array.isArray(arr);
+        schedMeta.totalItems = Array.isArray(arr) ? arr.length : 0;
+        schedMeta.sample = Array.isArray(arr) && arr.length ? [arr[0]] : [];
+      }
+    } catch {}
 
     res.setHeader("Cache-Control", "no-store");
     res.json({

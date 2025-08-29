@@ -10,20 +10,17 @@ async function readBodyJson(req) {
   const buf = Buffer.concat(chunks).toString("utf8");
   try { return JSON.parse(buf || "{}"); } catch { return {}; }
 }
-
 async function readBlobJson(key, def = null) {
   try {
-    const { get } = await import("@vercel/blob");
-    const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
-    const url = r?.downloadUrl || r?.url;
+    const { list } = await import("@vercel/blob");
+    const { blobs } = await list({ prefix: key }, TOKEN ? { token: TOKEN } : undefined);
+    const b = blobs?.find(x => x.pathname === key) || blobs?.[0];
+    const url = b?.url || b?.downloadUrl;
     if (!url) return def;
     const txt = await (await fetch(url)).text();
     return txt ? JSON.parse(txt) : def;
-  } catch {
-    return def;
-  }
+  } catch { return def; }
 }
-
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {
@@ -43,6 +40,7 @@ export default async function handler(req, res) {
     const endpoint = body?.endpoint;
     const prefs = body?.prefs || {};
     const clientId = body?.clientId || null;
+
     if (!endpoint) return res.status(400).json({ ok: false, error: "missing_endpoint" });
 
     const key = "push/prefs.json";

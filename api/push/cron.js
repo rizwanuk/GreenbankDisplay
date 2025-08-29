@@ -11,25 +11,21 @@ const VAPID_SUBJECT     = process.env.VAPID_SUBJECT || "mailto:admin@example.com
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 function dayKey(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
 
 async function readBlobJson(key, def = null) {
   try {
-    const { get } = await import("@vercel/blob");
-    const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
-    const url = r?.downloadUrl || r?.url;
+    const { list } = await import("@vercel/blob");
+    const { blobs } = await list({ prefix: key }, TOKEN ? { token: TOKEN } : undefined);
+    const b = blobs?.find(x => x.pathname === key) || blobs?.[0];
+    const url = b?.url || b?.downloadUrl;
     if (!url) return def;
     const txt = await (await fetch(url)).text();
     return txt ? JSON.parse(txt) : def;
-  } catch {
-    return def;
-  }
+  } catch { return def; }
 }
-
 async function writeBlobJson(key, data) {
   const { put } = await import("@vercel/blob");
   return put(key, JSON.stringify(data), {

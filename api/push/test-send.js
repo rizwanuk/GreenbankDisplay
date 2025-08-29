@@ -12,15 +12,14 @@ webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 async function readBlobJson(key, def = null) {
   try {
-    const { get } = await import("@vercel/blob");
-    const r = await get(key, TOKEN ? { token: TOKEN } : undefined);
-    const url = r?.downloadUrl || r?.url;
+    const { list } = await import("@vercel/blob");
+    const { blobs } = await list({ prefix: key }, TOKEN ? { token: TOKEN } : undefined);
+    const b = blobs?.find(x => x.pathname === key) || blobs?.[0];
+    const url = b?.url || b?.downloadUrl;
     if (!url) return def;
     const txt = await (await fetch(url)).text();
     return txt ? JSON.parse(txt) : def;
-  } catch {
-    return def;
-  }
+  } catch { return def; }
 }
 
 export default async function handler(req, res) {
@@ -31,11 +30,7 @@ export default async function handler(req, res) {
     let subs = (await readBlobJson("push/subscriptions.json", [])) || [];
     if (!Array.isArray(subs)) subs = [];
 
-    const payload = JSON.stringify({
-      title: "Greenbank Masjid",
-      body: "Test notification",
-      tag: "test",
-    });
+    const payload = JSON.stringify({ title: "Greenbank Masjid", body: "Test notification", tag: "test" });
 
     const results = [];
     let sent = 0;
@@ -48,7 +43,6 @@ export default async function handler(req, res) {
         results.push({ endpoint: s.endpoint, ok: false, code: e?.statusCode, message: e?.body || e?.message });
       }
     }
-
     res.json({ ok: true, sent, total: subs.length, results });
   } catch (e) {
     res.status(500).json({ ok:false, error: e?.message || "test_send_failed" });
