@@ -19,7 +19,7 @@ import usePushStatus from "../hooks/usePushStatus";
 import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
 
 import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
-import { postSubscription, postSchedule } from "../pwa/pushApi";
+import { postSubscription } from "../pwa/pushApi"; // ⬅️ removed postSchedule (legacy)
 import { getMobileTheme } from "../utils/helpers";
 
 /* --------------------------- helpers ---------------------------- */
@@ -123,7 +123,7 @@ function computeLookupKey(p) {
   return k;
 }
 
-// ---- background push helpers (schedule) ----
+// ---- time helpers for parsing rows ----
 function parseTimeHM(str, baseDate) {
   if (!str) return null;
   const v = String(str).trim();
@@ -403,7 +403,7 @@ export default function MobileScreen() {
     }
   };
 
-  // --- Background push: post subscription once, and today's schedule once per day ---
+  // --- Push: ensure subscription is posted (once) ---
   useEffect(() => {
     (async () => {
       try {
@@ -413,22 +413,20 @@ export default function MobileScreen() {
       } catch {}
     })();
   }, []);
-  useEffect(() => {
-    if (!todayRow) return;
+
+  // ✅ Build today's Jama'ah times (LOCAL) for the settings sheet to schedule
+  const todayJamaahTimes = useMemo(() => {
+    if (!todayRow) return [];
     const entries = buildScheduleEntries(todayRow, refToday);
-    if (!entries.length) return;
-    const dk = dayKey(refToday);
-    const stampKey = "mobile.schedule.lastSent";
-    const last = localStorage.getItem(stampKey);
-    if (last === dk) return;
-    (async () => {
-      const ok = await postSchedule(entries, dk);
-      if (ok) {
-        try {
-          localStorage.setItem(stampKey, dk);
-        } catch {}
-      }
-    })();
+    return entries
+      .map((e) => {
+        const ts = Number.isFinite(e.jamaahAt) ? e.jamaahAt : e.startAt;
+        if (!Number.isFinite(ts)) return null;
+        const d = new Date(ts);
+        const name = (e.prayer || "").charAt(0).toUpperCase() + (e.prayer || "").slice(1);
+        return { name, hour: d.getHours(), minute: d.getMinutes() };
+      })
+      .filter(Boolean);
   }, [todayRow, refToday]);
 
   return (
@@ -470,7 +468,7 @@ export default function MobileScreen() {
         </div>
 
         <main className="px-4 py-4 space-y-3">
-          {/* Dates pill (2 lines, larger defaults; still theme-overridable) */}
+          {/* Dates pill */}
           <div
             className={[
               "flex flex-col rounded-2xl border shadow-sm px-4 py-3 leading-snug",
@@ -479,7 +477,6 @@ export default function MobileScreen() {
               themeDateCard.border || themeDateCard.borderColor || "border-white/10",
             ].join(" ")}
           >
-            {/* Line 1: English date */}
             <div
               className={`w-full text-center font-semibold ${
                 themeDateCard.englishDateSize || "text-[18px]"
@@ -487,7 +484,6 @@ export default function MobileScreen() {
             >
               {todayLong}
             </div>
-            {/* Line 2: Hijri date */}
             <div
               className={`w-full text-center mt-1 opacity-90 ${
                 themeDateCard.hijriDateSize || "text-[16px]"
@@ -504,7 +500,7 @@ export default function MobileScreen() {
             </div>
           )}
 
-          {/* Cards (pass theme pieces; components can opt to use them) */}
+          {/* Cards */}
           <MobileCurrentCard
             theme={themeCurrentPrayer}
             labels={labels}
@@ -549,6 +545,7 @@ export default function MobileScreen() {
           setThemeOverride(name || "");
         }}
         about={about}
+        jamaahTimes={todayJamaahTimes} // ✅ pass today's times for scheduling
       />
     </div>
   );

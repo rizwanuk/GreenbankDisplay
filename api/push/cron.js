@@ -3,18 +3,16 @@ export const config = { runtime: "nodejs" };
 
 import webpush from "web-push";
 
-const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
-const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT     = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
-const CRON_TOKEN        = process.env.CRON_TOKEN; // set this in Vercel envs
+const TOKEN            = process.env.BLOB_READ_WRITE_TOKEN;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY= process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT    = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+const CRON_TOKEN       = process.env.CRON_TOKEN; // optional but recommended
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 function dayKey(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
 
@@ -27,9 +25,7 @@ async function readBlobJson(key, def = null) {
     if (!url) return def;
     const txt = await (await fetch(url)).text();
     return txt ? JSON.parse(txt) : def;
-  } catch {
-    return def;
-  }
+  } catch { return def; }
 }
 
 async function writeBlobJson(key, data) {
@@ -42,81 +38,131 @@ async function writeBlobJson(key, data) {
   });
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "method_not_allowed" });
-  }
-  if (!TOKEN) {
-    return res.status(500).json({ ok: false, error: "server_missing_blob_token" });
-  }
+// derive minutes-before per endpoint; falls back to entry.defaultMinutesBefore or 10
+function getMinutesBefore(endpoint, entry, prefsMap) {
+  const ep = prefsMap?.[endpoint]?.prefs || {};
+  const v = Number(ep.minutesBeforeJamaah);
+  if (Number.isFinite(v) && v >= 0) return v;
+  const def = Number(entry?.defaultMinutesBefore);
+  return Number.isFinite(def) && def >= 0 ? def : 10;
+}
 
-  // --- Auth for cron ping (header or query) ---
+// convert an entry's base time to ms
+function toMs(x) {
+  if (typeof x === "number") return x;
+  const n = Date.parse(x || "");
+  return Number.isFinite(n) ? n : NaN;
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "method_not_allowed" });
+  if (!TOKEN) return res.status(500).json({ ok: false, error: "server_missing_blob_token" });
+
+  // Optional token check (header or query param)
   const url = new URL(req.url, `https://${req.headers.host}`);
   const hdrToken = req.headers["x-cron-token"];
-  const qToken = url.searchParams.get("token");
+  const qToken   = url.searchParams.get("token");
   if (CRON_TOKEN && hdrToken !== CRON_TOKEN && qToken !== CRON_TOKEN) {
     return res.status(401).json({ ok: false, error: "unauthorized_cron" });
   }
 
   try {
-    const dk = url.searchParams.get("dk") || dayKey();
-    const dry = url.searchParams.get("dry") === "1"; // optional: test run without sending
+    const dk  = url.searchParams.get("dk") || dayKey();
+    const dry = url.searchParams.get("dry") === "1";
 
-    // Load schedule & subscriptions
+    // Load schedule (for the day), subscriptions, and per-endpoint prefs
     const schedKey = `push/schedule-${dk}.json`;
     const schedule = (await readBlobJson(schedKey, { entries: [] })) || { entries: [] };
-    let subs = (await readBlobJson("push/subscriptions.json", [])) || [];
+    let   subs     = (await readBlobJson("push/subscriptions.json", [])) || [];
+    const prefsMap = (await readBlobJson("push/prefs.json", {})) || {};
+
     if (!Array.isArray(subs)) subs = [];
-
-    const now = Date.now();
-    const windowMs = 10 * 60 * 1000; // consider due if within last 10 minutes
-    // Prevent duplicates: only send entries that do NOT have sentAt yet
     const entries = Array.isArray(schedule.entries) ? schedule.entries : [];
-    const due = entries.filter(e => {
-      const ts = typeof e.ts === "number" ? e.ts : Date.parse(e.ts || "");
-      return !e.sentAt && Number.isFinite(ts) && ts <= now && now - ts < windowMs;
-    });
 
-    const results = [];
+    const now      = Date.now();
+    const windowMs = 10 * 60 * 1000; // treat as due if within the last 10 minutes
+    const results  = [];
     const toRemove = new Set();
-    let sentCount = 0;
+    let sentCount  = 0;
 
-    if (!dry) {
-      for (const n of due) {
-        const payload = JSON.stringify({
-          title: n.title || "Greenbank Masjid",
-          body: n.body || "",
-          tag: n.tag || "announcement",
-          data: n.data || {},
-        });
+    // We support two kinds of entries:
+    //  A) Global fire-at entries:   { ts: <ms>, ... } with perUserOffset !== true
+    //  B) Per-user offset entries:  { baseTs: <ms> OR ts: <ms>, perUserOffset: true, defaultMinutesBefore?: number }
+    //
+    // In (B), each user can pick `prefs.minutesBeforeJamaah`, and we compute fireTs = baseTs - minutes*60s*1000 per endpoint.
+    for (let i = 0; i < entries.length; i++) {
+      const n = entries[i];
 
+      const perUser = !!n.perUserOffset;
+      const baseTs  = Number.isFinite(n.baseTs) ? n.baseTs : toMs(n.ts);
+      if (!Number.isFinite(baseTs)) continue;
+
+      if (perUser) {
+        // Track who we've already sent to for this entry
+        const sentFor = new Set(Array.isArray(n.sentFor) ? n.sentFor : []);
         for (const sub of subs) {
-          try {
-            await webpush.sendNotification(sub, payload, { TTL: 300 });
-            sentCount++;
-            results.push({ endpoint: sub.endpoint, ok: true });
-          } catch (e) {
-            if (e?.statusCode === 410 || e?.statusCode === 404) toRemove.add(sub.endpoint);
-            results.push({
-              endpoint: sub.endpoint,
-              ok: false,
-              code: e?.statusCode,
-              message: e?.body || e?.message,
-            });
+          const endpoint = sub?.endpoint;
+          if (!endpoint || sentFor.has(endpoint)) continue;
+
+          const minutes = getMinutesBefore(endpoint, n, prefsMap);
+          const fireTs  = baseTs - minutes * 60 * 1000;
+
+          if (Number.isFinite(fireTs) && fireTs <= now && now - fireTs < windowMs) {
+            if (!dry) {
+              try {
+                const payload = JSON.stringify({
+                  title: n.title || "Greenbank Masjid",
+                  body:  n.body  || "",
+                  tag:   n.tag   || `jamaah-${dk}`,
+                  data:  n.data  || {},
+                });
+                await webpush.sendNotification(sub, payload, { TTL: 300 });
+                sentCount++;
+                results.push({ endpoint, ok: true, minutes });
+                sentFor.add(endpoint);
+              } catch (e) {
+                if (e?.statusCode === 410 || e?.statusCode === 404) toRemove.add(endpoint);
+                results.push({ endpoint, ok: false, code: e?.statusCode, message: e?.body || e?.message });
+              }
+            }
           }
+        }
+        // Persist per-entry sent list so repeated cron ticks don't resend to the same endpoint
+        if (sentFor.size !== (n.sentFor?.length || 0)) {
+          entries[i] = { ...n, sentFor: Array.from(sentFor) };
+        }
+      } else {
+        // Global fire-at timestamp: send to everyone once, then mark sentAt
+        const due = baseTs <= now && now - baseTs < windowMs && !n.sentAt;
+        if (due && !dry) {
+          const payload = JSON.stringify({
+            title: n.title || "Greenbank Masjid",
+            body:  n.body  || "",
+            tag:   n.tag   || "announcement",
+            data:  n.data  || {},
+          });
+
+          for (const sub of subs) {
+            try {
+              await webpush.sendNotification(sub, payload, { TTL: 300 });
+              sentCount++;
+              results.push({ endpoint: sub.endpoint, ok: true });
+            } catch (e) {
+              if (e?.statusCode === 410 || e?.statusCode === 404) toRemove.add(sub.endpoint);
+              results.push({ endpoint: sub.endpoint, ok: false, code: e?.statusCode, message: e?.body || e?.message });
+            }
+          }
+          // mark globally sent to avoid duplicates
+          entries[i] = { ...n, sentAt: new Date().toISOString() };
         }
       }
     }
 
-    // Mark sent entries to avoid re-sends on next cron tick
-    if (due.length > 0) {
-      const iso = new Date().toISOString();
-      const updated = entries.map(e => (due.includes(e) ? { ...e, sentAt: iso } : e));
-      try {
-        await writeBlobJson(schedKey, { ...schedule, entries: updated });
-      } catch (e) {
-        results.push({ scheduleWriteError: e?.message || String(e) });
-      }
+    // Write back updated schedule (with sentFor/sentAt markers)
+    try {
+      await writeBlobJson(schedKey, { ...schedule, entries });
+    } catch (e) {
+      results.push({ scheduleWriteError: e?.message || String(e) });
     }
 
     // Prune dead subscriptions if needed
@@ -129,15 +175,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.json({
-      ok: true,
-      dk,
-      checked: due.length,
-      sentCount,
-      pruned: toRemove.size,
-      dryRun: dry,
-      results,
-    });
+    return res.json({ ok: true, dk, checked: entries.length, sentCount, pruned: toRemove.size, results });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || "cron_failed" });
   }

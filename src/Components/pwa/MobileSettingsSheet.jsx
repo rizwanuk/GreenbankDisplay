@@ -62,6 +62,32 @@ function readThemeNamesFromSettings(rows) {
 
 // 👉 adjust to your backend route if needed
 const PREFS_ENDPOINT = "/api/push/prefs";
+const SCHEDULE_ENDPOINT = "/api/push/schedule";
+
+// Helper: post today's base Jama'ah times; server applies per-user minutes
+async function scheduleJamaahForToday({ jamaahTimes, defaultMinutesBefore = 10 }) {
+  if (!Array.isArray(jamaahTimes) || jamaahTimes.length === 0) return;
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const [y, m, d] = dateKey.split("-").map(Number);
+
+  const entries = jamaahTimes.map((t) => {
+    const base = new Date(y, m - 1, d, t.hour, t.minute); // local time
+    return {
+      name: t.name,
+      baseTs: base.getTime(),
+      title: `${t.name} reminder`,
+      tag: `jamaah-${t.name.toLowerCase()}-${dateKey}`,
+      perUserOffset: true,           // important: cron will compute per user
+      defaultMinutesBefore,          // fallback if user hasn't set a value
+    };
+  });
+
+  await fetch(SCHEDULE_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ dateKey, entries }),
+  });
+}
 
 export default function MobileSettingsSheet({
   open,
@@ -72,6 +98,8 @@ export default function MobileSettingsSheet({
   categoryKey = "mobile.notif.categories",
   // About (from MobileScreen)
   about = { version: "", timezone: "", lastUpdated: "" },
+  // ✅ NEW: today's Jama'ah times in LOCAL time, e.g. [{name:"Asr", hour:18, minute:0}, ...]
+  jamaahTimes = [],
 }) {
   const allThemeNames = useMemo(() => readThemeNamesFromSettings(settingsRows), [settingsRows]);
 
@@ -115,6 +143,13 @@ export default function MobileSettingsSheet({
       const res = await enablePush();
       if (res?.ok) {
         setEnableMsg("Notifications enabled ✅");
+        // If the user wants Jama'ah alerts and we know today's times, post schedule now
+        if (jamaahEnabled && Array.isArray(jamaahTimes) && jamaahTimes.length > 0) {
+          await scheduleJamaahForToday({
+            jamaahTimes,
+            defaultMinutesBefore: minutesBefore,
+          });
+        }
       } else {
         const reason = res?.reason ? ` (${res.reason})` : "";
         const detail = res?.detail ? ` — ${res.detail}` : "";
@@ -274,6 +309,18 @@ export default function MobileSettingsSheet({
       mounted = false;
     };
   }, [startEnabled, jamaahEnabled, minutesBefore, cats]);
+
+  // ✅ NEW: whenever Jama'ah reminders are enabled AND we have today's times,
+  // post today's base schedule so the server can send per-user notifications.
+  useEffect(() => {
+    if (!jamaahEnabled) return;
+    if (!Array.isArray(jamaahTimes) || jamaahTimes.length === 0) return;
+    scheduleJamaahForToday({
+      jamaahTimes,
+      defaultMinutesBefore: minutesBefore,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jamaahEnabled, minutesBefore, JSON.stringify(jamaahTimes)]);
 
   // -------- Update / Version controls --------
   const [updState, setUpdState] = useState("idle"); // idle | checking | available | none | applying | error
