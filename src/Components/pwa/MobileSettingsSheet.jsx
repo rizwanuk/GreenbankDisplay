@@ -1,5 +1,5 @@
 // src/Components/pwa/MobileSettingsSheet.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import useInstallPrompt from "../../hooks/useInstallPrompt";
 import { checkForUpdates as swCheckForUpdates, applySWUpdate } from "../../pwa/registerMobileSW";
 
@@ -30,7 +30,36 @@ export default function MobileSettingsSheet({
   // PWA install prompt
   const { canInstall, promptInstall } = useInstallPrompt();
 
+  // Lightweight UX feedback for SW actions
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
   if (!open) return null;
+
+  const onCheckUpdate = async () => {
+    try {
+      setBusy(true);
+      setStatus("");
+      await swCheckForUpdates();
+      setStatus("Checked for updates.");
+    } catch (e) {
+      setStatus(`Update check failed${e?.message ? `: ${e.message}` : ""}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onApplyUpdate = async () => {
+    try {
+      setBusy(true);
+      setStatus("");
+      await applySWUpdate(); // should postMessage({type: 'SKIP_WAITING'}) & reload if your helper does that
+      setStatus("Applied update.");
+    } catch (e) {
+      setStatus(`Apply update failed${e?.message ? `: ${e.message}` : ""}`);
+      setBusy(false); // if page didn’t reload
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60">
@@ -60,11 +89,13 @@ export default function MobileSettingsSheet({
                 <button
                   key={name}
                   onClick={() => onChangeTheme?.(name)}
+                  disabled={busy}
                   className={[
                     "px-3 py-1.5 rounded-lg border transition",
                     currentThemeName === name
                       ? "bg-white text-[#0b0f1a] border-white"
                       : "bg-white/10 border-white/15 hover:bg-white/15",
+                    busy ? "opacity-60 cursor-not-allowed" : "",
                   ].join(" ")}
                 >
                   {name}
@@ -79,28 +110,32 @@ export default function MobileSettingsSheet({
           {/* PWA card */}
           <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
             <div className="font-medium mb-2">App</div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => swCheckForUpdates()}
-                className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15"
+                onClick={onCheckUpdate}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15 disabled:opacity-60"
               >
                 Check for update
               </button>
               <button
-                onClick={() => applySWUpdate()}
-                className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15"
+                onClick={onApplyUpdate}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15 disabled:opacity-60"
               >
                 Apply update
               </button>
               {canInstall && (
                 <button
                   onClick={() => promptInstall()}
-                  className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15"
+                  disabled={busy}
+                  className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15 disabled:opacity-60"
                 >
                   Install app
                 </button>
               )}
             </div>
+            {status && <div className="mt-2 text-sm opacity-80">{status}</div>}
           </div>
 
           {/* About */}
