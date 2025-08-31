@@ -14,12 +14,8 @@ import useMobileTimeline from "../hooks/useMobileTimeline";
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 import MobileUpcomingList from "../Components/MobileUpcomingList";
-
-import usePushStatus from "../hooks/usePushStatus";
-import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
-
-import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
-import { postSubscription } from "../pwa/pushApi"; // ⬅️ removed postSchedule (legacy)
+import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
+// ⬅️ removed postSchedule (legacy)
 import { getMobileTheme } from "../utils/helpers";
 
 /* --------------------------- helpers ---------------------------- */
@@ -196,8 +192,6 @@ export default function MobileScreen() {
   // SW status
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
 
-  // Live push status
-  usePushStatus();
 
   // Heartbeat tick
   useEffect(() => {
@@ -402,17 +396,6 @@ export default function MobileScreen() {
       setShowSettings(false);
     }
   };
-
-  // --- Push: ensure subscription is posted (once) ---
-  useEffect(() => {
-    (async () => {
-      try {
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) await postSubscription();
-      } catch {}
-    })();
-  }, []);
 
   // ✅ Build today's Jama'ah times (LOCAL) for the settings sheet to schedule
   const todayJamaahTimes = useMemo(() => {

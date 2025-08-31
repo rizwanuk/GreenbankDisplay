@@ -1,7 +1,7 @@
 {
   "name": "Greenbank Masjid - Mobile",
   "short_name": "Masjid Mobile",
-  "description": "Prayer times and mobile prayer screen for Greenbank Masjid, with optional notifications.",
+  "description": "Prayer times and mobile prayer screen for Greenbank Masjid, ",
   "id": "/mobile/",
   "start_url": "/mobile/",
   "scope": "/mobile/",

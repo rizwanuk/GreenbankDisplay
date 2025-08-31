@@ -130,37 +130,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 // Push notifications
-self.addEventListener("push", (event) => {
-  const data = (() => {
-    try {
-      return event.data ? event.data.json() : {};
-    } catch {
-      return {};
-    }
-  })();
-  const title = data.title || "Prayer Reminder";
-  const body = data.body || "";
-  const url = data.url || "/mobile/";
-  const tag = data.tag || undefined;
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      tag,
-      icon: "/mobile/icons/icon-192.png",
-      badge: "/mobile/icons/icon-192.png",
-      data: { url },
-    })
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const url = event.notification?.data?.url || "/mobile/";
-  event.waitUntil(
-    (async () => {
-      const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
-      const existing = all.find((c) => c.url.includes("/mobile/"));
+const existing = all.find((c) => c.url.includes("/mobile/"));
       if (existing) return existing.focus();
       return clients.openWindow(url);
     })()

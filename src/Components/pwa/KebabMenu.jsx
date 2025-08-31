@@ -7,11 +7,7 @@ export default function KebabMenu({
   isIOS,
   isIOSSafari,
   onInstall,
-  onNotifications,
   onCopyLink,
-  notifStatusLabel = "—",
-  notifStatusColor = "text-white/70",
-  // NEW:
   debugEnabled = false,
   onToggleDebug = null,
 }) {
@@ -40,23 +36,8 @@ export default function KebabMenu({
       {open && (
         <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-white/10 bg-[#121827] shadow-xl overflow-hidden">
           <div className="py-1 text-sm">
-            {/* Notifications row with status dot */}
-            <button
-              onClick={() => {
-                setOpen(false);
-                onNotifications?.();
-              }}
-              className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between"
-            >
-              <span>Notifications</span>
-              <span className={`flex items-center gap-1 ${notifStatusColor}`}>
-                <span className="inline-block h-2 w-2 rounded-full bg-current" />
-                {notifStatusLabel}
-              </span>
-            </button>
-
             {/* Install */}
-            {canInstallMenu && !installed && (
+            {canInstallMenu && (
               <button
                 onClick={() => {
                   setOpen(false);
@@ -64,39 +45,36 @@ export default function KebabMenu({
                 }}
                 className="w-full text-left px-3 py-2 hover:bg-white/10"
               >
-                Install app
+                {installed ? "Reinstall app" : "Install app"}
+                {isIOS && isIOSSafari && (
+                  <span className="block text-xs text-white/60">
+                    iOS: use Share → Add to Home Screen
+                  </span>
+                )}
               </button>
             )}
 
-            {/* iOS hint / copy link for Safari */}
-            {isIOS && !isIOSSafari && (
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  onCopyLink?.();
-                }}
-                className="w-full text-left px-3 py-2 hover:bg-white/10"
-              >
-                Copy link for Safari (Install)
-              </button>
-            )}
+            {/* Copy link */}
+            <button
+              onClick={() => {
+                setOpen(false);
+                onCopyLink?.();
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-white/10"
+            >
+              Copy link
+            </button>
 
-            {/* Divider */}
-            <div className="my-1 h-px bg-white/10" />
-
-            {/* NEW: Toggle troubleshooting tools */}
+            {/* Debug */}
             {onToggleDebug && (
               <button
                 onClick={() => {
-                  onToggleDebug();
                   setOpen(false);
+                  onToggleDebug?.(!debugEnabled);
                 }}
-                className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between"
+                className="w-full text-left px-3 py-2 hover:bg-white/10"
               >
-                <span>Troubleshooting tools</span>
-                <span className={`ml-3 text-xs ${debugEnabled ? "text-emerald-400" : "text-white/60"}`}>
-                  {debugEnabled ? "On" : "Off"}
-                </span>
+                {debugEnabled ? "Disable debug mode" : "Enable debug mode"}
               </button>
             )}
           </div>
