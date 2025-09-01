@@ -3,6 +3,19 @@ import React, { useMemo, useState } from "react";
 import useInstallPrompt from "../../hooks/useInstallPrompt";
 import { checkForUpdates as swCheckForUpdates, applySWUpdate } from "../../pwa/registerMobileSW";
 
+// --- Helpers: normalize “Group” (strip zero-width chars, trim around dots, collapse spaces)
+const ZW = /\u200B|\u200C|\u200D|\uFEFF/g;
+const normalizeGroup = (g = "") =>
+  String(g)
+    .normalize("NFKC")
+    .replace(ZW, "")
+    .replace(/\s*\.\s*/g, ".") // "themeMobile . Theme_3 . header" -> "themeMobile.Theme_3.header"
+    .replace(/\s+/g, " ")
+    .trim();
+
+const naturalCompare = (a, b) =>
+  String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+
 function getMobileThemeNames(rows) {
   if (!Array.isArray(rows)) return [];
   const set = new Set();
