@@ -1,10 +1,11 @@
+\
 /**
  * Greenbank Mobile PWA Service Worker
  * Scope: /mobile/
  * (push removed; supports manual update via SKIP_WAITING)
  */
 
-const CACHE = "gbm-mobile-v4"; // bump to force fresh cache
+const CACHE = "gbm-mobile-v5"; // bump to force fresh cache
 
 // App shell / static assets to seed cache (add more if needed)
 const PRECACHE = [
