@@ -1,88 +1,74 @@
 // tailwind.config.js
+/** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  content: [
+    "./index.html",
+    "./public/**/*.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
 
   theme: {
     extend: {
-      // Map Tailwind font utility classes to your self-hosted font-faces
+      // Self-hosted fonts mapped to utilities
       fontFamily: {
         rubik: ["Rubik", "sans-serif"],
         inter: ["Inter", "sans-serif"],
         cairo: ["Cairo", "sans-serif"],
         lalezar: ["Lalezar", "cursive"],
         poppins: ["Poppins", "sans-serif"],
-        arabic: ["Amiri", "serif"], // gives you class: font-arabic
+        arabic: ["Amiri", "serif"],
       },
-
-      // Project accents (optional)
       colors: {
         greenbank: "#196466",
       },
     },
   },
 
-  /**
-   * We safelist utilities that are injected at runtime from the Google Sheet
-   * (theme.* and themeMobile.*). Tailwind only keeps classes it can "see" at
-   * build time, so anything dynamic must be covered here.
-   */
+  // Keep runtime (sheet-driven) utilities from being purged.
   safelist: [
-    // Core color utility families (sheet-driven bg/text/border)
-    {
-      pattern:
-        /(bg|text|border)-(white|black|slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900)/,
-    },
-
-    // Opacity variants for white/black like "bg-white/10", "border-black/20"
-    {
-      pattern: /(bg|text|border)-(white|black)\/(5|10|15|20|30|40|50|60|70|80|90)/,
-    },
-
-    // Hover variants (e.g., "hover:bg-white/15" coming from the sheet)
-    {
-      pattern:
-        /^bg-(white|black|(slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+)(\/\d+)?$/,
-      variants: ["hover"],
-    },
-    {
-      pattern:
-        /^border-(white|black|(slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+)(\/\d+)?$/,
-      variants: ["hover"],
-    },
-    {
-      pattern:
-        /^text-(white|black|(slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+)(\/\d+)?$/,
-      variants: ["hover"],
-    },
-
-    // Gradients (if themes use from-/via-/to- color stops)
-    {
-      pattern:
-        /^(from|via|to)-(slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(100|200|300|400|500|600|700|800|900)$/,
-    },
-
-    // Bare 'border' utility (many sheet rows set "border border-white/20")
+    // Common one-offs used across screens
     "border",
-
-    // Common one-offs we saw in your sheet/themes
-    "bg-white/5",
-    "bg-white/10",
-    "bg-white/15",
+    "bg-white/5", "bg-white/10", "bg-white/15",
     "text-white",
-    "border-white/10",
-    "border-white/20",
+    "border-white/10", "border-white/20",
 
-    // Backdrop blur options (used in headers/cards sometimes)
-    { pattern: /^backdrop-blur(-(sm|md|lg|xl|2xl))?$/ },
+    // Mobile theme colors you listed
+    "bg-gray-800", "bg-emerald-700", "bg-emerald-900",
+    "text-yellow-300", "text-lime-300",
 
-    // Generic utility families you may reference dynamically (sizes/layout)
-    { pattern: /^(p|px|py|pt|pb|pl|pr|m|mx|my|w|h|rounded|shadow|gap|flex|grid|items|justify)-/ },
+    // Named Tailwind text sizes (if your sheet uses these tokens)
+    { pattern: /^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/ },
 
-    // Arbitrary text sizes from the sheet (e.g., text-[180px])
-    { pattern: /^text-\[\d+px\]$/ },
+    // ===== Main display: arbitrary font sizes from the sheet =====
+    // e.g. text-[28px], text-[2.8vw], text-[1.75rem]
+    { pattern: /^text-\[(\d+(\.\d+)?)px\]$/ },
+    { pattern: /^text-\[(\d+(\.\d+)?)vw\]$/ },
+    { pattern: /^text-\[(\d+(\.\d+)?)rem\]$/ },
 
-    // Common Tailwind heading sizes if they’re sheet-driven
-    { pattern: /^text-(sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/ },
+    // Responsive variants for arbitrary sizes (md:text-[...], etc.)
+    { pattern: /^text-\[(\d+(\.\d+)?)px\]$/, variants: ["sm","md","lg","xl","2xl"] },
+    { pattern: /^text-\[(\d+(\.\d+)?)vw\]$/, variants: ["sm","md","lg","xl","2xl"] },
+    { pattern: /^text-\[(\d+(\.\d+)?)rem\]$/, variants: ["sm","md","lg","xl","2xl"] },
+
+    // Line-height from sheet (e.g. leading-[1.15], leading-[32px])
+    { pattern: /^leading-\[(\d+(\.\d+)?)\]$/ },
+    { pattern: /^leading-\[(\d+(\.\d+)?)px\]$/ },
+    { pattern: /^leading-(none|tight|snug|normal|relaxed|loose)$/ },
+
+    // Letter-spacing from sheet (optional)
+    { pattern: /^tracking-(tighter|tight|normal|wide|wider|widest)$/ },
+    { pattern: /^tracking-\[-?\d+(\.\d+)?(px|em)\]$/ },
+
+    // Opacity variants for white/black (bg/border/text) incl. hover
+    { pattern: /^(bg|text|border)-(white|black)\/(5|10|15|20|30|40|50|60|70|80|90)$/ },
+    { pattern: /^hover:bg-(white|black)\/(5|10|15|20|30|40|50|60|70|80|90)$/ },
+
+    // Small color-family net for occasional sheet colors on desktop
+    { pattern: /^(bg|text|border)-(gray|emerald|yellow)-(50|100|200|300|400|500|600|700|800|900)$/ },
+    { pattern: /^hover:bg-(gray|emerald|yellow)-(50|100|200|300|400|500|600|700|800|900)$/ },
+
+    // If your themes use gradient stops like from-emerald-700 etc.
+    { pattern: /^(from|via|to)-(slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(100|200|300|400|500|600|700|800|900)$/ },
   ],
 
   plugins: [],
