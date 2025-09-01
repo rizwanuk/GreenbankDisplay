@@ -14,9 +14,9 @@ import useMobileTimeline from "../hooks/useMobileTimeline";
 import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 import MobileUpcomingList from "../Components/MobileUpcomingList";
-import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
+import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
+import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
 // ⬅️ removed postSchedule (legacy)
-import { getMobileTheme } from "../utils/helpers";
 
 /* --------------------------- helpers ---------------------------- */
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
@@ -175,6 +175,28 @@ function dayKey(d) {
   return `${y}-${m}-${dd}`;
 }
 
+/* -------- Mobile theme helpers (from Google Sheet rows) -------- */
+function buildMobileThemeMap(settingsRows = []) {
+  // Rows like: Group="themeMobile.Theme_4.currentPrayer", Key="bgColor", Value="bg-gray-800"
+  const map = {};
+  for (const r of settingsRows || []) {
+    const group = (r?.Group || "").trim();
+    if (!group.startsWith("themeMobile.")) continue;
+    const key = (r?.Key || "").trim();
+    const val = r?.Value != null ? String(r.Value).trim() : "";
+    if (!key) continue;
+
+    const parts = group.split("."); // ["themeMobile","Theme_4","currentPrayer"]
+    const themeName = parts[1] || "Theme_1";
+    const section = parts[2] || "root";
+
+    map[themeName] ||= {};
+    map[themeName][section] ||= {};
+    map[themeName][section][key] = val;
+  }
+  return map;
+}
+
 /* ============================= Component ============================= */
 export default function MobileScreen() {
   const [hb, setHb] = useState(0);
@@ -191,7 +213,6 @@ export default function MobileScreen() {
 
   // SW status
   const [swInfo, setSwInfo] = useState({ ready: false, scope: "" });
-
 
   // Heartbeat tick
   useEffect(() => {
@@ -230,19 +251,22 @@ export default function MobileScreen() {
 
   const settingsMap = useMemo(() => flattenSettings(settingsRows), [settingsRows]);
 
-  // ===== Theme selection (mobile-aware) =====
-  const defaultTheme =
-    settingsMap["mobile.theme"] || settingsMap["toggles.theme"] || "Theme_1";
-  const activeTheme = themeOverride || defaultTheme;
+  /* ===== Theme selection from Google Sheet =====
+     - Reads theme names/sections from rows with Group starting 'themeMobile.'
+     - Default theme comes from (in order): mobile.theme → toggles.themeMobile → toggles.theme → 'Theme_1'
+     - Local override stored in localStorage('selectedTheme')
+  */
+  const themeMap = useMemo(() => buildMobileThemeMap(settingsRows), [settingsRows]);
 
-  const mapWithThemeOverride = useMemo(
-    () => ({ ...settingsMap, "toggles.theme": activeTheme }),
-    [settingsMap, activeTheme]
-  );
+  const defaultThemeName =
+    settingsMap["mobile.theme"] ||
+    settingsMap["toggles.themeMobile"] ||
+    settingsMap["toggles.theme"] ||
+    "Theme_1";
 
-  // Use helper that respects themeMobile.* overrides
-  const themeAll = useMemo(() => getMobileTheme(mapWithThemeOverride), [mapWithThemeOverride]);
+  const activeThemeName = themeOverride || defaultThemeName;
 
+  const themeAll = themeMap[activeThemeName] || {};
   const themeHeader = themeAll.header || {};
   const themeDateCard = themeAll.dateCard || {};
   const themeCurrentPrayer = themeAll.currentPrayer || {};
@@ -520,7 +544,8 @@ export default function MobileScreen() {
         open={showSettings}
         onClose={requestCloseSettings}
         settingsRows={settingsRows}
-        currentThemeName={activeTheme}
+        settings={{ toggles: { themeMobile: defaultThemeName } }}
+        currentThemeName={activeThemeName}
         onChangeTheme={(name) => {
           try {
             localStorage.setItem("selectedTheme", name || "");
