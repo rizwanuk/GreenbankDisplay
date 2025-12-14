@@ -38,7 +38,7 @@ export default function Embed2Screen() {
           document.body.scrollHeight,
           document.documentElement.offsetHeight,
           document.body.offsetHeight
-        ) + 8;
+        ) + 2;
 
       window.parent?.postMessage({ type: "GBM_EMBED2_HEIGHT", height }, "*");
     };
@@ -271,7 +271,8 @@ export default function Embed2Screen() {
 
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
-      <div className="w-full max-w-xl px-2 py-2 space-y-3">
+      <div className="w-full max-w-xl px-2 pt-2 pb-0 space-y-2">
+
         {/* ======================= TODAY ======================= */}
         <div className="px-1 text-xs sm:text-sm font-semibold tracking-wide text-black/70 uppercase">
           Today’s times
@@ -406,7 +407,8 @@ export default function Embed2Screen() {
           Tomorrow’s times
         </div>
 
-        <div className="bg-gray-100 text-black rounded-xl shadow p-2">
+        <div className="bg-gray-100 text-black rounded-xl shadow p-2 pb-1">
+
           <table className="w-full table-fixed text-center">
             <thead>
               <tr className="text-xs sm:text-sm">
