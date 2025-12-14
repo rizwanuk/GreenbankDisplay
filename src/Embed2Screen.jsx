@@ -29,6 +29,36 @@ export default function Embed2Screen() {
     return () => clearInterval(fullReload);
   }, []);
 
+  // Auto-resize in an iframe (WordPress)
+  useEffect(() => {
+    const postHeight = () => {
+      const height =
+        Math.max(
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+          document.documentElement.offsetHeight,
+          document.body.offsetHeight
+        ) + 8;
+
+      window.parent?.postMessage({ type: "GBM_EMBED2_HEIGHT", height }, "*");
+    };
+
+    postHeight();
+    const t1 = setTimeout(postHeight, 100);
+    const t2 = setTimeout(postHeight, 400);
+
+    window.addEventListener("resize", postHeight);
+
+    const interval = setInterval(postHeight, 1500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearInterval(interval);
+      window.removeEventListener("resize", postHeight);
+    };
+  }, []);
+
   const settings = useMemo(
     () => (rawSettings?.length ? parseSettings(rawSettings) : null),
     [rawSettings]
@@ -82,7 +112,6 @@ export default function Embed2Screen() {
       String(settings?.islamicCalendar?.normalizeTo30DayMonths ?? "FALSE").toUpperCase() ===
       "TRUE";
 
-    // Build a clean date-only moment so i* formats always work
     let m = moment(baseDate.format("YYYY-MM-DD"), "YYYY-MM-DD").add(offset, "days");
 
     const isDayOne = m.format("iD") === "1";
@@ -192,7 +221,6 @@ export default function Embed2Screen() {
     messageStyle = "bg-cyan-600 text-white";
   }
 
-  // Last updated (if present)
   const lastUpdatedRaw = settings?.meta?.lastUpdated;
   const lastUpdated = lastUpdatedRaw
     ? moment.utc(lastUpdatedRaw).local().format("D MMM YYYY, h:mm A")
@@ -234,13 +262,23 @@ export default function Embed2Screen() {
   const jummahMomentToday = getJummahTime(settings, today);
   const jummahMomentTomorrow = getJummahTime(settings, tomorrow);
 
+  // Mobile-friendly sizing classes to prevent overlaps
+  const thPad = "px-0.5 sm:px-1";
+  const thEn = "text-[0.7rem] sm:text-sm md:text-base leading-tight";
+  const thAr = "text-[0.6rem] sm:text-xs md:text-sm font-normal leading-tight";
+  const rowLabel = "text-[0.7rem] sm:text-sm md:text-base whitespace-nowrap";
+  const cellText = "text-[0.7rem] sm:text-sm md:text-base whitespace-nowrap";
+
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
-      {/* Outer wrapper: two stacked "cards" */}
       <div className="w-full max-w-xl px-2 py-2 space-y-3">
-        {/* ======================= TODAY CARD ======================= */}
+        {/* ======================= TODAY ======================= */}
+        <div className="px-1 text-xs sm:text-sm font-semibold tracking-wide text-black/70 uppercase">
+          Today’s times
+        </div>
+
         <div className="bg-gray-100 text-black rounded-xl shadow p-2">
-          <table className="w-full table-fixed text-center text-sm sm:text-base">
+          <table className="w-full table-fixed text-center">
             <thead>
               <tr className="text-xs sm:text-sm">
                 <th className="text-left py-1" colSpan={6}>
@@ -275,12 +313,12 @@ export default function Embed2Screen() {
                   return (
                     <th
                       key={key}
-                      className={`w-1/6 px-1 py-1 font-semibold leading-tight ${
+                      className={`w-1/6 ${thPad} py-1 font-semibold leading-tight ${
                         isActive ? "bg-green-200 text-black font-bold rounded" : ""
                       }`}
                     >
-                      <div className="text-sm sm:text-base">{enLabel}</div>
-                      <div className="text-[0.7rem] sm:text-sm font-normal">{arLabel}</div>
+                      <div className={thEn}>{enLabel}</div>
+                      <div className={thAr}>{arLabel}</div>
                     </th>
                   );
                 })}
@@ -289,13 +327,13 @@ export default function Embed2Screen() {
 
             <tbody>
               <tr className="border-t border-black/10">
-                <td className="text-left py-1 font-medium text-sm sm:text-base">Begins</td>
+                <td className={`text-left py-1 font-medium ${rowLabel}`}>Begins</td>
                 {prayers.map((key) => {
                   const isActive = !isMakroohNow && key === activePrayerKeyToday;
                   return (
                     <td
                       key={key + "-adhan"}
-                      className={`py-1 text-sm sm:text-base ${
+                      className={`py-1 ${cellText} ${
                         isActive ? "bg-green-200 text-black font-semibold rounded" : ""
                       }`}
                     >
@@ -306,7 +344,7 @@ export default function Embed2Screen() {
               </tr>
 
               <tr className="border-t border-black/10">
-                <td className="text-left py-1 font-medium text-sm sm:text-base">Jama‘ah</td>
+                <td className={`text-left py-1 font-medium ${rowLabel}`}>Jama‘ah</td>
                 {prayers.map((key) => {
                   const isActive = !isMakroohNow && key === activePrayerKeyToday;
                   const jamaahTime =
@@ -317,7 +355,7 @@ export default function Embed2Screen() {
                   return (
                     <td
                       key={key + "-iqamah"}
-                      className={`py-1 text-sm sm:text-base ${
+                      className={`py-1 ${cellText} ${
                         isActive ? "bg-green-200 text-black font-semibold rounded" : ""
                       }`}
                     >
@@ -329,7 +367,6 @@ export default function Embed2Screen() {
             </tbody>
           </table>
 
-          {/* Today current prayer message row */}
           {(structured || prayerMessage) && (
             <div className={`mt-1 font-semibold text-center rounded p-1 ${messageStyle}`}>
               <div className="inline-flex items-baseline justify-center gap-2 whitespace-nowrap">
@@ -350,7 +387,6 @@ export default function Embed2Screen() {
             </div>
           )}
 
-          {/* Today info row */}
           <div className="pt-1 text-xs sm:text-sm text-black/90 px-2">
             {current.isMakrooh ? (
               <div className="bg-red-600 text-white font-semibold text-center rounded p-1">
@@ -365,9 +401,13 @@ export default function Embed2Screen() {
           </div>
         </div>
 
-        {/* ======================= TOMORROW CARD ======================= */}
+        {/* ======================= TOMORROW ======================= */}
+        <div className="px-1 text-xs sm:text-sm font-semibold tracking-wide text-black/70 uppercase">
+          Tomorrow’s times
+        </div>
+
         <div className="bg-gray-100 text-black rounded-xl shadow p-2">
-          <table className="w-full table-fixed text-center text-sm sm:text-base">
+          <table className="w-full table-fixed text-center">
             <thead>
               <tr className="text-xs sm:text-sm">
                 <th className="text-left py-1" colSpan={6}>
@@ -392,9 +432,9 @@ export default function Embed2Screen() {
                     key === "dhuhr" && isFridayTomorrow ? A.jummah || "" : A[key] || "";
 
                   return (
-                    <th key={key} className="w-1/6 px-1 py-1 font-semibold leading-tight">
-                      <div className="text-sm sm:text-base">{enLabel}</div>
-                      <div className="text-[0.7rem] sm:text-sm font-normal">{arLabel}</div>
+                    <th key={key} className={`w-1/6 ${thPad} py-1 font-semibold leading-tight`}>
+                      <div className={thEn}>{enLabel}</div>
+                      <div className={thAr}>{arLabel}</div>
                     </th>
                   );
                 })}
@@ -403,16 +443,16 @@ export default function Embed2Screen() {
 
             <tbody>
               <tr className="border-t border-black/10">
-                <td className="text-left py-1 font-medium text-sm sm:text-base">Begins</td>
+                <td className={`text-left py-1 font-medium ${rowLabel}`}>Begins</td>
                 {prayers.map((key) => (
-                  <td key={key + "-adhan-tom"} className="py-1 text-sm sm:text-base">
+                  <td key={key + "-adhan-tom"} className={`py-1 ${cellText}`}>
                     {formatTime(tomorrowRow[`${capitalize(key)} Adhan`])}
                   </td>
                 ))}
               </tr>
 
               <tr className="border-t border-black/10">
-                <td className="text-left py-1 font-medium text-sm sm:text-base">Jama‘ah</td>
+                <td className={`text-left py-1 font-medium ${rowLabel}`}>Jama‘ah</td>
                 {prayers.map((key) => {
                   const jamaahTime =
                     key === "dhuhr" && isFridayTomorrow
@@ -420,7 +460,7 @@ export default function Embed2Screen() {
                       : formatTime(tomorrowRow[`${capitalize(key)} Iqamah`]);
 
                   return (
-                    <td key={key + "-iqamah-tom"} className="py-1 text-sm sm:text-base">
+                    <td key={key + "-iqamah-tom"} className={`py-1 ${cellText}`}>
                       {jamaahTime}
                     </td>
                   );
@@ -429,7 +469,6 @@ export default function Embed2Screen() {
             </tbody>
           </table>
 
-          {/* ✅ Tomorrow info row (THIS is where Shouruq for tomorrow goes) */}
           <div className="mt-1 text-xs sm:text-sm text-black/90 px-2">
             <div className="flex justify-center flex-wrap gap-2 whitespace-nowrap text-center">
               <span>Shouruq (Sunrise): {formatTime(tomorrowRow["Shouruq"])}</span>
