@@ -1,8 +1,10 @@
 // api/wp/prayer-times-2day.js
-export const config = { runtime: "nodejs" };
+// READ-ONLY, STANDALONE SERVERLESS FUNCTION
+// No React, no RSC, no app imports
 
-// READ-ONLY ENDPOINT FOR WORDPRESS (ADDITIVE - does not affect existing screens)
-import { tab } from "../../src/constants/sheets";
+export const config = {
+  runtime: "nodejs",
+};
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -11,12 +13,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = tab("PrayerTimes");
+    // 🔒 Inline OpenSheet URL (prevents import-time crashes)
+    const PRAYER_TIMES_URL =
+      "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/PrayerTimes";
 
-    // ✅ Use built-in fetch (no node-fetch dependency)
-    const response = await fetch(url);
+    const response = await fetch(PRAYER_TIMES_URL);
+
     if (!response.ok) {
-      res.status(502).json({ error: "Upstream fetch failed", status: response.status });
+      res.status(502).json({
+        error: "Upstream fetch failed",
+        status: response.status,
+      });
       return;
     }
 
@@ -29,25 +36,21 @@ export default async function handler(req, res) {
     const matchRow = (d) =>
       rows.find(
         (r) =>
-          parseInt(r.Day, 10) === d.getDate() &&
-          parseInt(r.Month, 10) === d.getMonth() + 1
+          Number(r.Day) === d.getDate() &&
+          Number(r.Month) === d.getMonth() + 1
       );
 
-    const todayRow = matchRow(today);
-    const tomorrowRow = matchRow(tomorrow);
-
-    // Cache at the edge (safe, reduces pressure on opensheet)
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 
     res.status(200).json({
-      today: todayRow || null,
-      tomorrow: tomorrowRow || null,
+      today: matchRow(today) || null,
+      tomorrow: matchRow(tomorrow) || null,
       generatedAt: new Date().toISOString(),
     });
-  } catch (e) {
+  } catch (err) {
     res.status(500).json({
-      error: "Function crashed",
-      details: String(e?.message || e),
+      error: "Serverless function error",
+      message: String(err),
     });
   }
 }
