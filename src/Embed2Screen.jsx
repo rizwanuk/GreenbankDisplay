@@ -1,5 +1,5 @@
 // src/Embed2Screen.jsx
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import usePrayerTimes from "./hooks/usePrayerTimes";
 import useSettings from "./hooks/useSettings";
 import { parseSettings } from "./utils/parseSettings";
@@ -24,37 +24,42 @@ export default function Embed2Screen() {
   const rawSettings = useSettings(); // array
   const rawNow = useNow(1000);
 
+  // ✅ This is the key: measure ONLY this wrapper, not the whole document
+  const contentRef = useRef(null);
+
   useEffect(() => {
     const fullReload = setInterval(() => window.location.reload(), 30 * 60 * 1000);
     return () => clearInterval(fullReload);
   }, []);
 
-  // Auto-resize in an iframe (WordPress)
+  // ✅ Auto-resize in an iframe (WordPress) based on content wrapper height
   useEffect(() => {
     const postHeight = () => {
-      const height =
-        Math.max(
-          document.documentElement.scrollHeight,
-          document.body.scrollHeight,
-          document.documentElement.offsetHeight,
-          document.body.offsetHeight
-        ) + 2;
+      const el = contentRef.current;
+      if (!el) return;
+
+      // getBoundingClientRect() avoids the 100vh/min-h-screen inflation
+      const rect = el.getBoundingClientRect();
+      const height = Math.ceil(rect.height) + 2; // tiny buffer
 
       window.parent?.postMessage({ type: "GBM_EMBED2_HEIGHT", height }, "*");
     };
 
+    // Post immediately and after layout settles
     postHeight();
-    const t1 = setTimeout(postHeight, 100);
-    const t2 = setTimeout(postHeight, 400);
+    const t1 = setTimeout(postHeight, 80);
+    const t2 = setTimeout(postHeight, 250);
+
+    // Observe changes (fonts, responsive shifts, etc.)
+    const ro = new ResizeObserver(() => postHeight());
+    if (contentRef.current) ro.observe(contentRef.current);
 
     window.addEventListener("resize", postHeight);
-
-    const interval = setInterval(postHeight, 1500);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
-      clearInterval(interval);
+      ro.disconnect();
       window.removeEventListener("resize", postHeight);
     };
   }, []);
@@ -105,7 +110,6 @@ export default function Embed2Screen() {
 
   const { hijriDateString } = useHijriDate(settings);
 
-  // ✅ Correct Hijri formatting for arbitrary day (used for tomorrow header)
   const getHijriDateStringFor = (baseDate) => {
     const offset = parseInt(settings?.islamicCalendar?.offset || 0, 10);
     const normalizeTo30 =
@@ -123,7 +127,7 @@ export default function Embed2Screen() {
     }
 
     const hijriDay = forcedDay ?? m.format("iD");
-    const hijriMonthIndex = parseInt(m.format("iM"), 10); // 1–12
+    const hijriMonthIndex = parseInt(m.format("iM"), 10);
     const hijriYear = m.format("iYYYY");
 
     const hijriMonthKey = [
@@ -165,7 +169,6 @@ export default function Embed2Screen() {
   if (!todayRow) return <div className="text-black p-4">Today's prayer times not found.</div>;
   if (!tomorrowRow) return <div className="text-black p-4">Tomorrow's prayer times not found.</div>;
 
-  // Current prayer state (TODAY ONLY)
   const current = getCurrentPrayerState({
     now,
     todayRow,
@@ -175,7 +178,6 @@ export default function Embed2Screen() {
     arabicLabels: A,
   });
 
-  // Apply Jum’ah override safely (TODAY ONLY)
   let displayLabel = current?.label || "";
   let displayArabic = current?.arabic || "";
 
@@ -192,7 +194,6 @@ export default function Embed2Screen() {
     displayArabic = A?.[lk] ?? displayArabic;
   }
 
-  // Message styling (TODAY ONLY)
   let messageStyle = "";
   let prayerMessage = "";
   let structured = null;
@@ -229,7 +230,6 @@ export default function Embed2Screen() {
   const formatTime = (timeStr) =>
     timeStr && String(timeStr).includes(":") ? moment(timeStr, "HH:mm").format("h:mm") : "--";
 
-  // TODAY highlight only
   const isMakroohNow = current.isMakrooh;
 
   const getPrayerStart = (row, date, key) => {
@@ -262,7 +262,7 @@ export default function Embed2Screen() {
   const jummahMomentToday = getJummahTime(settings, today);
   const jummahMomentTomorrow = getJummahTime(settings, tomorrow);
 
-  // Mobile-friendly sizing classes to prevent overlaps
+  // Mobile-friendly sizing classes
   const thPad = "px-0.5 sm:px-1";
   const thEn = "text-[0.7rem] sm:text-sm md:text-base leading-tight";
   const thAr = "text-[0.6rem] sm:text-xs md:text-sm font-normal leading-tight";
@@ -271,8 +271,8 @@ export default function Embed2Screen() {
 
   return (
     <div className="bg-white text-black font-sans flex flex-col items-center">
-      <div className="w-full max-w-xl px-2 pt-2 pb-0 space-y-2">
-
+      {/* ✅ ref wrapper is what we measure */}
+      <div ref={contentRef} className="w-full max-w-xl px-2 pt-2 pb-0 space-y-2">
         {/* ======================= TODAY ======================= */}
         <div className="px-1 text-xs sm:text-sm font-semibold tracking-wide text-black/70 uppercase">
           Today’s times
@@ -302,13 +302,9 @@ export default function Embed2Screen() {
                 <th className="text-left py-1 w-1/6"></th>
                 {prayers.map((key) => {
                   const enLabel =
-                    key === "dhuhr" && isFridayToday
-                      ? L.jummah || "Jum‘ah"
-                      : L[key] || capitalize(key);
-
+                    key === "dhuhr" && isFridayToday ? L.jummah || "Jum‘ah" : L[key] || capitalize(key);
                   const arLabel =
                     key === "dhuhr" && isFridayToday ? A.jummah || "" : A[key] || "";
-
                   const isActive = !isMakroohNow && key === activePrayerKeyToday;
 
                   return (
@@ -408,7 +404,6 @@ export default function Embed2Screen() {
         </div>
 
         <div className="bg-gray-100 text-black rounded-xl shadow p-2 pb-1">
-
           <table className="w-full table-fixed text-center">
             <thead>
               <tr className="text-xs sm:text-sm">
@@ -426,10 +421,7 @@ export default function Embed2Screen() {
                 <th className="text-left py-1 w-1/6"></th>
                 {prayers.map((key) => {
                   const enLabel =
-                    key === "dhuhr" && isFridayTomorrow
-                      ? L.jummah || "Jum‘ah"
-                      : L[key] || capitalize(key);
-
+                    key === "dhuhr" && isFridayTomorrow ? L.jummah || "Jum‘ah" : L[key] || capitalize(key);
                   const arLabel =
                     key === "dhuhr" && isFridayTomorrow ? A.jummah || "" : A[key] || "";
 
