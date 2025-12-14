@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router-dom";
 import App from "./App";
 import SlideshowScreen from "./Screens/SlideshowScreen";
 import EmbedScreen from "./EmbedScreen";
+import Embed2Screen from "./Embed2Screen";
 import MobileScreen from "./Screens/MobileScreen";
 
 // Small wrapper to pull globals (or leave empty if not set)
@@ -16,7 +17,8 @@ const router = createBrowserRouter([
   { path: "/", element: <App /> },
   { path: "/slideshow", element: <SlideshowScreen /> },
   { path: "/embed", element: <EmbedScreen /> },
-  { path: "/mobile", element: <MobileRoute /> }, // ✅ new mobile route
+  { path: "/embed2", element: <Embed2Screen /> },
+  { path: "/mobile", element: <MobileRoute /> },
 ]);
 
 export default router;
