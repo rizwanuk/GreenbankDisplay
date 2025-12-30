@@ -1,6 +1,6 @@
-const { google } = require("googleapis");
+import { google } from "googleapis";
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
@@ -9,10 +9,12 @@ module.exports = async (req, res) => {
     if (!email || !keyRaw || !sheetId) {
       return res.status(500).json({
         ok: false,
-        error: "Missing env vars: GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY / GOOGLE_SHEET_ID",
+        error:
+          "Missing env vars: GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY / GOOGLE_SHEET_ID",
       });
     }
 
+    // Vercel often stores newlines as \n inside env vars
     const privateKey = keyRaw.replace(/\\n/g, "\n");
 
     const auth = new google.auth.JWT(
@@ -29,14 +31,14 @@ module.exports = async (req, res) => {
       range: "A1:C5",
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       ok: true,
       rows: result.data.values || [],
     });
   } catch (err) {
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: err?.message || String(err),
     });
   }
-};
+}
