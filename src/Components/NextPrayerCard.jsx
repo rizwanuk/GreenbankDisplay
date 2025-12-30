@@ -26,26 +26,37 @@ function NextPrayerCard({
         : String(!!rawEnabled)) === "true";
     const rawTime = (settingsMap?.["toggles.fakeTime"] ?? "").toString().trim();
     if (enabled && rawTime) {
-      const normalized = rawTime.replace(/[：﹕︓]/g, ":").replace(/[．。]/g, ".");
-      const fmtDate = tickNow.format("YYYY-MM-DD");
-      const m = moment(
-        `${fmtDate} ${normalized}`,
-        ["YYYY-MM-DD HH:mm", "YYYY-MM-DD H:mm", "YYYY-MM-DD HH.mm", "YYYY-MM-DD H.mm"],
+      const frozen = moment(
+        `${tickNow.format("YYYY-MM-DD")} ${rawTime}`,
+        "YYYY-MM-DD HH:mm",
         true
       );
-      if (m.isValid()) return m;
-      console.warn("[NextPrayerCard] Invalid toggles.fakeTime:", rawTime, "(normalized:", normalized, ")");
+      if (frozen.isValid()) return frozen;
     }
     return tickNow;
   }, [tickNow, settingsMap]);
 
-  const highlightMinutes = parseInt(settingsMap["timings.jamaahHighlightDuration"] || "5", 10);
-  const ishraqOffset = parseInt(settingsMap["timings.ishraqAfterSunrise"] || "10", 10);
-  const ishraqDuration = parseInt(settingsMap["timings.ishraqDuration"] || "30", 10);
+  const highlightMinutes = parseInt(
+    settingsMap?.["timings.jamaahHighlightDuration"] || "5",
+    10
+  );
+
+  const ishraqOffset = parseInt(
+    settingsMap?.["timings.ishraqAfterSunrise"] || "10",
+    10
+  );
+  const ishraqDuration = parseInt(
+    settingsMap?.["timings.ishraqDuration"] || "30",
+    10
+  );
 
   const toMomentOn = (timeStr, base) =>
     timeStr
-      ? moment(timeStr, "HH:mm").set({ year: base.year(), month: base.month(), date: base.date() })
+      ? moment(timeStr, "HH:mm").set({
+          year: base.year(),
+          month: base.month(),
+          date: base.date(),
+        })
       : null;
 
   const list = useMemo(() => {
@@ -57,6 +68,7 @@ function NextPrayerCard({
     const build = (label, row, baseDate) => {
       const startStr = row[`${label} Adhan`] || row[label];
       const jamaahStr = row[`${label} Iqamah`];
+
       if (!startStr) return null;
 
       const start = toMomentOn(startStr, baseDate);
@@ -73,18 +85,27 @@ function NextPrayerCard({
     };
 
     const items = [];
+
+    // Today prayers
     ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].forEach((name) => {
-      const x = build(name, todayRow, today);
-      if (x) items.push(x);
+      const p = build(name, todayRow, today);
+      if (p && p.start && p.start.isValid()) items.push(p);
     });
 
-    const fajrTomorrow = build("Fajr", tomorrowRow, tomorrow);
-    if (fajrTomorrow) items.push(fajrTomorrow);
+    // Sunrise (Shouruq)
+    const sunriseStr = todayRow["Sunrise"] || todayRow["Shouruq"] || todayRow["Shouruq Adhan"];
+    const sunrise = sunriseStr ? toMomentOn(sunriseStr, today) : null;
+    if (sunrise && sunrise.isValid()) {
+      items.push({
+        key: "sunrise",
+        name: "Sunrise",
+        lookupKey: "sunrise",
+        start: sunrise,
+        jamaah: sunrise,
+      });
 
-    const sunriseRaw = todayRow["Shouruq"];
-    if (sunriseRaw) {
-      const sunrise = toMomentOn(sunriseRaw, today);
-      if (sunrise?.isValid()) {
+      // Optional Ishraq as a pseudo "next" item
+      if (ishraqDuration > 0) {
         const ishraqStart = sunrise.clone().add(ishraqOffset, "minutes");
         const ishraqEnd = ishraqStart.clone().add(ishraqDuration, "minutes");
         items.push({
@@ -98,6 +119,12 @@ function NextPrayerCard({
       }
     }
 
+    // Tomorrow prayers (for after-Isha / late-night)
+    ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].forEach((name) => {
+      const p = build(name, tomorrowRow, tomorrow);
+      if (p && p.start && p.start.isValid()) items.push(p);
+    });
+
     const withJummah = items
       .filter((p) => p.start && p.start.isValid())
       .map((p) => applyJummahOverride(p, settingsMap))
@@ -105,13 +132,23 @@ function NextPrayerCard({
         const lk = (p.lookupKey || p.key || "").toLowerCase();
         return {
           ...p,
+          lookupKey: lk,
           label: labels?.[lk] ?? labels?.[p.key] ?? p.name,
           arabic: arabicLabels?.[lk] ?? arabicLabels?.[p.key] ?? "",
         };
       });
 
     return withJummah;
-  }, [todayRow, tomorrowRow, now, labels, arabicLabels, ishraqOffset, ishraqDuration, settingsMap]);
+  }, [
+    todayRow,
+    tomorrowRow,
+    now,
+    labels,
+    arabicLabels,
+    ishraqOffset,
+    ishraqDuration,
+    settingsMap,
+  ]);
 
   useEffect(() => {
     if (!list.length) {
@@ -122,9 +159,52 @@ function NextPrayerCard({
       return;
     }
 
-    const upcoming = [...list].filter((p) => now.isBefore(p.start)).sort((a, b) => a.start.diff(b.start))[0];
+    const eligibleKeys = new Set(["fajr", "dhuhr", "jummah", "asr", "isha"]);
 
-    if (!upcoming) {
+    const sorted = [...list].sort((a, b) => a.start.diff(b.start));
+    const nextUpcoming = sorted
+      .filter((p) => now.isBefore(p.start))
+      .sort((a, b) => a.start.diff(b.start))[0];
+    const lastStarted = [...sorted]
+      .filter((p) => p.start && now.isSameOrAfter(p.start))
+      .sort((a, b) => b.start.diff(a.start))[0];
+
+    const getKey = (p) => (p?.lookupKey || p?.key || "").toString().toLowerCase();
+    const isEligible = (p) => eligibleKeys.has(getKey(p));
+    const hasMeaningfulGap = (p) =>
+      p?.start && p?.jamaah && p.jamaah.diff(p.start, "seconds") > 60; // avoids Maghrib (start ≈ jama‘ah)
+
+    // Jama‘ah-in-progress highlight (only for eligible prayers)
+    const highlightStart =
+      isEligible(lastStarted) && hasMeaningfulGap(lastStarted) ? lastStarted.jamaah : null;
+    const highlightEnd = highlightStart
+      ? highlightStart.clone().add(highlightMinutes, "minutes")
+      : null;
+    const duringJamaah =
+      highlightStart &&
+      highlightEnd &&
+      now.isSameOrAfter(highlightStart) &&
+      now.isBefore(highlightEnd);
+
+    setInProgress(Boolean(duringJamaah));
+
+    if (duringJamaah && lastStarted) {
+      setNextLabel(lastStarted.label || "");
+      setNextArabic(lastStarted.arabic || "");
+      setCountdown("Jama‘ah in progress");
+      return;
+    }
+
+    const showCurrentJamaahCountdown =
+      isEligible(lastStarted) &&
+      hasMeaningfulGap(lastStarted) &&
+      lastStarted?.jamaah &&
+      now.isSameOrAfter(lastStarted.start) &&
+      now.isBefore(lastStarted.jamaah);
+
+    const displayPrayer = showCurrentJamaahCountdown ? lastStarted : nextUpcoming;
+
+    if (!displayPrayer) {
       setNextLabel("");
       setNextArabic("");
       setCountdown("No upcoming prayer");
@@ -132,16 +212,11 @@ function NextPrayerCard({
       return;
     }
 
-    setNextLabel(upcoming.label || "");
-    setNextArabic(upcoming.arabic || "");
+    setNextLabel(displayPrayer.label || "");
+    setNextArabic(displayPrayer.arabic || "");
 
-    const highlightStart = upcoming.jamaah;
-    const highlightEnd = highlightStart ? highlightStart.clone().add(highlightMinutes, "minutes") : null;
-    const duringJamaah = highlightStart && highlightEnd && now.isSameOrAfter(highlightStart) && now.isBefore(highlightEnd);
-    setInProgress(Boolean(duringJamaah));
-
-    const target = now.isBefore(upcoming.start) ? upcoming.start : upcoming.jamaah || upcoming.start;
-    const prefix = now.isBefore(upcoming.start) ? "Begins in" : upcoming.jamaah ? "Jama‘ah in" : "Begins in";
+    const target = showCurrentJamaahCountdown ? displayPrayer.jamaah : displayPrayer.start;
+    const prefix = showCurrentJamaahCountdown ? "Jama‘ah in" : "Begins in";
 
     const diff = moment.duration(target.diff(now));
     const seconds = Math.max(0, Math.floor(diff.asSeconds()));
@@ -159,21 +234,31 @@ function NextPrayerCard({
       const mins = totalMinutes % 60;
       if (hours > 0 && mins > 0) display = `${prefix} ${hours}h ${mins}m`;
       else if (hours > 0) display = `${prefix} ${hours} hour${hours !== 1 ? "s" : ""}`;
-      else display = `${prefix} ${totalMinutes} minute${totalMinutes !== 1 ? "s" : ""}`;
+      else
+        display = `${prefix} ${totalMinutes} minute${totalMinutes !== 1 ? "s" : ""}`;
     }
 
     setCountdown(display);
   }, [list, now, highlightMinutes]);
 
-  const cardBg = inProgress ? theme?.jamaahColor || "bg-green-700" : theme?.bgColor || "bg-white/5";
-  const nameClass = `${theme?.nameSize || "text-6xl sm:text-7xl md:text-8xl"} font-eng font-semibold flex-shrink-0`;
-  const nameArClass = `${theme?.nameSizeArabic || "text-5xl sm:text-6xl md:text-7xl"} font-arabic flex-shrink-0`;
+  const cardBg = inProgress
+    ? theme?.jamaahColor || "bg-green-700"
+    : theme?.bgColor || "bg-white/5";
+  const nameClass = `${
+    theme?.nameSize || "text-6xl sm:text-7xl md:text-8xl"
+  } font-eng font-semibold flex-shrink-0`;
+  const nameArClass = `${
+    theme?.nameSizeArabic || "text-5xl sm:text-6xl md:text-7xl"
+  } font-arabic flex-shrink-0`;
 
   // Accent colour: use theme if provided, otherwise a green that matches NOW
   const accentColor = theme?.accentColor || "bg-green-700";
 
   return (
-    <div style={toFontVars(theme)} className={`rounded-xl overflow-hidden mb-4 ${cardBg} flex items-stretch`}>
+    <div
+      style={toFontVars(theme)}
+      className={`rounded-xl overflow-hidden mb-4 ${cardBg} flex items-stretch`}
+    >
       {/* Left accent with vertical NEXT */}
       <div className={`w-14 sm:w-16 md:w-20 ${accentColor} flex items-center justify-center`}>
         <span
@@ -195,7 +280,11 @@ function NextPrayerCard({
           )}
         </div>
 
-        <div className={`${theme?.countdownSize || "text-3xl md:text-5xl"} ${theme?.textColor || "text-white/80"} font-eng`}>
+        <div
+          className={`${theme?.countdownSize || "text-3xl md:text-5xl"} ${
+            theme?.textColor || "text-white/80"
+          } font-eng`}
+        >
           {countdown}
         </div>
       </div>
