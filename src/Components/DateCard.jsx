@@ -29,22 +29,19 @@ function DateCard({
   // Detect start of new Hijri month in the library's calendar
   const isDayOne = rawHijri.format("iD") === "1";
 
-  // If normalizing and it's the library's day 1,
-  // we *force* display of the previous month but with day "30".
-  // This avoids falling back to 29 if the lib thinks the previous month had only 29.
   let displayMoment;
   let forcedDay = null;
 
   if (normalizeTo30DayMonths && isDayOne) {
-    displayMoment = rawHijri.clone().subtract(1, "day"); // previous month
-    forcedDay = "30"; // force the 30th regardless of lib month length
+    displayMoment = rawHijri.clone().subtract(1, "day");
+    forcedDay = "30";
   } else {
     displayMoment = rawHijri;
   }
 
-  // Hijri date parts (from the possibly corrected display moment)
+  // Hijri date parts
   const hijriDay = forcedDay ?? displayMoment.format("iD");
-  const hijriMonthIndex = parseInt(displayMoment.format("iM"), 10) - 1; // 0–11
+  const hijriMonthIndex = parseInt(displayMoment.format("iM"), 10) - 1;
   const hijriYear = displayMoment.format("iYYYY");
   const hijriMonth = islamicMonths[hijriMonthIndex] || "Unknown";
 
@@ -65,16 +62,17 @@ function DateCard({
         shadow-md
       `}
     >
+      {/* English (Gregorian) date – responsive clamp to prevent wrapping */}
       <p
         className={`
           font-eng font-semibold
-          ${theme.englishDateSize || "text-4xl"}
+          ${theme.englishDateSize || "text-[clamp(1.75rem,3.2vw,2.5rem)]"}
         `}
       >
         {englishDate}
       </p>
 
-      {/* Keep overall direction LTR to preserve order: 30 Ṣafar 1447 AH */}
+      {/* Hijri date – unchanged */}
       <p
         className={`
           font-arabic
