@@ -24,6 +24,11 @@ export default function Clock({ settings = {}, theme = {} }) {
   const fontSize = theme.fontSize || "text-[180px]";
   const amPmSize = theme.amPmSize || "text-4xl";
 
+  const monospaceStyle = {
+    fontFamily:
+      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  };
+
   return (
     <div
       className={`
@@ -32,14 +37,28 @@ export default function Clock({ settings = {}, theme = {} }) {
         rounded-2xl shadow-md px-4 py-4
         backdrop-blur-md border border-white/10
         text-center w-full
+        flex justify-center
       `}
     >
-      <div className="flex justify-center items-baseline whitespace-nowrap overflow-hidden w-full">
-        <span className={`${fontFamily} ${fontSize} font-bold leading-none tracking-tight`}>
+      {/* Clock block (time + AM/PM) */}
+      <div className="inline-flex flex-col items-center">
+        {/* Time */}
+        <span
+          className={`${fontFamily} ${fontSize} font-bold leading-none tracking-tight text-right`}
+          style={{ ...monospaceStyle, width: is24Hour ? "8ch" : "7ch" }}
+        >
           {timeDisplay}
         </span>
+
+        {/* AM/PM — tucked under seconds */}
         {!is24Hour && (
-          <span className={`${amPmSize} ml-2 font-bold opacity-80`} style={{ lineHeight: 1 }}>
+          <span
+            className={`${amPmSize} font-bold opacity-80 -mt-3`}
+            style={{
+              lineHeight: 1,
+              transform: "translateX(2.5ch)", // nudges it under the seconds
+            }}
+          >
             {ampm}
           </span>
         )}
