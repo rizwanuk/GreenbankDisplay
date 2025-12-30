@@ -29,9 +29,11 @@ export default async function handler(req, res) {
   const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "";
   const sheetId = (process.env.GOOGLE_SHEET_ID || "").trim();
 
+  const privateKey = normalizePrivateKey(keyRaw);
+
   // Safe diagnostics only (no secrets)
   const diag = {
-    version: "v2-key-normalize",
+    version: "v3-googleauth-credentials",
     hasEmail: !!email,
     email: email ? email : "(missing)",
     hasSheetId: !!sheetId,
@@ -42,6 +44,8 @@ export default async function handler(req, res) {
     privateKeyHasEnd: keyRaw.includes("END PRIVATE KEY"),
     privateKeyHasEscapedNewlines: keyRaw.includes("\\n"),
     privateKeyHasRealNewlines: keyRaw.includes("\n"),
+    normalizedKeyHasRealNewlines: privateKey.includes("\n"),
+    normalizedKeyStartsCorrectly: privateKey.startsWith("-----BEGIN PRIVATE KEY-----"),
     runtime: process.env.VERCEL ? "vercel" : "local",
   };
 
@@ -50,20 +54,22 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, error: "Missing env vars", diag });
     }
 
-    const privateKey = normalizePrivateKey(keyRaw);
+    // ✅ Use GoogleAuth with explicit credentials (more robust than JWT constructor here)
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: email,
+        private_key: privateKey,
+      },
+      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    });
 
-    const auth = new google.auth.JWT(
-      email,
-      null,
-      privateKey,
-      ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-    );
+    const client = await auth.getClient();
 
-    // Force token creation so we can confirm auth is working
-    const token = await auth.getAccessToken();
+    // Force token creation to confirm auth works
+    const token = await client.getAccessToken();
     diag.gotAccessToken = !!token?.token;
 
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = google.sheets({ version: "v4", auth: client });
 
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
