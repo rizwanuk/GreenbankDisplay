@@ -13,6 +13,7 @@
   "dependencies": {
     "@vitejs/plugin-react": "4.3.1",
     "dayjs": "^1.11.9",
+    "google-auth-library": "^10.5.0",
     "googleapis": "^169.0.0",
     "lucide-react": "^0.536.0",
     "moment": "^2.30.1",
