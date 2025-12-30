@@ -11,6 +11,10 @@ export default function InfoCard({ settings = [], settingsMap = {}, theme = {} }
   const [visibleMessage, setVisibleMessage] = useState("");
   const [isInOverridePeriod, setIsInOverridePeriod] = useState(false);
 
+  // Pager / countdown
+  const [secondsToNext, setSecondsToNext] = useState(0);
+  const [nextSwitchAt, setNextSwitchAt] = useState(null);
+
   // ---------- SETTINGS (global first, then theme.<current>, then theme.default) ----------
   const themeName = settingsMap?.["toggles.theme"];
 
@@ -47,6 +51,12 @@ export default function InfoCard({ settings = [], settingsMap = {}, theme = {} }
   })();
 
   // ---------- ACTIVE SCHEDULED MESSAGES (Group: infoCardMessages) ----------
+  // Keep stable for a full minute so rotation isn't reset every second
+  const nowMinuteKey =
+    typeof now?.format === "function"
+      ? now.format("YYYY-MM-DD HH:mm")
+      : moment().format("YYYY-MM-DD HH:mm");
+
   const activeMessages = useMemo(() => {
     const list = (settings || [])
       .filter((row) => row?.Group === "infoCardMessages" && row?.Value)
@@ -64,13 +74,14 @@ export default function InfoCard({ settings = [], settingsMap = {}, theme = {} }
       .filter(Boolean);
 
     const nowTs = typeof now?.valueOf === "function" ? now.valueOf() : Date.now();
+
     return list.filter(({ message, start, end }) => {
       if (!message) return false;
       const okStart = !start || nowTs >= start.valueOf();
       const okEnd = !end || nowTs <= end.valueOf();
       return okStart && okEnd;
     });
-  }, [settings, now]);
+  }, [settings, nowMinuteKey]); // ✅ IMPORTANT: do NOT include `now` here
 
   // ---------- Robust time parsing helper (locale=null, strict=true) ----------
   const parseTodayTime = (hhmmLike) => {
@@ -99,9 +110,11 @@ export default function InfoCard({ settings = [], settingsMap = {}, theme = {} }
       true  // strict
     );
     return m.isValid()
-      ? m.set({ year: (typeof now?.year === "function" ? now.year() : moment().year()),
-                month: (typeof now?.month === "function" ? now.month() : moment().month()),
-                date: (typeof now?.date === "function" ? now.date() : moment().date()) })
+      ? m.set({
+          year: (typeof now?.year === "function" ? now.year() : moment().year()),
+          month: (typeof now?.month === "function" ? now.month() : moment().month()),
+          date: (typeof now?.date === "function" ? now.date() : moment().date()),
+        })
       : null;
   };
 
@@ -175,30 +188,68 @@ export default function InfoCard({ settings = [], settingsMap = {}, theme = {} }
   useEffect(() => {
     if (isInOverridePeriod) {
       setVisibleMessage(overrideMessage || "");
+      setNextSwitchAt(null);
       return;
     }
+
     if (activeMessages.length === 0) {
-      setVisibleMessage(""); // nothing to show (no override, no active messages)
+      setVisibleMessage("");
+      setNextSwitchAt(null);
+      return;
+    }
+
+    // Clamp index if message count shrank
+    if (currentMessageIndex >= activeMessages.length) {
+      setCurrentMessageIndex(0);
       return;
     }
 
     setVisibleMessage(activeMessages[currentMessageIndex]?.message || "");
+    setNextSwitchAt(Date.now() + rotateIntervalMs);
 
     const id = setInterval(() => {
       setCurrentMessageIndex((prev) => (prev + 1) % activeMessages.length);
     }, rotateIntervalMs);
 
     return () => clearInterval(id);
-  }, [currentMessageIndex, rotateIntervalMs, isInOverridePeriod, activeMessages, overrideMessage]);
+  }, [
+    currentMessageIndex,
+    rotateIntervalMs,
+    isInOverridePeriod,
+    activeMessages.length, // ✅ depend on length, not array ref
+    overrideMessage,
+  ]);
+
+  // ---------- Countdown (ticks each second via `now`) ----------
+  useEffect(() => {
+    if (!nextSwitchAt) {
+      setSecondsToNext(0);
+      return;
+    }
+    const nowTs = typeof now?.valueOf === "function" ? now.valueOf() : Date.now();
+    const diffMs = nextSwitchAt - nowTs;
+    setSecondsToNext(Math.max(0, Math.ceil(diffMs / 1000)));
+  }, [now, nextSwitchAt]);
 
   if (!visibleMessage) return null;
+
+  const totalSlides = isInOverridePeriod ? 1 : activeMessages.length;
+  const currentSlide = isInOverridePeriod ? 1 : Math.min(activeMessages.length || 1, currentMessageIndex + 1);
 
   return (
     <div
       className={`w-full px-4 py-6 text-center rounded-xl ${
         theme?.bgColor || "bg-white/10"
-      } ${theme?.textColor || "text-white"} backdrop-blur-sm`}
+      } ${theme?.textColor || "text-white"} backdrop-blur-sm relative`}
     >
+      {/* Tiny pager + countdown */}
+      {totalSlides > 0 && (
+        <div className="absolute top-2 right-2 px-2 py-1 rounded-md text-[10px] sm:text-xs bg-white/10 text-white border border-white/20 backdrop-blur-sm">
+          {currentSlide}/{totalSlides}
+          {!isInOverridePeriod && totalSlides > 1 ? ` • ${secondsToNext}s` : ""}
+        </div>
+      )}
+
       <div className="mb-3">
         <span className="px-4 py-1 rounded-full text-sm sm:text-base font-medium tracking-wide bg-white/10 text-white border border-white/20 backdrop-blur-sm">
           Info
