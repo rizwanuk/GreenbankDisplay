@@ -31,6 +31,21 @@ function decodeEmailFromIdToken(token) {
   }
 }
 
+function getTokenPayload(token) {
+  try {
+    return JSON.parse(atob(token.split(".")[1]));
+  } catch {
+    return null;
+  }
+}
+
+function isTokenNearExpiry(token, minutes = 5) {
+  const payload = getTokenPayload(token);
+  if (!payload?.exp) return false;
+  const expMs = payload.exp * 1000;
+  return Date.now() > expMs - minutes * 60 * 1000;
+}
+
 function rowKey(group, key) {
   return `${group}||${key}`;
 }
@@ -56,6 +71,7 @@ export default function AdminScreen() {
   // UI toggles (testing phase)
   const [showAll, setShowAll] = useState(false);
 
+  // Client-side allowlist (nice-to-have for UX only)
   const allowed = useMemo(() => ALLOWLIST.has((email || "").toLowerCase()), [email]);
 
   // Server-verified identity
@@ -91,6 +107,24 @@ export default function AdminScreen() {
     }
     return n;
   }, [draft, baseline]);
+
+  const signOut = () => {
+    setIdToken("");
+    setEmail("");
+    setServerEmail("");
+    setRows([]);
+    setBaseline(new Map());
+    setDraft(new Map());
+    setError("");
+    setStatus("");
+    localStorage.removeItem("gbm_admin_id_token");
+    localStorage.removeItem("gbm_admin_email");
+
+    try {
+      // optional: prompt shows sign-in again (non-blocking)
+      window.google?.accounts?.id?.prompt?.();
+    } catch {}
+  };
 
   // --- Google Sign-in button ---
   useEffect(() => {
@@ -150,24 +184,31 @@ export default function AdminScreen() {
     };
   }, [clientId]);
 
-  const signOut = () => {
-    setIdToken("");
-    setEmail("");
-    setServerEmail("");
-    setRows([]);
-    setBaseline(new Map());
-    setDraft(new Map());
-    setError("");
-    setStatus("");
-    localStorage.removeItem("gbm_admin_id_token");
-    localStorage.removeItem("gbm_admin_email");
-  };
+  // Warn before expiry (so you don’t get surprised mid-edit)
+  useEffect(() => {
+    if (!idToken) return;
+
+    const tick = () => {
+      if (isTokenNearExpiry(idToken, 5)) {
+        setStatus("Session expiring soon — please save and sign in again.");
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 60_000);
+    return () => clearInterval(t);
+  }, [idToken]);
 
   // --- Server verify + load settings ---
   const fetchWhoAmI = async (token) => {
     const r = await fetch("/api/admin/whoami", {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    if (r.status === 401 || r.status === 403) {
+      throw new Error("AUTH_EXPIRED");
+    }
+
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "whoami failed");
     return j;
@@ -177,6 +218,11 @@ export default function AdminScreen() {
     const r = await fetch("/api/admin/settings", {
       headers: { Authorization: `Bearer ${token}` },
     });
+
+    if (r.status === 401 || r.status === 403) {
+      throw new Error("AUTH_EXPIRED");
+    }
+
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "settings GET failed");
     return j.rows || [];
@@ -205,6 +251,18 @@ export default function AdminScreen() {
         setStatus("");
       } catch (e) {
         const msg = e?.message || String(e);
+
+        if (
+          msg === "AUTH_EXPIRED" ||
+          msg.toLowerCase().includes("token used too late") ||
+          msg.toLowerCase().includes("jwt expired") ||
+          msg.toLowerCase().includes("expired")
+        ) {
+          signOut();
+          setError("Session expired — please sign in again.");
+          return;
+        }
+
         setError(msg);
         setStatus("");
       } finally {
@@ -265,6 +323,10 @@ export default function AdminScreen() {
         body: JSON.stringify({ updates }),
       });
 
+      if (r.status === 401 || r.status === 403) {
+        throw new Error("AUTH_EXPIRED");
+      }
+
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || "Save failed");
 
@@ -278,7 +340,20 @@ export default function AdminScreen() {
       setStatus("Saved ✅");
       setTimeout(() => setStatus(""), 1500);
     } catch (e) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+
+      if (
+        msg === "AUTH_EXPIRED" ||
+        msg.toLowerCase().includes("token used too late") ||
+        msg.toLowerCase().includes("jwt expired") ||
+        msg.toLowerCase().includes("expired")
+      ) {
+        signOut();
+        setError("Session expired — please sign in again.");
+        return;
+      }
+
+      setError(msg);
       setStatus("");
     } finally {
       setLoading(false);
@@ -288,7 +363,6 @@ export default function AdminScreen() {
   const card = "rounded-2xl bg-white/5 border border-white/10 p-4 sm:p-5";
   const input =
     "mt-1 w-full rounded-xl bg-black/40 border border-white/15 px-3 py-2.5 text-base";
-  const select = input;
   const label = "text-sm text-white/70";
 
   return (
@@ -337,6 +411,12 @@ export default function AdminScreen() {
                 Server: {serverAllowed ? "Allowed" : "Blocked"}
               </span>
 
+              {dirtyCount > 0 ? (
+                <span className="text-xs text-yellow-300">● {dirtyCount} unsaved change(s)</span>
+              ) : (
+                <span className="text-xs text-white/50">No unsaved changes</span>
+              )}
+
               {!serverAllowed && allowed ? (
                 <span className="text-xs text-white/60">
                   (Signed in, but server blocked — check allowlist)
@@ -364,7 +444,7 @@ export default function AdminScreen() {
                 <div>
                   <label className={label}>Theme</label>
                   <select
-                    className={select}
+                    className={input}
                     value={get("toggles", "theme", "")}
                     onChange={(e) => set("toggles", "theme", e.target.value)}
                   >
@@ -392,7 +472,7 @@ export default function AdminScreen() {
                 <div>
                   <label className={label}>Clock 24 hours</label>
                   <select
-                    className={select}
+                    className={input}
                     value={get("toggles", "clock24Hours", "FALSE")}
                     onChange={(e) => set("toggles", "clock24Hours", e.target.value)}
                   >
