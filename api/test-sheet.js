@@ -11,15 +11,14 @@ function normalizePrivateKey(keyRaw) {
   // Case 2: already has real newlines
   if (k.includes("\n")) return k;
 
-  // Case 3: single-line PEM (what your diag shows)
-  // Reconstruct with proper newlines around header/footer and wrap body to 64-char lines.
+  // Case 3: single-line PEM
   const header = "-----BEGIN PRIVATE KEY-----";
   const footer = "-----END PRIVATE KEY-----";
 
-  // Remove header/footer if present, then strip all whitespace
+  // Remove header/footer and all whitespace
   k = k.replace(header, "").replace(footer, "").replace(/\s+/g, "");
 
-  // Wrap body at 64 chars per line (standard PEM formatting)
+  // Wrap the body at 64 chars per line (standard PEM formatting)
   const wrapped = k.match(/.{1,64}/g)?.join("\n") || k;
 
   return `${header}\n${wrapped}\n${footer}\n`;
@@ -30,7 +29,9 @@ export default async function handler(req, res) {
   const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "";
   const sheetId = (process.env.GOOGLE_SHEET_ID || "").trim();
 
+  // Safe diagnostics only (no secrets)
   const diag = {
+    version: "v2-key-normalize",
     hasEmail: !!email,
     email: email ? email : "(missing)",
     hasSheetId: !!sheetId,
