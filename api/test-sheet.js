@@ -1,11 +1,35 @@
 import { google } from "googleapis";
 
+function normalizePrivateKey(keyRaw) {
+  if (!keyRaw) return "";
+
+  let k = String(keyRaw).trim();
+
+  // Case 1: stored with escaped newlines
+  if (k.includes("\\n")) return k.replace(/\\n/g, "\n");
+
+  // Case 2: already has real newlines
+  if (k.includes("\n")) return k;
+
+  // Case 3: single-line PEM (what your diag shows)
+  // Reconstruct with proper newlines around header/footer and wrap body to 64-char lines.
+  const header = "-----BEGIN PRIVATE KEY-----";
+  const footer = "-----END PRIVATE KEY-----";
+
+  // Remove header/footer if present, then strip all whitespace
+  k = k.replace(header, "").replace(footer, "").replace(/\s+/g, "");
+
+  // Wrap body at 64 chars per line (standard PEM formatting)
+  const wrapped = k.match(/.{1,64}/g)?.join("\n") || k;
+
+  return `${header}\n${wrapped}\n${footer}\n`;
+}
+
 export default async function handler(req, res) {
   const email = (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
   const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "";
   const sheetId = (process.env.GOOGLE_SHEET_ID || "").trim();
 
-  // Safe diagnostics only (no secrets)
   const diag = {
     hasEmail: !!email,
     email: email ? email : "(missing)",
@@ -25,8 +49,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, error: "Missing env vars", diag });
     }
 
-    // Handle either escaped newlines (\n) or real newlines
-    const privateKey = keyRaw.includes("\\n") ? keyRaw.replace(/\\n/g, "\n") : keyRaw;
+    const privateKey = normalizePrivateKey(keyRaw);
 
     const auth = new google.auth.JWT(
       email,
@@ -35,7 +58,7 @@ export default async function handler(req, res) {
       ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     );
 
-    // Force token creation so we can see if auth is working
+    // Force token creation so we can confirm auth is working
     const token = await auth.getAccessToken();
     diag.gotAccessToken = !!token?.token;
 
