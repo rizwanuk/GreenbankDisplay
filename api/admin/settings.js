@@ -63,6 +63,18 @@ async function getSheetsClient() {
 // Expect Settings sheet columns: Group | Key | Value (headers in row 1)
 const SETTINGS_SHEET_NAME = process.env.GOOGLE_SETTINGS_SHEET_NAME || "Settings";
 
+function safeJsonParse(body) {
+  if (!body) return {};
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body;
+}
+
 export default async function handler(req, res) {
   try {
     const { email } = await requireAdmin(req);
@@ -83,10 +95,10 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      const updates = Array.isArray(body?.updates) ? body.updates : [];
+      const body = safeJsonParse(req.body);
+      const updatesIn = Array.isArray(body?.updates) ? body.updates : [];
 
-      if (!updates.length) {
+      if (!updatesIn.length) {
         return res.status(400).json({ ok: false, error: "No updates provided" });
       }
 
@@ -97,6 +109,7 @@ export default async function handler(req, res) {
       });
 
       const rows = existing.data.values || [];
+
       // Build index: "Group||Key" -> rowNumber (1-based in sheet)
       const idx = new Map();
       for (let i = 1; i < rows.length; i++) {
@@ -106,9 +119,17 @@ export default async function handler(req, res) {
         if (g && k) idx.set(`${g}||${k}`, i + 1);
       }
 
+      // Always bump meta.lastUpdated on any save
+      const nowIso = new Date().toISOString();
+      const updates = [
+        ...updatesIn,
+        { Group: "meta", Key: "lastUpdated", Value: nowIso },
+      ];
+
       const data = [];
       const applied = [];
       const skipped = [];
+      let needsAppendLastUpdated = false;
 
       for (const u of updates) {
         const g = (u?.Group || u?.group || "").toString().trim();
@@ -122,6 +143,12 @@ export default async function handler(req, res) {
 
         const rowNum = idx.get(`${g}||${k}`);
         if (!rowNum) {
+          // If meta.lastUpdated doesn't exist, we will append it
+          if (g === "meta" && k === "lastUpdated") {
+            needsAppendLastUpdated = true;
+            continue;
+          }
+
           skipped.push({ reason: "Not found in sheet", Group: g, Key: k });
           continue;
         }
@@ -132,19 +159,36 @@ export default async function handler(req, res) {
         applied.push({ Group: g, Key: k, Value: v });
       }
 
-      if (!data.length) {
+      if (!data.length && !needsAppendLastUpdated) {
         return res.status(400).json({ ok: false, error: "No valid updates", skipped });
       }
 
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: sheetId,
-        requestBody: {
-          valueInputOption: "RAW",
-          data,
-        },
-      });
+      // Apply cell updates
+      if (data.length) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: {
+            valueInputOption: "RAW",
+            data,
+          },
+        });
+      }
 
-      return res.status(200).json({ ok: true, email, applied, skipped });
+      // Append meta.lastUpdated if missing
+      if (needsAppendLastUpdated) {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: `${SETTINGS_SHEET_NAME}!A:C`,
+          valueInputOption: "RAW",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: {
+            values: [["meta", "lastUpdated", nowIso]],
+          },
+        });
+        applied.push({ Group: "meta", Key: "lastUpdated", Value: nowIso });
+      }
+
+      return res.status(200).json({ ok: true, email, applied, skipped, lastUpdated: nowIso });
     }
 
     res.setHeader("Allow", "GET, POST");
