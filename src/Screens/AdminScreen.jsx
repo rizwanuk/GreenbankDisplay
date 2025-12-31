@@ -1,450 +1,409 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import AdminShell from "./admin/components/AdminShell";
+import AdminAuthCard from "./admin/components/AdminAuthCard";
+import AdminBadges from "./admin/components/AdminBadges";
+import AdminSection from "./admin/components/AdminSection";
+import { Field, SelectInput, TextArea, TextInput } from "./admin/components/AdminField";
+import ReadOnlySettingsTable from "./admin/components/ReadOnlySettingsTable";
+import { useAdminSettings } from "./admin/useAdminSettings";
 
-const ALLOWLIST = new Set(["rizwan.uk@gmail.com", "eid.bristol@gmail.com"]);
-
-function loadGoogleScript() {
-  return new Promise((resolve, reject) => {
-    if (window.google?.accounts?.id) return resolve();
-    const existing = document.querySelector('script[data-google-identity="true"]');
-    if (existing) {
-      existing.addEventListener("load", resolve);
-      existing.addEventListener("error", () => reject(new Error("Failed to load Google script")));
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = "https://accounts.google.com/gsi/client";
-    s.async = true;
-    s.defer = true;
-    s.dataset.googleIdentity = "true";
-    s.onload = resolve;
-    s.onerror = () => reject(new Error("Failed to load Google script"));
-    document.head.appendChild(s);
-  });
+function asBoolToken(v) {
+  const s = String(v ?? "").trim().toUpperCase();
+  if (s === "TRUE" || s === "FALSE") return s;
+  return s === "1" || s === "YES" ? "TRUE" : "FALSE";
 }
 
-function decodeEmailFromIdToken(token) {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return (payload?.email || "").toLowerCase();
-  } catch {
-    return "";
-  }
+function clampIntString(v, { min = 0, max = 9999 } = {}) {
+  const n = parseInt(String(v || "").replace(/[^\d-]/g, ""), 10);
+  if (Number.isNaN(n)) return "";
+  return String(Math.max(min, Math.min(max, n)));
 }
 
-function getTokenPayload(token) {
-  try {
-    return JSON.parse(atob(token.split(".")[1]));
-  } catch {
-    return null;
-  }
+function normalizeTimeHHmm(v) {
+  const raw = String(v ?? "").trim();
+  if (!raw) return "";
+  // allow "13.30" or "13:30"
+  const s = raw.replace(/[．。]/g, ".").replace(/[：﹕︓]/g, ":").replace(".", ":");
+  const m = s.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (!m) return raw; // keep as-is so user can see it's invalid
+  const hh = Math.max(0, Math.min(23, parseInt(m[1], 10)));
+  const mm = Math.max(0, Math.min(59, parseInt(m[2], 10)));
+  const pad2 = (n) => String(n).padStart(2, "0");
+  return `${pad2(hh)}:${pad2(mm)}`;
 }
 
-function isTokenNearExpiry(token, minutes = 5) {
-  const payload = getTokenPayload(token);
-  if (!payload?.exp) return false;
-  const expMs = payload.exp * 1000;
-  return Date.now() > expMs - minutes * 60 * 1000;
+/** Curated label keys (from your sheet example) */
+const LABEL_GROUP_EN = "labels";
+const LABEL_GROUP_AR = "labels.arabic";
+
+// Prayers + sunrise + ishraq
+const LABEL_KEYS_PRAYER = [
+  ["fajr", "Fajr"],
+  ["sunrise", "Sunrise (Shouruq)"],
+  ["ishraq", "Ishraq"],
+  ["dhuhr", "Zuhr"],
+  ["asr", "Asr"],
+  ["maghrib", "Maghrib"],
+  ["isha", "Isha (Esha)"],
+];
+
+// Table headings + common UI labels
+const LABEL_KEYS_UI = [
+  ["begins", "Begins (Adhan)"],
+  ["jamaah", "Jama’ah (Iqamah)"],
+];
+
+// Specials
+const LABEL_KEYS_SPECIAL = [
+  ["jummah", "Jum’ah"],
+  ["nafl", "Nafl"],
+  ["eidFitr", "Eid-ul-Fitr"],
+  ["eidAdha", "Eid-ul-Adha"],
+];
+
+// Hijri months
+const LABEL_KEYS_HIJRI_MONTHS = [
+  ["muharram", "Muharram"],
+  ["safar", "Safar"],
+  ["rabiAwal", "Rabi’ al-Awwal"],
+  ["rabiThani", "Rabi’ al-Akhir"],
+  ["jumadaAwal", "Jumada al-Ula"],
+  ["jumadaThani", "Jumada al-Akhirah"],
+  ["rajab", "Rajab"],
+  ["shaban", "Sha’ban"],
+  ["ramadan", "Ramadan"],
+  ["shawwal", "Shawwal"],
+  ["dhulQadah", "Dhul Qa’dah"],
+  ["dhulHijjah", "Dhul Hijjah"],
+];
+
+function LabelRow({ title, k, get, set }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <Field label={`${title} (English)`} hint={`${LABEL_GROUP_EN}.${k}`}>
+        <TextInput
+          value={get(LABEL_GROUP_EN, k, "")}
+          onChange={(e) => set(LABEL_GROUP_EN, k, e.target.value)}
+          placeholder="English label…"
+        />
+      </Field>
+
+      <Field label={`${title} (Arabic)`} hint={`${LABEL_GROUP_AR}.${k}`}>
+        <TextInput
+          value={get(LABEL_GROUP_AR, k, "")}
+          onChange={(e) => set(LABEL_GROUP_AR, k, e.target.value)}
+          placeholder="Arabic label…"
+          dir="rtl"
+        />
+      </Field>
+    </div>
+  );
 }
 
-function rowKey(group, key) {
-  return `${group}||${key}`;
+function LabelsPanel({ get, set }) {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <div className="text-sm font-semibold text-white/90">Prayer names</div>
+        <div className="space-y-3">
+          {LABEL_KEYS_PRAYER.map(([k, title]) => (
+            <LabelRow key={k} title={title} k={k} get={get} set={set} />
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="text-sm font-semibold text-white/90">Table headings</div>
+        <div className="space-y-3">
+          {LABEL_KEYS_UI.map(([k, title]) => (
+            <LabelRow key={k} title={title} k={k} get={get} set={set} />
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="text-sm font-semibold text-white/90">Special labels</div>
+        <div className="space-y-3">
+          {LABEL_KEYS_SPECIAL.map(([k, title]) => (
+            <LabelRow key={k} title={title} k={k} get={get} set={set} />
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="text-sm font-semibold text-white/90">Hijri month names</div>
+        <div className="space-y-3">
+          {LABEL_KEYS_HIJRI_MONTHS.map(([k, title]) => (
+            <LabelRow key={k} title={title} k={k} get={get} set={set} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function toMap(rows) {
-  const m = new Map();
-  for (let i = 1; i < rows.length; i++) {
-    const [g, k, v] = rows[i] || [];
-    if (!g || !k) continue;
-    m.set(rowKey(String(g).trim(), String(k).trim()), String(v ?? ""));
-  }
-  return m;
+/** ---------------- Prayer rules (timings.*) ---------------- */
+
+const TIMINGS_GROUP = "timings";
+
+const TIMING_FIELDS = [
+  {
+    key: "makroohBeforeSunrise",
+    title: "Makrooh before sunrise (minutes)",
+    hint: "Minutes before Shouruq where prayer is not allowed",
+    min: 0,
+    max: 60,
+    placeholder: "1",
+  },
+  {
+    key: "makroohAfterSunrise",
+    title: "Makrooh after sunrise (minutes)",
+    hint: "Minutes after Shouruq where prayer is not allowed",
+    min: 0,
+    max: 60,
+    placeholder: "10",
+  },
+  {
+    key: "showIshraq",
+    title: "Ishraq window length (minutes)",
+    hint: "How long Ishraq is shown (after it begins)",
+    min: 0,
+    max: 180,
+    placeholder: "30",
+  },
+  {
+    key: "makroohBeforeZuhr",
+    title: "Makrooh before Zuhr (minutes)",
+    hint: "Zawal window length",
+    min: 0,
+    max: 60,
+    placeholder: "10",
+  },
+  {
+    key: "makroohBeforeAsr",
+    title: "Makrooh before Asr (minutes)",
+    hint: "Often 0 (no warning window)",
+    min: 0,
+    max: 60,
+    placeholder: "0",
+  },
+  {
+    key: "makroohBeforeMaghrib",
+    title: "Makrooh before Maghrib (minutes)",
+    hint: "Window before sunset / Maghrib begins",
+    min: 0,
+    max: 60,
+    placeholder: "10",
+  },
+  {
+    key: "makroohBeforeIsha",
+    title: "Makrooh before Isha (minutes)",
+    hint: "Often 0",
+    min: 0,
+    max: 60,
+    placeholder: "0",
+  },
+  {
+    key: "jamaahHighlightDuration",
+    title: "Jama’ah highlight duration (minutes)",
+    hint: "How long the “Jama’ah in progress” state is held",
+    min: 0,
+    max: 30,
+    placeholder: "5",
+  },
+];
+
+function TimingsPanel({ get, set }) {
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-white/70">
+        These are used across the display and embed screens to drive Makrooh/Ishraq/Jama’ah behaviour.
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {TIMING_FIELDS.map((f) => (
+          <Field key={f.key} label={f.title} hint={`timings.${f.key} • ${f.hint}`}>
+            <TextInput
+              inputMode="numeric"
+              value={get(TIMINGS_GROUP, f.key, "")}
+              placeholder={f.placeholder}
+              onChange={(e) =>
+                set(TIMINGS_GROUP, f.key, clampIntString(e.target.value, { min: f.min, max: f.max }))
+              }
+            />
+          </Field>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** ---------------- Jum’ah times (jummahTimes.*) ---------------- */
+
+const JUMMAH_GROUP = "jummahTimes";
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function JummahTimesPanel({ get, set }) {
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-white/70">
+        Month-based Jum’ah Jama’ah time. Use <span className="font-semibold">HH:mm</span> (e.g. 13:30).
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {MONTHS.map((m) => (
+          <Field key={m} label={m} hint={`jummahTimes.${m}`}>
+            <TextInput
+              value={get(JUMMAH_GROUP, m, "")}
+              placeholder="13:30"
+              onBlur={(e) => set(JUMMAH_GROUP, m, normalizeTimeHHmm(e.target.value))}
+              onChange={(e) => set(JUMMAH_GROUP, m, e.target.value)}
+              inputMode="numeric"
+            />
+          </Field>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function AdminScreen() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-  const [idToken, setIdToken] = useState(() => localStorage.getItem("gbm_admin_id_token") || "");
-  const [email, setEmail] = useState(() => localStorage.getItem("gbm_admin_email") || "");
-  const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
+  const admin = useAdminSettings(clientId);
 
-  // UI toggles (testing phase)
+  const {
+    idToken,
+    email,
+    allowedClient,
+    allowedServer,
+    serverEmail,
+    rows,
+    dirtyCount,
+    themeOptions,
+    loading,
+    status,
+    error,
+    signOut,
+    save,
+    refresh,
+    resetDraft,
+    get,
+    set,
+  } = admin;
+
   const [showAll, setShowAll] = useState(false);
 
-  // Client-side allowlist (nice-to-have for UX only)
-  const allowed = useMemo(() => ALLOWLIST.has((email || "").toLowerCase()), [email]);
+  const canEdit = idToken && allowedServer;
 
-  // Server-verified identity
-  const [serverEmail, setServerEmail] = useState("");
-  const serverAllowed = useMemo(
-    () => !!serverEmail && ALLOWLIST.has(serverEmail.toLowerCase()),
-    [serverEmail]
+  const categories = useMemo(
+    () => [
+      { key: "appearance", title: "Appearance", subtitle: "Theme + clock format (safe to test)." },
+      { key: "labels", title: "Labels", subtitle: "English + Arabic labels (prayers, headings, Hijri months)." },
+      { key: "prayerRules", title: "Prayer rules", subtitle: "Makrooh windows, Ishraq, Jama’ah highlight." },
+      { key: "jummah", title: "Jum’ah times", subtitle: "Monthly Jum’ah Jama’ah time." },
+      { key: "slideshow", title: "Slideshow", subtitle: "Rotation timing for slideshow screen." },
+      { key: "infoCard", title: "Info card", subtitle: "Rotation + override message for announcements." },
+      { key: "testMode", title: "Test mode", subtitle: "Optional fake time controls (if you use them)." },
+    ],
+    []
   );
 
-  // Settings data
-  const [rows, setRows] = useState([]); // includes header row
-  const [baseline, setBaseline] = useState(() => new Map());
-  const [draft, setDraft] = useState(() => new Map());
-  const [loading, setLoading] = useState(false);
-
-  // Derived: list of theme names from rows
-  const themeOptions = useMemo(() => {
-    const names = new Set();
-    for (const r of rows.slice(1)) {
-      const g = String(r?.[0] || "");
-      if (g.startsWith("theme.")) {
-        const parts = g.split(".");
-        if (parts[1]) names.add(parts[1]);
-      }
-    }
-    return Array.from(names);
-  }, [rows]);
-
-  const dirtyCount = useMemo(() => {
-    let n = 0;
-    for (const [k, v] of draft.entries()) {
-      if (baseline.get(k) !== v) n++;
-    }
-    return n;
-  }, [draft, baseline]);
-
-  const signOut = () => {
-    setIdToken("");
-    setEmail("");
-    setServerEmail("");
-    setRows([]);
-    setBaseline(new Map());
-    setDraft(new Map());
-    setError("");
-    setStatus("");
-    localStorage.removeItem("gbm_admin_id_token");
-    localStorage.removeItem("gbm_admin_email");
-
-    try {
-      // optional: prompt shows sign-in again (non-blocking)
-      window.google?.accounts?.id?.prompt?.();
-    } catch {}
-  };
-
-  // --- Google Sign-in button ---
-  useEffect(() => {
-    if (!clientId) {
-      setError("Missing VITE_GOOGLE_CLIENT_ID (set it in Vercel + .env.local)");
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        await loadGoogleScript();
-        if (cancelled) return;
-
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (resp) => {
-            const token = resp?.credential || "";
-            setIdToken(token);
-            localStorage.setItem("gbm_admin_id_token", token);
-
-            const em = decodeEmailFromIdToken(token);
-            setEmail(em);
-            if (em) localStorage.setItem("gbm_admin_email", em);
-            else localStorage.removeItem("gbm_admin_email");
-
-            // clear previous session state
-            setServerEmail("");
-            setRows([]);
-            setBaseline(new Map());
-            setDraft(new Map());
-            setStatus("");
-            setError("");
-          },
-        });
-
-        const el = document.getElementById("googleSignInBtn");
-        if (el) {
-          el.innerHTML = "";
-          window.google.accounts.id.renderButton(el, {
-            theme: "outline",
-            size: "large",
-            type: "standard",
-            shape: "pill",
-            text: "signin_with",
-            logo_alignment: "left",
-          });
-        }
-      } catch (e) {
-        setError(e?.message || String(e));
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId]);
-
-  // Warn before expiry (so you don’t get surprised mid-edit)
-  useEffect(() => {
-    if (!idToken) return;
-
-    const tick = () => {
-      if (isTokenNearExpiry(idToken, 5)) {
-        setStatus("Session expiring soon — please save and sign in again.");
-      }
-    };
-
-    tick();
-    const t = setInterval(tick, 60_000);
-    return () => clearInterval(t);
-  }, [idToken]);
-
-  // --- Server verify + load settings ---
-  const fetchWhoAmI = async (token) => {
-    const r = await fetch("/api/admin/whoami", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (r.status === 401 || r.status === 403) {
-      throw new Error("AUTH_EXPIRED");
-    }
-
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "whoami failed");
-    return j;
-  };
-
-  const fetchSettings = async (token) => {
-    const r = await fetch("/api/admin/settings", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (r.status === 401 || r.status === 403) {
-      throw new Error("AUTH_EXPIRED");
-    }
-
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "settings GET failed");
-    return j.rows || [];
-  };
-
-  useEffect(() => {
-    if (!idToken) return;
-
-    (async () => {
-      try {
-        setLoading(true);
-        setError("");
-        setStatus("Verifying…");
-
-        const me = await fetchWhoAmI(idToken);
-        setServerEmail(me.email || "");
-
-        setStatus("Loading settings…");
-        const sRows = await fetchSettings(idToken);
-        setRows(sRows);
-
-        const base = toMap(sRows);
-        setBaseline(base);
-        setDraft(new Map(base));
-
-        setStatus("");
-      } catch (e) {
-        const msg = e?.message || String(e);
-
-        if (
-          msg === "AUTH_EXPIRED" ||
-          msg.toLowerCase().includes("token used too late") ||
-          msg.toLowerCase().includes("jwt expired") ||
-          msg.toLowerCase().includes("expired")
-        ) {
-          signOut();
-          setError("Session expired — please sign in again.");
-          return;
-        }
-
-        setError(msg);
-        setStatus("");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [idToken]);
-
-  const get = (group, key, fallback = "") => {
-    const k = rowKey(group, key);
-    return draft.get(k) ?? fallback;
-  };
-
-  const set = (group, key, value) => {
-    const k = rowKey(group, key);
-    setDraft((prev) => {
-      const next = new Map(prev);
-      next.set(k, value);
-      return next;
-    });
-  };
-
-  const setNumber = (group, key, raw, fallback) => {
-    const cleaned = String(raw ?? "").replace(/[^\d]/g, "");
-    set(group, key, cleaned || String(fallback));
-  };
-
-  const save = async () => {
-    try {
-      if (!idToken) return;
-      if (!serverAllowed) throw new Error("Not allowlisted");
-
-      setLoading(true);
-      setError("");
-      setStatus("Saving…");
-
-      const updates = [];
-      for (const [k, v] of draft.entries()) {
-        const prev = baseline.get(k);
-        if (prev !== v) {
-          const [Group, Key] = k.split("||");
-          updates.push({ Group, Key, Value: v });
-        }
-      }
-
-      if (!updates.length) {
-        setStatus("No changes to save");
-        setTimeout(() => setStatus(""), 1200);
-        return;
-      }
-
-      const r = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ updates }),
-      });
-
-      if (r.status === 401 || r.status === 403) {
-        throw new Error("AUTH_EXPIRED");
-      }
-
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "Save failed");
-
-      // Reload after save so baseline matches server truth
-      const sRows = await fetchSettings(idToken);
-      setRows(sRows);
-      const base = toMap(sRows);
-      setBaseline(base);
-      setDraft(new Map(base));
-
-      setStatus("Saved ✅");
-      setTimeout(() => setStatus(""), 1500);
-    } catch (e) {
-      const msg = e?.message || String(e);
-
-      if (
-        msg === "AUTH_EXPIRED" ||
-        msg.toLowerCase().includes("token used too late") ||
-        msg.toLowerCase().includes("jwt expired") ||
-        msg.toLowerCase().includes("expired")
-      ) {
-        signOut();
-        setError("Session expired — please sign in again.");
-        return;
-      }
-
-      setError(msg);
-      setStatus("");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const card = "rounded-2xl bg-white/5 border border-white/10 p-4 sm:p-5";
-  const input =
-    "mt-1 w-full rounded-xl bg-black/40 border border-white/15 px-3 py-2.5 text-base";
-  const label = "text-sm text-white/70";
-
   return (
-    <div className="min-h-screen bg-black text-white p-4 sm:p-6 pb-28">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold mb-1">Greenbank Display Admin</h1>
-            <p className="text-white/70">Testing a few settings first (mobile-friendly).</p>
-          </div>
+    <AdminShell>
+      <div className="space-y-6">
+        <AdminAuthCard
+          idToken={idToken}
+          email={email}
+          onSignOut={signOut}
+          error={error}
+          status={status}
+          loading={loading}
+        />
 
-          {idToken ? (
-            <button
-              onClick={signOut}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
-            >
-              Sign out
-            </button>
-          ) : null}
-        </div>
-
-        {error && (
-          <div className="mt-5 p-3 rounded-xl bg-red-900/40 border border-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        {!idToken ? (
-          <div className={`${card} mt-6`}>
-            <div id="googleSignInBtn" />
-            <div className="mt-3 text-xs text-white/60">Only allowlisted accounts can proceed.</div>
-          </div>
-        ) : (
-          <div className={`${card} mt-6`}>
-            <div className="text-sm text-white/70">Signed in as</div>
-            <div className="text-lg sm:text-xl font-semibold mt-1">{email || "(email unknown)"}</div>
-
-            <div className="mt-4 flex items-center gap-2 sm:gap-3 flex-wrap">
-              <span
-                className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${
-                  serverAllowed
-                    ? "bg-emerald-900/40 border-emerald-600 text-emerald-200"
-                    : "bg-red-900/40 border-red-600 text-red-200"
-                }`}
-              >
-                Server: {serverAllowed ? "Allowed" : "Blocked"}
-              </span>
-
-              {dirtyCount > 0 ? (
-                <span className="text-xs text-yellow-300">● {dirtyCount} unsaved change(s)</span>
-              ) : (
-                <span className="text-xs text-white/50">No unsaved changes</span>
-              )}
-
-              {!serverAllowed && allowed ? (
-                <span className="text-xs text-white/60">
-                  (Signed in, but server blocked — check allowlist)
-                </span>
-              ) : null}
+        {idToken ? (
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+            <div className="text-sm text-white/70">
+              Server verified as:{" "}
+              <span className="font-semibold text-white">{serverEmail || "—"}</span>
             </div>
 
-            {(status || loading) && (
-              <div className="mt-3 text-sm text-white/70">{status || "Working…"}</div>
+            <AdminBadges
+              allowedClient={allowedClient}
+              allowedServer={allowedServer}
+              dirtyCount={dirtyCount}
+            />
+
+            {canEdit ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={save}
+                  disabled={loading}
+                  className={`px-4 py-2 rounded-lg border ${
+                    loading
+                      ? "bg-white/10 border-white/10 opacity-60"
+                      : "bg-emerald-700 border-emerald-600 hover:bg-emerald-600"
+                  }`}
+                >
+                  Save changes
+                </button>
+
+                <button
+                  onClick={refresh}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+                >
+                  Refresh from sheet
+                </button>
+
+                <button
+                  onClick={resetDraft}
+                  disabled={loading || dirtyCount === 0}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 disabled:opacity-50"
+                >
+                  Reset changes
+                </button>
+
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="ml-auto px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+                >
+                  {showAll ? "Hide all settings" : "Show all settings"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 text-sm text-red-200">
+                Signed in, but server blocked — check allowlist.
+              </div>
             )}
           </div>
-        )}
+        ) : null}
 
-        {/* Controls */}
-        {idToken && serverAllowed ? (
-          <div className="mt-6 grid gap-6">
-            <div className={card}>
-              <h2 className="text-xl font-semibold">Quick settings</h2>
-              <p className="text-sm text-white/60 mt-1">
-                Keep this page simple while we test. Full settings later.
-              </p>
-
-              <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Theme */}
-                <div>
-                  <label className={label}>Theme</label>
-                  <select
-                    className={input}
+        {/* Curated panels */}
+        {canEdit ? (
+          <div className="space-y-4">
+            {/* Appearance */}
+            <AdminSection
+              title={categories.find((c) => c.key === "appearance")?.title}
+              subtitle={categories.find((c) => c.key === "appearance")?.subtitle}
+              defaultOpen
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Theme">
+                  <SelectInput
                     value={get("toggles", "theme", "")}
                     onChange={(e) => set("toggles", "theme", e.target.value)}
                   >
@@ -454,153 +413,138 @@ export default function AdminScreen() {
                         {t}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </SelectInput>
+                </Field>
 
-                {/* Upcoming count */}
-                <div>
-                  <label className={label}>Number of upcoming prayers</label>
-                  <input
-                    className={input}
-                    value={get("toggles", "numberUpcomingPrayers", "6")}
-                    onChange={(e) => setNumber("toggles", "numberUpcomingPrayers", e.target.value, 6)}
-                    inputMode="numeric"
-                  />
-                </div>
-
-                {/* Clock 24h */}
-                <div>
-                  <label className={label}>Clock 24 hours</label>
-                  <select
-                    className={input}
-                    value={get("toggles", "clock24Hours", "FALSE")}
+                <Field label="Clock 24 hours">
+                  <SelectInput
+                    value={asBoolToken(get("toggles", "clock24Hours", "FALSE"))}
                     onChange={(e) => set("toggles", "clock24Hours", e.target.value)}
                   >
                     <option value="FALSE">FALSE</option>
                     <option value="TRUE">TRUE</option>
-                  </select>
-                </div>
+                  </SelectInput>
+                </Field>
+              </div>
+            </AdminSection>
 
-                {/* Slideshow duration */}
-                <div>
-                  <label className={label}>Slideshow duration (seconds)</label>
-                  <input
-                    className={input}
+            {/* Labels */}
+            <AdminSection
+              title={categories.find((c) => c.key === "labels")?.title}
+              subtitle={categories.find((c) => c.key === "labels")?.subtitle}
+              defaultOpen={false}
+            >
+              <LabelsPanel get={get} set={set} />
+            </AdminSection>
+
+            {/* Prayer rules */}
+            <AdminSection
+              title={categories.find((c) => c.key === "prayerRules")?.title}
+              subtitle={categories.find((c) => c.key === "prayerRules")?.subtitle}
+              defaultOpen
+            >
+              <TimingsPanel get={get} set={set} />
+            </AdminSection>
+
+            {/* Jummah */}
+            <AdminSection
+              title={categories.find((c) => c.key === "jummah")?.title}
+              subtitle={categories.find((c) => c.key === "jummah")?.subtitle}
+              defaultOpen
+            >
+              <JummahTimesPanel get={get} set={set} />
+            </AdminSection>
+
+            {/* Slideshow */}
+            <AdminSection
+              title={categories.find((c) => c.key === "slideshow")?.title}
+              subtitle={categories.find((c) => c.key === "slideshow")?.subtitle}
+              defaultOpen={false}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Slideshow duration (seconds)" hint="e.g. 8">
+                  <TextInput
                     value={get("slideshow", "duration", "8")}
-                    onChange={(e) => setNumber("slideshow", "duration", e.target.value, 8)}
+                    onChange={(e) =>
+                      set("slideshow", "duration", clampIntString(e.target.value, { min: 3, max: 60 }))
+                    }
                     inputMode="numeric"
                   />
-                </div>
+                </Field>
+              </div>
+            </AdminSection>
 
-                {/* InfoCard rotate */}
-                <div>
-                  <label className={label}>Info card rotate interval (seconds)</label>
-                  <input
-                    className={input}
+            {/* Info card */}
+            <AdminSection
+              title={categories.find((c) => c.key === "infoCard")?.title}
+              subtitle={categories.find((c) => c.key === "infoCard")?.subtitle}
+              defaultOpen={false}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Rotate interval (seconds)" hint="e.g. 15">
+                  <TextInput
                     value={get("infoCard", "rotateInterval", "15")}
-                    onChange={(e) => setNumber("infoCard", "rotateInterval", e.target.value, 15)}
+                    onChange={(e) =>
+                      set("infoCard", "rotateInterval", clampIntString(e.target.value, { min: 5, max: 120 }))
+                    }
                     inputMode="numeric"
                   />
-                </div>
+                </Field>
 
-                {/* InfoCard override duration */}
-                <div>
-                  <label className={label}>Override duration (seconds)</label>
-                  <input
-                    className={input}
+                <Field label="Override duration (seconds)" hint="e.g. 300">
+                  <TextInput
                     value={get("infoCard", "overrideDuration", "300")}
-                    onChange={(e) => setNumber("infoCard", "overrideDuration", e.target.value, 300)}
+                    onChange={(e) =>
+                      set("infoCard", "overrideDuration", clampIntString(e.target.value, { min: 10, max: 3600 }))
+                    }
                     inputMode="numeric"
                   />
-                </div>
+                </Field>
 
-                {/* Override message (full width) */}
-                <div className="lg:col-span-2">
-                  <label className={label}>Override message</label>
-                  <textarea
-                    className={`${input} min-h-[140px]`}
-                    value={get("infoCard", "overrideMessage", "")}
-                    onChange={(e) => set("infoCard", "overrideMessage", e.target.value)}
+                <div className="sm:col-span-2">
+                  <Field label="Override message" hint="Shown when forced">
+                    <TextArea
+                      className="min-h-[140px]"
+                      value={get("infoCard", "overrideMessage", "")}
+                      onChange={(e) => set("infoCard", "overrideMessage", e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </AdminSection>
+
+            {/* Test mode */}
+            <AdminSection
+              title={categories.find((c) => c.key === "testMode")?.title}
+              subtitle={categories.find((c) => c.key === "testMode")?.subtitle}
+              defaultOpen={false}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Fake time enabled">
+                  <SelectInput
+                    value={asBoolToken(get("toggles", "fakeTimeEnabled", "FALSE"))}
+                    onChange={(e) => set("toggles", "fakeTimeEnabled", e.target.value)}
+                  >
+                    <option value="FALSE">FALSE</option>
+                    <option value="TRUE">TRUE</option>
+                  </SelectInput>
+                </Field>
+
+                <Field label="Fake time" hint="HH:mm e.g. 13:05">
+                  <TextInput
+                    value={get("toggles", "fakeTime", "")}
+                    onChange={(e) => set("toggles", "fakeTime", e.target.value)}
+                    placeholder="13:05"
                   />
-                </div>
+                </Field>
               </div>
-            </div>
+            </AdminSection>
 
-            {/* All settings (hidden by default while testing) */}
-            <div className={card}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold">All settings</h2>
-                  <p className="text-sm text-white/60 mt-1">
-                    Optional debug view. Hidden by default for performance.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAll((v) => !v)}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-sm"
-                >
-                  {showAll ? "Hide" : "Show"}
-                </button>
-              </div>
-
-              {showAll ? (
-                <div className="mt-4 max-h-[340px] overflow-auto rounded-xl border border-white/10">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-black">
-                      <tr className="text-white/70">
-                        <th className="text-left p-2 border-b border-white/10">Group</th>
-                        <th className="text-left p-2 border-b border-white/10">Key</th>
-                        <th className="text-left p-2 border-b border-white/10">Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.slice(1).map((r, idx) => (
-                        <tr key={idx} className="odd:bg-white/0 even:bg-white/5">
-                          <td className="p-2 border-b border-white/5 align-top">{r?.[0]}</td>
-                          <td className="p-2 border-b border-white/5 align-top">{r?.[1]}</td>
-                          <td className="p-2 border-b border-white/5 align-top whitespace-pre-wrap break-words">
-                            {r?.[2]}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Sticky bottom action bar (always reachable on mobile) */}
-        {idToken && serverAllowed ? (
-          <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/80 backdrop-blur">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                {loading ? (
-                  <div className="text-sm text-white/70 truncate">Working…</div>
-                ) : dirtyCount > 0 ? (
-                  <div className="text-sm text-yellow-200 truncate">● {dirtyCount} unsaved change(s)</div>
-                ) : (
-                  <div className="text-sm text-white/50 truncate">All changes saved</div>
-                )}
-                {status ? <div className="text-xs text-white/50 truncate">{status}</div> : null}
-              </div>
-
-              <button
-                onClick={save}
-                disabled={loading || dirtyCount === 0}
-                className={`shrink-0 px-5 py-2.5 rounded-xl border text-sm font-medium ${
-                  loading || dirtyCount === 0
-                    ? "bg-white/10 border-white/10 opacity-60"
-                    : "bg-emerald-700 border-emerald-600 hover:bg-emerald-600"
-                }`}
-              >
-                Save
-              </button>
-            </div>
+            {/* Read-only settings */}
+            {showAll ? <ReadOnlySettingsTable rows={rows} /> : null}
           </div>
         ) : null}
       </div>
-    </div>
+    </AdminShell>
   );
 }
