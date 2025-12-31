@@ -29,6 +29,35 @@ import useDeviceId from "./hooks/useDeviceId";
 // Remote device config (JSONP-capable hook)
 import useRemoteDeviceConfig from "./hooks/useRemoteDeviceConfig";
 
+/* ---------------- helpers ---------------- */
+
+function extractLastUpdatedFromSettingsRows(rows) {
+  if (!rows) return "";
+
+  // Shape: [{Group, Key, Value}]
+  if (Array.isArray(rows) && rows.length && !Array.isArray(rows[0])) {
+    for (const r of rows) {
+      const g = String(r?.Group || "").trim();
+      const k = String(r?.Key || "").trim();
+      const v = String(r?.Value ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+    return "";
+  }
+
+  // Shape: [["Group","Key","Value"], ["meta","lastUpdated","..."]]
+  if (Array.isArray(rows) && Array.isArray(rows[0])) {
+    for (const r of rows.slice(1)) {
+      const g = String(r?.[0] || "").trim();
+      const k = String(r?.[1] || "").trim();
+      const v = String(r?.[2] ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+  }
+
+  return "";
+}
+
 function App() {
   // 🔒 Always call hooks in the same order, unconditionally
   const settings = useSettings();
@@ -111,20 +140,40 @@ function App() {
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
   const islamicOffset = parseInt(settingsMap["islamicCalendar.offset"] || 0, 10);
   const normalizeTo30DayMonths =
-    String(settingsMap["islamicCalendar.normalizeTo30DayMonths"] || "FALSE").toUpperCase() === "TRUE";
+    String(settingsMap["islamicCalendar.normalizeTo30DayMonths"] || "FALSE").toUpperCase() ===
+    "TRUE";
 
   const L = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const A = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
   // Hijri months (prefer Google Sheet spellings, fall back to nice defaults)
   const hijriMonthKeys = [
-    "muharram","safar","rabiAwal","rabiThani","jumadaAwal","jumadaThani",
-    "rajab","shaban","ramadan","shawwal","dhulQadah","dhulHijjah"
+    "muharram",
+    "safar",
+    "rabiAwal",
+    "rabiThani",
+    "jumadaAwal",
+    "jumadaThani",
+    "rajab",
+    "shaban",
+    "ramadan",
+    "shawwal",
+    "dhulQadah",
+    "dhulHijjah",
   ];
   const DEFAULT_I_MONTHS = [
-    "Muharram","Safar","Rabīʿ al-ʾAwwal","Rabīʿ al-Ākhir",
-    "Jumādā al-Ūlā","Jumādā al-Ākhirah","Rajab","Shaʿbān",
-    "Ramaḍān","Shawwāl","Dhū al-Qaʿdah","Dhū al-Ḥijjah"
+    "Muharram",
+    "Safar",
+    "Rabīʿ al-ʾAwwal",
+    "Rabīʿ al-Ākhir",
+    "Jumādā al-Ūlā",
+    "Jumādā al-Ākhirah",
+    "Rajab",
+    "Shaʿbān",
+    "Ramaḍān",
+    "Shawwāl",
+    "Dhū al-Qaʿdah",
+    "Dhū al-Ḥijjah",
   ];
   const islamicMonths = hijriMonthKeys.map((key, idx) => {
     const fromSheet = settingsMap[`labels.${key}`];
@@ -148,26 +197,59 @@ function App() {
   const tomorrowRow = getRow(tomorrow);
   const yesterdayRow = getRow(yesterday);
 
-  // Auto-refresh when Settings sheet changes (meta.lastUpdated)
-  useEffect(() => {
-    if (!Array.isArray(settings)) return;
+  // ✅ Auto-refresh when Settings sheet changes (meta.lastUpdated)
+  // This polls a PUBLIC endpoint so it works even if useSettings() doesn't refetch.
+  const hardReloadRef = useRef(Date.now());
 
-    const checkLastUpdated = () => {
-      const metaRow = settings.find((row) => row?.Group === "meta" && row?.Key === "lastUpdated");
-      if (!metaRow) return;
-      const newTimestamp = metaRow.Value;
-      if (prevLastUpdated.current && prevLastUpdated.current !== newTimestamp) {
-        console.log("🔄 Detected change in Google Sheet. Reloading page...");
-        window.location.reload();
+  useEffect(() => {
+    let stopped = false;
+
+    const poll = async () => {
+      try {
+        // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        const j = await r.json();
+
+        const rows = j.rows || j.values || j.settings || [];
+        const next = extractLastUpdatedFromSettingsRows(rows);
+
+        // seed
+        if (!prevLastUpdated.current) {
+          prevLastUpdated.current = next || null;
+          if (next) setLastUpdated(next);
+          return;
+        }
+
+        // changed => reload
+        if (next && prevLastUpdated.current !== next) {
+          console.log("🔄 Detected change in Google Sheet. Reloading page...");
+          window.location.reload();
+          return;
+        }
+
+        // safety net: full reload every 30 mins
+        if (Date.now() - hardReloadRef.current > 30 * 60 * 1000) {
+          hardReloadRef.current = Date.now();
+          window.location.reload();
+        }
+
+        // keep footer timestamp fresh (optional)
+        if (next) setLastUpdated(next);
+      } catch {
+        // ignore transient failures
       }
-      prevLastUpdated.current = newTimestamp;
-      setLastUpdated(newTimestamp);
     };
 
-    const interval = setInterval(checkLastUpdated, 60000);
-    checkLastUpdated();
-    return () => clearInterval(interval);
-  }, [settings]);
+    poll();
+    const id = setInterval(() => {
+      if (!stopped) poll();
+    }, 60 * 1000);
+
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, []);
 
   // Theme options for selector
   const allThemes = useMemo(() => {
@@ -183,7 +265,9 @@ function App() {
 
   const handleSetTheme = (name) => {
     setSelectedTheme(name);
-    try { localStorage.setItem("selectedTheme", name); } catch {}
+    try {
+      localStorage.setItem("selectedTheme", name);
+    } catch {}
   };
 
   // Device code
@@ -204,13 +288,14 @@ function App() {
 
     if (remoteCfg.themeOverride) {
       setSelectedTheme(remoteCfg.themeOverride);
-      try { localStorage.setItem("selectedTheme", remoteCfg.themeOverride); } catch {}
+      try {
+        localStorage.setItem("selectedTheme", remoteCfg.themeOverride);
+      } catch {}
     }
 
     if (typeof remoteCfg.showWeather !== "undefined") {
       const sw =
-        String(remoteCfg.showWeather).toUpperCase() === "TRUE" ||
-        remoteCfg.showWeather === true;
+        String(remoteCfg.showWeather).toUpperCase() === "TRUE" || remoteCfg.showWeather === true;
       setShowWeather(sw);
     }
 
@@ -262,11 +347,7 @@ function App() {
               />
 
               {showWeather && (
-                <WeatherCardUnified
-                  settings={settingsMap}
-                  theme={themeWeather}
-                  mode={weatherMode}
-                />
+                <WeatherCardUnified settings={settingsMap} theme={themeWeather} mode={weatherMode} />
               )}
 
               <InfoCard settings={settings} settingsMap={settingsMap} theme={themeInfoCard} />
@@ -304,7 +385,9 @@ function App() {
 
           <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
             ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
-            {remoteErr ? <span className="ml-2 text-red-400">• Remote: {String(remoteErr)}</span> : null}
+            {remoteErr ? (
+              <span className="ml-2 text-red-400">• Remote: {String(remoteErr)}</span>
+            ) : null}
           </div>
         </div>
 

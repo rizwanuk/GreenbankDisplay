@@ -18,6 +18,35 @@ import applyJummahOverride from "./helpers/applyJummahOverride";
 
 moment.locale("en-gb");
 
+/* ---------------- helpers ---------------- */
+
+function extractLastUpdatedFromSettingsRows(rows) {
+  if (!rows) return "";
+
+  // Shape: [{Group, Key, Value}]
+  if (Array.isArray(rows) && rows.length && !Array.isArray(rows[0])) {
+    for (const r of rows) {
+      const g = String(r?.Group || "").trim();
+      const k = String(r?.Key || "").trim();
+      const v = String(r?.Value ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+    return "";
+  }
+
+  // Shape: [["Group","Key","Value"], ["meta","lastUpdated","..."]]
+  if (Array.isArray(rows) && Array.isArray(rows[0])) {
+    for (const r of rows.slice(1)) {
+      const g = String(r?.[0] || "").trim();
+      const k = String(r?.[1] || "").trim();
+      const v = String(r?.[2] ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+  }
+
+  return "";
+}
+
 export default function EmbedScreen() {
   const timetable = usePrayerTimes();
   const rawSettings = useSettings();
@@ -33,6 +62,58 @@ export default function EmbedScreen() {
     () => (rawSettings ? parseSettings(rawSettings) : null),
     [rawSettings]
   );
+
+  // ✅ Auto-reload when Google Sheet settings change (meta.lastUpdated)
+  // This polls a PUBLIC endpoint so it works even if useSettings() doesn't refetch.
+  const prevLastUpdated = useRef("");
+  const hardReloadRef = useRef(Date.now());
+
+  useEffect(() => {
+    let stopped = false;
+
+    const poll = async () => {
+      try {
+        // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        const j = await r.json();
+
+        const rows = j.rows || j.values || j.settings || [];
+        const next = extractLastUpdatedFromSettingsRows(rows);
+
+        // seed
+        if (!prevLastUpdated.current) {
+          prevLastUpdated.current = next || "";
+          return;
+        }
+
+        // changed => reload
+        if (next && prevLastUpdated.current !== next) {
+          // eslint-disable-next-line no-console
+          console.log("🔄 Detected change in Google Sheet. Reloading page...");
+          window.location.reload();
+          return;
+        }
+
+        // safety net: reload every 30 mins (in addition to your existing 30-min interval)
+        if (Date.now() - hardReloadRef.current > 30 * 60 * 1000) {
+          hardReloadRef.current = Date.now();
+          window.location.reload();
+        }
+      } catch {
+        // ignore transient failures
+      }
+    };
+
+    poll();
+    const id = setInterval(() => {
+      if (!stopped) poll();
+    }, 60 * 1000);
+
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, []);
 
   // 🔓 Robust fake time override
   const now = useMemo(() => {
@@ -128,7 +209,7 @@ export default function EmbedScreen() {
   // Build message + style (Arabic appears directly after English label)
   let messageStyle = "";
   let prayerMessage = ""; // used for Makrooh/Nafl
-  let structured = null;  // { label, ar, suffix }
+  let structured = null; // { label, ar, suffix }
 
   if (current.isMakrooh) {
     prayerMessage = "⚠ Makrooh time — please avoid praying";

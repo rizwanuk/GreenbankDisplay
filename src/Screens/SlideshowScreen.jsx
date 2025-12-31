@@ -33,6 +33,7 @@ function buildSettingsMap(rows) {
   });
   return map;
 }
+
 function readGroup(map, prefix) {
   const out = {};
   const pfx = prefix.endsWith(".") ? prefix : prefix + ".";
@@ -41,6 +42,7 @@ function readGroup(map, prefix) {
   }
   return out;
 }
+
 function normaliseFontToken(v) {
   if (!v) return v;
   const s = String(v).trim().toLowerCase();
@@ -56,12 +58,44 @@ function normaliseFontToken(v) {
   };
   return map[s] || s;
 }
+
 function withNormalisedFonts(obj) {
   if (!obj) return obj;
   const out = { ...obj };
   if (out.fontEng) out.fontEng = normaliseFontToken(out.fontEng);
   if (out.fontAra) out.fontAra = normaliseFontToken(out.fontAra);
   return out;
+}
+
+function extractLastUpdatedFromSettingsRows(rows) {
+  // supports both shapes:
+  // 1) rows like [{ Group, Key, Value }]
+  // 2) rows like [["Group","Key","Value"], ["meta","lastUpdated","..."]]
+  if (!rows) return "";
+
+  // Shape 1
+  if (Array.isArray(rows) && rows.length && !Array.isArray(rows[0])) {
+    for (const r of rows) {
+      const g = String(r?.Group || "").trim();
+      const k = String(r?.Key || "").trim();
+      const v = String(r?.Value ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+    return "";
+  }
+
+  // Shape 2
+  if (Array.isArray(rows) && Array.isArray(rows[0])) {
+    const body = rows.slice(1);
+    for (const r of body) {
+      const g = String(r?.[0] || "").trim();
+      const k = String(r?.[1] || "").trim();
+      const v = String(r?.[2] ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+  }
+
+  return "";
 }
 
 /* ---------------- component ---------------- */
@@ -104,8 +138,12 @@ export default function SlideshowScreen() {
   const themeHeader = withNormalisedFonts(readGroup(settingsMap, `${base}.header`));
   const themeClock = withNormalisedFonts(readGroup(settingsMap, `${base}.slideshowClock`));
   const themeDateCard = withNormalisedFonts(readGroup(settingsMap, `${base}.slideshowDateCard`));
-  const themeCurrentPrayer = withNormalisedFonts(readGroup(settingsMap, `${base}.slideshowCurrentPrayer`));
-  const themeUpcomingPrayer = withNormalisedFonts(readGroup(settingsMap, `${base}.slideshowUpcomingPrayer`));
+  const themeCurrentPrayer = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshowCurrentPrayer`)
+  );
+  const themeUpcomingPrayer = withNormalisedFonts(
+    readGroup(settingsMap, `${base}.slideshowUpcomingPrayer`)
+  );
   const themeSlideshow = withNormalisedFonts(readGroup(settingsMap, `${base}.slideshow`));
 
   // Labels
@@ -147,18 +185,53 @@ export default function SlideshowScreen() {
 
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
 
-  // Auto-reload when Google Sheet changes
-  const lastUpdatedRef = useRef(null);
+  // Auto-reload when Google Sheet changes (works even if useSettings() doesn't refetch)
+  const lastUpdatedRef = useRef("");
+  const lastHardReloadRef = useRef(Date.now());
+
   useEffect(() => {
-    const id = setInterval(() => {
-      const current = settingsMap["meta.lastUpdated"];
-      if (!lastUpdatedRef.current) lastUpdatedRef.current = current;
-      else if (current && current !== lastUpdatedRef.current) {
-        window.location.reload();
+    let stopped = false;
+
+    const poll = async () => {
+      try {
+        // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
+        // If your public settings endpoint is different, change it here:
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        const j = await r.json();
+
+        const rows = j.rows || j.values || j.settings || [];
+        const next = extractLastUpdatedFromSettingsRows(rows);
+
+        if (!lastUpdatedRef.current) {
+          lastUpdatedRef.current = next || "";
+          return;
+        }
+
+        if (next && next !== lastUpdatedRef.current) {
+          window.location.reload();
+          return;
+        }
+
+        // Safety net: full reload every 30 mins
+        if (Date.now() - lastHardReloadRef.current > 30 * 60 * 1000) {
+          lastHardReloadRef.current = Date.now();
+          window.location.reload();
+        }
+      } catch {
+        // ignore transient failures
       }
-    }, 60000);
-    return () => clearInterval(id);
-  }, [settingsMap]);
+    };
+
+    poll();
+    const id = setInterval(() => {
+      if (!stopped) poll();
+    }, 60 * 1000);
+
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, []);
 
   /* ---------- Display Mode (local, per device) ---------- */
   const [displayMode, setDisplayMode] = useLocalDisplayMode("1080p");
@@ -281,7 +354,9 @@ export default function SlideshowScreen() {
         themeName={activeTheme}
         setThemeName={(t) => {
           setSelectedTheme(t);
-          try { localStorage.setItem("selectedTheme", t); } catch {}
+          try {
+            localStorage.setItem("selectedTheme", t);
+          } catch {}
         }}
         themeOptions={allThemes}
         displayMode={displayMode}

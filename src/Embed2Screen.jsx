@@ -19,6 +19,35 @@ import applyJummahOverride from "./helpers/applyJummahOverride";
 
 moment.locale("en-gb");
 
+/* ---------------- helpers ---------------- */
+
+function extractLastUpdatedFromSettingsRows(rows) {
+  if (!rows) return "";
+
+  // Shape: [{Group, Key, Value}]
+  if (Array.isArray(rows) && rows.length && !Array.isArray(rows[0])) {
+    for (const r of rows) {
+      const g = String(r?.Group || "").trim();
+      const k = String(r?.Key || "").trim();
+      const v = String(r?.Value ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+    return "";
+  }
+
+  // Shape: [["Group","Key","Value"], ["meta","lastUpdated","..."]]
+  if (Array.isArray(rows) && Array.isArray(rows[0])) {
+    for (const r of rows.slice(1)) {
+      const g = String(r?.[0] || "").trim();
+      const k = String(r?.[1] || "").trim();
+      const v = String(r?.[2] ?? "").trim();
+      if (g === "meta" && k === "lastUpdated") return v;
+    }
+  }
+
+  return "";
+}
+
 export default function Embed2Screen() {
   const timetable = usePrayerTimes(); // array
   const rawSettings = useSettings(); // array
@@ -27,9 +56,59 @@ export default function Embed2Screen() {
   // ✅ This is the key: measure ONLY this wrapper, not the whole document
   const contentRef = useRef(null);
 
+  // Keep the periodic full reload
   useEffect(() => {
     const fullReload = setInterval(() => window.location.reload(), 30 * 60 * 1000);
     return () => clearInterval(fullReload);
+  }, []);
+
+  // ✅ Auto-reload when Google Sheet settings change (meta.lastUpdated)
+  // Poll a PUBLIC endpoint so it works even if useSettings() isn't refetching.
+  const prevLastUpdated = useRef("");
+  const hardReloadRef = useRef(Date.now());
+
+  useEffect(() => {
+    let stopped = false;
+
+    const poll = async () => {
+      try {
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        const j = await r.json();
+
+        const rows = j.rows || j.values || j.settings || [];
+        const next = extractLastUpdatedFromSettingsRows(rows);
+
+        if (!prevLastUpdated.current) {
+          prevLastUpdated.current = next || "";
+          return;
+        }
+
+        if (next && prevLastUpdated.current !== next) {
+          // eslint-disable-next-line no-console
+          console.log("🔄 Detected change in Google Sheet. Reloading page...");
+          window.location.reload();
+          return;
+        }
+
+        // safety net (in addition to your existing 30-min interval)
+        if (Date.now() - hardReloadRef.current > 30 * 60 * 1000) {
+          hardReloadRef.current = Date.now();
+          window.location.reload();
+        }
+      } catch {
+        // ignore transient failures
+      }
+    };
+
+    poll();
+    const id = setInterval(() => {
+      if (!stopped) poll();
+    }, 60 * 1000);
+
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
   }, []);
 
   // ✅ Auto-resize in an iframe (WordPress) based on content wrapper height
@@ -205,9 +284,9 @@ export default function Embed2Screen() {
     structured = {
       label: displayLabel,
       ar: (displayArabic || "").trim(),
-      suffix: "— Current",
+      suffix: "— Jama‘ah in progress",
     };
-    messageStyle = "bg-cyan-600 text-white";
+    messageStyle = "bg-green-600 text-white";
   } else if (current.key === "nafl") {
     const naflAr = (current.arabic || displayArabic || A?.nafl || "").trim();
     const fallback = `${displayLabel || "Nafl"}${naflAr ? ` ${naflAr}` : ""} prayers can be offered`;
