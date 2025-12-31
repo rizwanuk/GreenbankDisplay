@@ -43,6 +43,7 @@ function Crash({ error }) {
         color: "#ffb4b4",
         fontFamily: "monospace",
         whiteSpace: "pre-wrap",
+        minHeight: "100vh",
       }}
     >
       <div style={{ fontWeight: "bold", marginBottom: 8 }}>❌ App crashed</div>
@@ -60,7 +61,7 @@ class RootErrorBoundary extends React.Component {
     return { error };
   }
   componentDidCatch(error, info) {
-    console.error(error, info);
+    console.error("RootErrorBoundary caught:", error, info);
   }
   render() {
     if (this.state.error) return <Crash error={this.state.error} />;
@@ -69,14 +70,24 @@ class RootErrorBoundary extends React.Component {
 }
 
 const rootEl = document.getElementById("root");
-createRoot(rootEl).render(
-  <RootErrorBoundary>
-    <RouterProvider
-      router={router}
-      fallbackElement={<div className="p-6 text-white bg-black">Loading…</div>}
-    />
-  </RootErrorBoundary>
-);
+if (!rootEl) {
+  // If root is missing, show something obvious rather than failing silently
+  document.body.innerHTML =
+    '<div style="padding:16px;background:#1b1b1b;color:#ffb4b4;font-family:monospace;white-space:pre-wrap;">❌ #root element not found in index.html</div>';
+} else {
+  createRoot(rootEl).render(
+    <React.StrictMode>
+      <RootErrorBoundary>
+        <RouterProvider
+          router={router}
+          fallbackElement={
+            <div className="p-6 text-white bg-black min-h-screen">Loading…</div>
+          }
+        />
+      </RootErrorBoundary>
+    </React.StrictMode>
+  );
+}
 
 // Just log global errors
 window.addEventListener("error", (e) =>

@@ -39,3 +39,5 @@ server/node_modules/
 
 .vercel
 /src/version.js
+
+.env*.local

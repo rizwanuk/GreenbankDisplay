@@ -1,550 +1,287 @@
-import React, { useMemo, useState } from "react";
-import AdminShell from "./admin/components/AdminShell";
-import AdminAuthCard from "./admin/components/AdminAuthCard";
-import AdminBadges from "./admin/components/AdminBadges";
-import AdminSection from "./admin/components/AdminSection";
-import { Field, SelectInput, TextArea, TextInput } from "./admin/components/AdminField";
-import ReadOnlySettingsTable from "./admin/components/ReadOnlySettingsTable";
-import { useAdminSettings } from "./admin/useAdminSettings";
+// src/Screens/AdminScreen.jsx
+import React, { useMemo, useState, useEffect } from "react";
+import { useAdminSettings } from "./admin/hooks/useAdminSettings";
+import AdminPanelShell from "./admin/components/AdminPanelShell";
 
-function asBoolToken(v) {
-  const s = String(v ?? "").trim().toUpperCase();
-  if (s === "TRUE" || s === "FALSE") return s;
-  return s === "1" || s === "YES" ? "TRUE" : "FALSE";
-}
+import LabelsPanel from "./admin/panels/LabelsPanel";
+import ThemePanel from "./admin/panels/ThemePanel";
+import MosquePanel from "./admin/panels/MosquePanel";
+import PrayerRulesPanel from "./admin/panels/PrayerRulesPanel";
+import JummahTimesPanel from "./admin/panels/JummahTimesPanel";
+import TestModePanel from "./admin/panels/TestModePanel";
+import IslamicCalendarPanel from "./admin/panels/IslamicCalendarPanel";
+import SignInPanel from "./admin/components/SignInPanel";
 
-function clampIntString(v, { min = 0, max = 9999 } = {}) {
-  const n = parseInt(String(v || "").replace(/[^\d-]/g, ""), 10);
-  if (Number.isNaN(n)) return "";
-  return String(Math.max(min, Math.min(max, n)));
-}
-
-function normalizeTimeHHmm(v) {
-  const raw = String(v ?? "").trim();
-  if (!raw) return "";
-  // allow "13.30" or "13:30"
-  const s = raw.replace(/[．。]/g, ".").replace(/[：﹕︓]/g, ":").replace(".", ":");
-  const m = s.match(/^(\d{1,2}):(\d{1,2})$/);
-  if (!m) return raw; // keep as-is so user can see it's invalid
-  const hh = Math.max(0, Math.min(23, parseInt(m[1], 10)));
-  const mm = Math.max(0, Math.min(59, parseInt(m[2], 10)));
-  const pad2 = (n) => String(n).padStart(2, "0");
-  return `${pad2(hh)}:${pad2(mm)}`;
-}
-
-/** Curated label keys (from your sheet example) */
-const LABEL_GROUP_EN = "labels";
-const LABEL_GROUP_AR = "labels.arabic";
-
-// Prayers + sunrise + ishraq
-const LABEL_KEYS_PRAYER = [
-  ["fajr", "Fajr"],
-  ["sunrise", "Sunrise (Shouruq)"],
-  ["ishraq", "Ishraq"],
-  ["dhuhr", "Zuhr"],
-  ["asr", "Asr"],
-  ["maghrib", "Maghrib"],
-  ["isha", "Isha (Esha)"],
+const PANELS = [
+  {
+    id: "labels",
+    title: "Labels",
+    desc: "English + Arabic prayer labels and UI text.",
+    emoji: "🏷️",
+    render: (props) => <LabelsPanel {...props} />,
+  },
+  {
+    id: "theme",
+    title: "Theme",
+    desc: "Edit Theme_3 / Theme_4 styling for desktop and mobile.",
+    emoji: "🎨",
+    render: (props) => <ThemePanel {...props} />,
+  },
+  {
+    id: "mosque",
+    title: "Mosque",
+    desc: "Name, address, website and logo used across the app.",
+    emoji: "📍",
+    render: (props) => <MosquePanel {...props} />,
+  },
+  {
+    id: "islamicCalendar",
+    title: "Islamic Calendar",
+    desc: "Preview today’s Hijri date and adjust offset / month normalisation.",
+    emoji: "🌙",
+    render: (props) => <IslamicCalendarPanel {...props} />,
+  },
+  {
+    id: "rules",
+    title: "Prayer Rules",
+    desc: "Makrooh windows, Ishraq, Jama'ah highlight duration.",
+    emoji: "🕌",
+    render: (props) => <PrayerRulesPanel {...props} />,
+  },
+  {
+    id: "jummah",
+    title: "Jummah Times",
+    desc: "Per-month Jummah Jama'ah times used across the app.",
+    emoji: "🗓️",
+    render: (props) => <JummahTimesPanel {...props} />,
+  },
+  {
+    id: "test",
+    title: "Test Mode",
+    desc: "Fake time controls for testing layouts and transitions.",
+    emoji: "🧪",
+    render: (props) => <TestModePanel {...props} />,
+  },
 ];
 
-// Table headings + common UI labels
-const LABEL_KEYS_UI = [
-  ["begins", "Begins (Adhan)"],
-  ["jamaah", "Jama’ah (Iqamah)"],
-];
-
-// Specials
-const LABEL_KEYS_SPECIAL = [
-  ["jummah", "Jum’ah"],
-  ["nafl", "Nafl"],
-  ["eidFitr", "Eid-ul-Fitr"],
-  ["eidAdha", "Eid-ul-Adha"],
-];
-
-// Hijri months
-const LABEL_KEYS_HIJRI_MONTHS = [
-  ["muharram", "Muharram"],
-  ["safar", "Safar"],
-  ["rabiAwal", "Rabi’ al-Awwal"],
-  ["rabiThani", "Rabi’ al-Akhir"],
-  ["jumadaAwal", "Jumada al-Ula"],
-  ["jumadaThani", "Jumada al-Akhirah"],
-  ["rajab", "Rajab"],
-  ["shaban", "Sha’ban"],
-  ["ramadan", "Ramadan"],
-  ["shawwal", "Shawwal"],
-  ["dhulQadah", "Dhul Qa’dah"],
-  ["dhulHijjah", "Dhul Hijjah"],
-];
-
-function LabelRow({ title, k, get, set }) {
+function isAuthErrorMessage(err) {
+  const s = String(err || "").toLowerCase();
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <Field label={`${title} (English)`} hint={`${LABEL_GROUP_EN}.${k}`}>
-        <TextInput
-          value={get(LABEL_GROUP_EN, k, "")}
-          onChange={(e) => set(LABEL_GROUP_EN, k, e.target.value)}
-          placeholder="English label…"
-        />
-      </Field>
-
-      <Field label={`${title} (Arabic)`} hint={`${LABEL_GROUP_AR}.${k}`}>
-        <TextInput
-          value={get(LABEL_GROUP_AR, k, "")}
-          onChange={(e) => set(LABEL_GROUP_AR, k, e.target.value)}
-          placeholder="Arabic label…"
-          dir="rtl"
-        />
-      </Field>
-    </div>
+    s.includes("missing bearer token") ||
+    s.includes("token used too late") ||
+    s.includes("expired") ||
+    s.includes("invalid token") ||
+    s.includes("jwt") ||
+    s.includes("unauthorized") ||
+    s.includes("401")
   );
 }
 
-function LabelsPanel({ get, set }) {
-  return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="text-sm font-semibold text-white/90">Prayer names</div>
-        <div className="space-y-3">
-          {LABEL_KEYS_PRAYER.map(([k, title]) => (
-            <LabelRow key={k} title={title} k={k} get={get} set={set} />
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="text-sm font-semibold text-white/90">Table headings</div>
-        <div className="space-y-3">
-          {LABEL_KEYS_UI.map(([k, title]) => (
-            <LabelRow key={k} title={title} k={k} get={get} set={set} />
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="text-sm font-semibold text-white/90">Special labels</div>
-        <div className="space-y-3">
-          {LABEL_KEYS_SPECIAL.map(([k, title]) => (
-            <LabelRow key={k} title={title} k={k} get={get} set={set} />
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="text-sm font-semibold text-white/90">Hijri month names</div>
-        <div className="space-y-3">
-          {LABEL_KEYS_HIJRI_MONTHS.map(([k, title]) => (
-            <LabelRow key={k} title={title} k={k} get={get} set={set} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+function getToken() {
+  try {
+    return typeof window !== "undefined"
+      ? localStorage.getItem("gbm_admin_id_token")
+      : null;
+  } catch {
+    return null;
+  }
 }
 
-/** ---------------- Prayer rules (timings.*) ---------------- */
-
-const TIMINGS_GROUP = "timings";
-
-const TIMING_FIELDS = [
-  {
-    key: "makroohBeforeSunrise",
-    title: "Makrooh before sunrise (minutes)",
-    hint: "Minutes before Shouruq where prayer is not allowed",
-    min: 0,
-    max: 60,
-    placeholder: "1",
-  },
-  {
-    key: "makroohAfterSunrise",
-    title: "Makrooh after sunrise (minutes)",
-    hint: "Minutes after Shouruq where prayer is not allowed",
-    min: 0,
-    max: 60,
-    placeholder: "10",
-  },
-  {
-    key: "showIshraq",
-    title: "Ishraq window length (minutes)",
-    hint: "How long Ishraq is shown (after it begins)",
-    min: 0,
-    max: 180,
-    placeholder: "30",
-  },
-  {
-    key: "makroohBeforeZuhr",
-    title: "Makrooh before Zuhr (minutes)",
-    hint: "Zawal window length",
-    min: 0,
-    max: 60,
-    placeholder: "10",
-  },
-  {
-    key: "makroohBeforeAsr",
-    title: "Makrooh before Asr (minutes)",
-    hint: "Often 0 (no warning window)",
-    min: 0,
-    max: 60,
-    placeholder: "0",
-  },
-  {
-    key: "makroohBeforeMaghrib",
-    title: "Makrooh before Maghrib (minutes)",
-    hint: "Window before sunset / Maghrib begins",
-    min: 0,
-    max: 60,
-    placeholder: "10",
-  },
-  {
-    key: "makroohBeforeIsha",
-    title: "Makrooh before Isha (minutes)",
-    hint: "Often 0",
-    min: 0,
-    max: 60,
-    placeholder: "0",
-  },
-  {
-    key: "jamaahHighlightDuration",
-    title: "Jama’ah highlight duration (minutes)",
-    hint: "How long the “Jama’ah in progress” state is held",
-    min: 0,
-    max: 30,
-    placeholder: "5",
-  },
-];
-
-function TimingsPanel({ get, set }) {
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-white/70">
-        These are used across the display and embed screens to drive Makrooh/Ishraq/Jama’ah behaviour.
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {TIMING_FIELDS.map((f) => (
-          <Field key={f.key} label={f.title} hint={`timings.${f.key} • ${f.hint}`}>
-            <TextInput
-              inputMode="numeric"
-              value={get(TIMINGS_GROUP, f.key, "")}
-              placeholder={f.placeholder}
-              onChange={(e) =>
-                set(TIMINGS_GROUP, f.key, clampIntString(e.target.value, { min: f.min, max: f.max }))
-              }
-            />
-          </Field>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** ---------------- Jum’ah times (jummahTimes.*) ---------------- */
-
-const JUMMAH_GROUP = "jummahTimes";
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-function JummahTimesPanel({ get, set }) {
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-white/70">
-        Month-based Jum’ah Jama’ah time. Use <span className="font-semibold">HH:mm</span> (e.g. 13:30).
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {MONTHS.map((m) => (
-          <Field key={m} label={m} hint={`jummahTimes.${m}`}>
-            <TextInput
-              value={get(JUMMAH_GROUP, m, "")}
-              placeholder="13:30"
-              onBlur={(e) => set(JUMMAH_GROUP, m, normalizeTimeHHmm(e.target.value))}
-              onChange={(e) => set(JUMMAH_GROUP, m, e.target.value)}
-              inputMode="numeric"
-            />
-          </Field>
-        ))}
-      </div>
-    </div>
-  );
+function clearToken() {
+  try {
+    localStorage.removeItem("gbm_admin_id_token");
+  } catch {
+    // ignore
+  }
 }
 
 export default function AdminScreen() {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const { loading, email, error, groups, setValue, saveAll, reload } =
+    useAdminSettings();
 
-  const admin = useAdminSettings(clientId);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
 
-  const {
-    idToken,
-    email,
-    allowedClient,
-    allowedServer,
-    serverEmail,
-    rows,
-    dirtyCount,
-    themeOptions,
-    loading,
-    status,
-    error,
-    signOut,
-    save,
-    refresh,
-    resetDraft,
-    get,
-    set,
-  } = admin;
+  // Which panel is expanded (nice for mobile)
+  const [openId, setOpenId] = useState("labels");
 
-  const [showAll, setShowAll] = useState(false);
+  // Derived auth state
+  const token = getToken();
+  const authError = isAuthErrorMessage(error);
+  const needsSignIn = !token || authError;
 
-  const canEdit = idToken && allowedServer;
+  // If we detect an expired/invalid token, clear it so UI reliably shows sign-in.
+  useEffect(() => {
+    if (authError) clearToken();
+  }, [authError]);
 
-  const categories = useMemo(
-    () => [
-      { key: "appearance", title: "Appearance", subtitle: "Theme + clock format (safe to test)." },
-      { key: "labels", title: "Labels", subtitle: "English + Arabic labels (prayers, headings, Hijri months)." },
-      { key: "prayerRules", title: "Prayer rules", subtitle: "Makrooh windows, Ishraq, Jama’ah highlight." },
-      { key: "jummah", title: "Jum’ah times", subtitle: "Monthly Jum’ah Jama’ah time." },
-      { key: "slideshow", title: "Slideshow", subtitle: "Rotation timing for slideshow screen." },
-      { key: "infoCard", title: "Info card", subtitle: "Rotation + override message for announcements." },
-      { key: "testMode", title: "Test mode", subtitle: "Optional fake time controls (if you use them)." },
-    ],
-    []
+  const canRender = useMemo(
+    () => Object.keys(groups || {}).length > 0,
+    [groups]
   );
 
-  return (
-    <AdminShell>
-      <div className="space-y-6">
-        <AdminAuthCard
-          idToken={idToken}
-          email={email}
-          onSignOut={signOut}
-          error={error}
-          status={status}
-          loading={loading}
-        />
+  async function onSave() {
+    setSavedMsg("");
+    setSaving(true);
+    const r = await saveAll();
+    setSaving(false);
 
-        {idToken ? (
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
-            <div className="text-sm text-white/70">
-              Server verified as:{" "}
-              <span className="font-semibold text-white">{serverEmail || "—"}</span>
+    if (r?.ok) {
+      setSavedMsg("Saved");
+      setTimeout(() => setSavedMsg(""), 1200);
+    }
+  }
+
+  async function onRefresh() {
+    // If token expired, force a clean sign-in rather than spamming 401s
+    if (needsSignIn) clearToken();
+    await reload();
+  }
+
+  const subtitle = needsSignIn
+    ? "Please sign in to load and edit settings."
+    : "Edit live settings stored in Google Sheets.";
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black text-white">
+      {/* Sticky app header */}
+      <div className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 md:px-6 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="text-lg md:text-2xl font-semibold tracking-tight">
+                  Admin
+                </div>
+                <span className="hidden md:inline text-xs rounded-full border border-white/15 bg-white/5 px-2 py-1 opacity-80">
+                  GreenbankDisplay
+                </span>
+              </div>
+
+              <div className="text-xs md:text-sm opacity-75 truncate">
+                {needsSignIn
+                  ? subtitle
+                  : `Signed in as ${email || "—"} • ${subtitle}`}
+              </div>
             </div>
 
-            <AdminBadges
-              allowedClient={allowedClient}
-              allowedServer={allowedServer}
-              dirtyCount={dirtyCount}
-            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onRefresh}
+                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 active:scale-[0.99]"
+              >
+                Refresh
+              </button>
 
-            {canEdit ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={save}
-                  disabled={loading}
-                  className={`px-4 py-2 rounded-lg border ${
-                    loading
-                      ? "bg-white/10 border-white/10 opacity-60"
-                      : "bg-emerald-700 border-emerald-600 hover:bg-emerald-600"
-                  }`}
-                >
-                  Save changes
-                </button>
-
-                <button
-                  onClick={refresh}
-                  disabled={loading}
-                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
-                >
-                  Refresh from sheet
-                </button>
-
-                <button
-                  onClick={resetDraft}
-                  disabled={loading || dirtyCount === 0}
-                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 disabled:opacity-50"
-                >
-                  Reset changes
-                </button>
-
-                <button
-                  onClick={() => setShowAll((v) => !v)}
-                  className="ml-auto px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
-                >
-                  {showAll ? "Hide all settings" : "Show all settings"}
-                </button>
-              </div>
-            ) : (
-              <div className="mt-4 text-sm text-red-200">
-                Signed in, but server blocked — check allowlist.
-              </div>
-            )}
+              <button
+                onClick={onSave}
+                disabled={saving || needsSignIn}
+                className="rounded-xl border border-white/15 bg-emerald-600/80 px-4 py-2 text-sm hover:bg-emerald-600 disabled:opacity-60 active:scale-[0.99]"
+                title={needsSignIn ? "Sign in to save changes" : "Save changes"}
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
-        ) : null}
 
-        {/* Curated panels */}
-        {canEdit ? (
-          <div className="space-y-4">
-            {/* Appearance */}
-            <AdminSection
-              title={categories.find((c) => c.key === "appearance")?.title}
-              subtitle={categories.find((c) => c.key === "appearance")?.subtitle}
-              defaultOpen
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Theme">
-                  <SelectInput
-                    value={get("toggles", "theme", "")}
-                    onChange={(e) => set("toggles", "theme", e.target.value)}
-                  >
-                    <option value="">(not set)</option>
-                    {themeOptions.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </SelectInput>
-                </Field>
-
-                <Field label="Clock 24 hours">
-                  <SelectInput
-                    value={asBoolToken(get("toggles", "clock24Hours", "FALSE"))}
-                    onChange={(e) => set("toggles", "clock24Hours", e.target.value)}
-                  >
-                    <option value="FALSE">FALSE</option>
-                    <option value="TRUE">TRUE</option>
-                  </SelectInput>
-                </Field>
+          {/* Mobile panel picker */}
+          {!needsSignIn && (
+            <div className="mt-3 md:hidden">
+              <div className="flex items-center gap-2">
+                <div className="text-xs opacity-70">Panel</div>
+                <select
+                  value={openId}
+                  onChange={(e) => setOpenId(e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm outline-none"
+                >
+                  {PANELS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </AdminSection>
-
-            {/* Labels */}
-            <AdminSection
-              title={categories.find((c) => c.key === "labels")?.title}
-              subtitle={categories.find((c) => c.key === "labels")?.subtitle}
-              defaultOpen={false}
-            >
-              <LabelsPanel get={get} set={set} />
-            </AdminSection>
-
-            {/* Prayer rules */}
-            <AdminSection
-              title={categories.find((c) => c.key === "prayerRules")?.title}
-              subtitle={categories.find((c) => c.key === "prayerRules")?.subtitle}
-              defaultOpen
-            >
-              <TimingsPanel get={get} set={set} />
-            </AdminSection>
-
-            {/* Jummah */}
-            <AdminSection
-              title={categories.find((c) => c.key === "jummah")?.title}
-              subtitle={categories.find((c) => c.key === "jummah")?.subtitle}
-              defaultOpen
-            >
-              <JummahTimesPanel get={get} set={set} />
-            </AdminSection>
-
-            {/* Slideshow */}
-            <AdminSection
-              title={categories.find((c) => c.key === "slideshow")?.title}
-              subtitle={categories.find((c) => c.key === "slideshow")?.subtitle}
-              defaultOpen={false}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Slideshow duration (seconds)" hint="e.g. 8">
-                  <TextInput
-                    value={get("slideshow", "duration", "8")}
-                    onChange={(e) =>
-                      set("slideshow", "duration", clampIntString(e.target.value, { min: 3, max: 60 }))
-                    }
-                    inputMode="numeric"
-                  />
-                </Field>
-              </div>
-            </AdminSection>
-
-            {/* Info card */}
-            <AdminSection
-              title={categories.find((c) => c.key === "infoCard")?.title}
-              subtitle={categories.find((c) => c.key === "infoCard")?.subtitle}
-              defaultOpen={false}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Rotate interval (seconds)" hint="e.g. 15">
-                  <TextInput
-                    value={get("infoCard", "rotateInterval", "15")}
-                    onChange={(e) =>
-                      set("infoCard", "rotateInterval", clampIntString(e.target.value, { min: 5, max: 120 }))
-                    }
-                    inputMode="numeric"
-                  />
-                </Field>
-
-                <Field label="Override duration (seconds)" hint="e.g. 300">
-                  <TextInput
-                    value={get("infoCard", "overrideDuration", "300")}
-                    onChange={(e) =>
-                      set("infoCard", "overrideDuration", clampIntString(e.target.value, { min: 10, max: 3600 }))
-                    }
-                    inputMode="numeric"
-                  />
-                </Field>
-
-                <div className="sm:col-span-2">
-                  <Field label="Override message" hint="Shown when forced">
-                    <TextArea
-                      className="min-h-[140px]"
-                      value={get("infoCard", "overrideMessage", "")}
-                      onChange={(e) => set("infoCard", "overrideMessage", e.target.value)}
-                    />
-                  </Field>
-                </div>
-              </div>
-            </AdminSection>
-
-            {/* Test mode */}
-            <AdminSection
-              title={categories.find((c) => c.key === "testMode")?.title}
-              subtitle={categories.find((c) => c.key === "testMode")?.subtitle}
-              defaultOpen={false}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Fake time enabled">
-                  <SelectInput
-                    value={asBoolToken(get("toggles", "fakeTimeEnabled", "FALSE"))}
-                    onChange={(e) => set("toggles", "fakeTimeEnabled", e.target.value)}
-                  >
-                    <option value="FALSE">FALSE</option>
-                    <option value="TRUE">TRUE</option>
-                  </SelectInput>
-                </Field>
-
-                <Field label="Fake time" hint="HH:mm e.g. 13:05">
-                  <TextInput
-                    value={get("toggles", "fakeTime", "")}
-                    onChange={(e) => set("toggles", "fakeTime", e.target.value)}
-                    placeholder="13:05"
-                  />
-                </Field>
-              </div>
-            </AdminSection>
-
-            {/* Read-only settings */}
-            {showAll ? <ReadOnlySettingsTable rows={rows} /> : null}
-          </div>
-        ) : null}
+            </div>
+          )}
+        </div>
       </div>
-    </AdminShell>
+
+      {/* Page content */}
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-5 space-y-4">
+        {savedMsg ? (
+          <div className="rounded-2xl bg-emerald-600/15 border border-emerald-400/20 p-3 text-sm">
+            ✅ {savedMsg}
+          </div>
+        ) : null}
+
+        {/* If auth error, show a friendly banner (instead of scary raw text) */}
+        {authError && (
+          <div className="rounded-2xl bg-amber-600/15 border border-amber-400/20 p-3 text-sm">
+            Your session has expired. Please sign in again.
+          </div>
+        )}
+
+        {/* Non-auth errors */}
+        {error && !needsSignIn && (
+          <div className="rounded-2xl bg-red-600/15 border border-red-400/20 p-3 text-sm">
+            {error}
+          </div>
+        )}
+
+        {loading && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm opacity-80">
+            Loading…
+          </div>
+        )}
+
+        {!loading && needsSignIn && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <SignInPanel
+              onSignedIn={() => {
+                // After sign-in, reload settings and open the first panel
+                setOpenId("labels");
+                reload();
+              }}
+            />
+          </div>
+        )}
+
+        {!loading && !needsSignIn && !canRender && !error && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm opacity-80">
+            No settings loaded.
+          </div>
+        )}
+
+        {!loading && !needsSignIn && canRender && (
+          <div className="grid grid-cols-1 gap-4">
+            {PANELS.map((p) => (
+              <AdminPanelShell
+                key={p.id}
+                title={p.title}
+                description={p.desc}
+                icon={p.emoji}
+                isOpen={openId === p.id}
+                onToggle={() => setOpenId((cur) => (cur === p.id ? "" : p.id))}
+              >
+                {p.render({ groups, setValue })}
+              </AdminPanelShell>
+            ))}
+          </div>
+        )}
+
+        {/* Mobile bottom save bar */}
+        {!needsSignIn && (
+          <div className="md:hidden sticky bottom-0 z-20 -mx-4 px-4 py-3 bg-slate-950/70 backdrop-blur border-t border-white/10">
+            <button
+              onClick={onSave}
+              disabled={saving || needsSignIn}
+              className="w-full rounded-2xl border border-white/15 bg-emerald-600/80 py-3 text-base font-semibold disabled:opacity-60 active:scale-[0.99]"
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
