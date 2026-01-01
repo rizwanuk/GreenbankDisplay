@@ -106,20 +106,26 @@ function App() {
     } catch {}
   }, []);
 
-  // Static mosque details
-  const mosque = {
-    name: "Greenbank Masjid",
-    address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
-    webpage: "greenbankbristol.org",
-    logoUrl:
-      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
-  };
-
-  // Build settings map
+   // Build settings map
   const settingsMap = useMemo(
     () => (Array.isArray(settings) && settings.length ? buildSettingsMap(settings) : {}),
     [settings]
   );
+
+  // Mosque details (from Settings sheet, with safe fallbacks)
+const mosque = useMemo(() => {
+  return {
+    name: settingsMap["mosque.name"] || "Greenbank Masjid",
+    address:
+      settingsMap["mosque.address"] ||
+      "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
+    webpage: settingsMap["mosque.webpage"] || "greenbankbristol.org",
+    logoUrl:
+      settingsMap["mosque.logoUrl"] ||
+      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
+  };
+}, [settingsMap]);
+
 
   // Theme selection
   const defaultTheme = settingsMap["toggles.theme"] || "Theme_1";

@@ -107,15 +107,6 @@ export default function SlideshowScreen() {
   const settings = useSettings();
   const timetable = usePrayerTimes();
 
-  // Static mosque details
-  const mosque = {
-    name: "Greenbank Masjid",
-    address: "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
-    webpage: "greenbankbristol.org",
-    logoUrl:
-      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
-  };
-
   const settingsMap = useMemo(() => buildSettingsMap(settings), [settings]);
 
   // Theme selection (local with optional remote override)
@@ -124,6 +115,21 @@ export default function SlideshowScreen() {
     () => localStorage.getItem("selectedTheme") || null
   );
   const activeTheme = selectedTheme || defaultTheme;
+
+  // Mosque details (from Settings sheet, with safe fallbacks)
+const mosque = useMemo(() => {
+  return {
+    name: settingsMap["mosque.name"] || "Greenbank Masjid",
+    address:
+      settingsMap["mosque.address"] ||
+      "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE",
+    webpage: settingsMap["mosque.webpage"] || "greenbankbristol.org",
+    logoUrl:
+      settingsMap["mosque.logoUrl"] ||
+      "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png",
+  };
+}, [settingsMap]);
+
 
   // All theme names for selector
   const allThemes = useMemo(() => {
