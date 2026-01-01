@@ -1,5 +1,6 @@
 // api/admin/prayertimes.js
 import { google } from "googleapis";
+import crypto from "crypto";
 
 /**
  * Verifies a Google ID token from the browser (Google Sign-In).
@@ -28,17 +29,50 @@ async function verifyGoogleToken(authHeader) {
   };
 }
 
-function normalizePrivateKey(keyRaw) {
-  return String(keyRaw || "").replace(/\\n/g, "\n");
+/**
+ * ✅ Robust private key loader.
+ * Prefer base64 env var (avoids newline/quote/CRLF issues on Vercel),
+ * fallback to raw PEM env var.
+ */
+function getPrivateKeyFromEnv() {
+  const b64 = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64 || "").trim();
+  if (b64) {
+    return Buffer.from(b64, "base64").toString("utf8");
+  }
+
+  let k = String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
+
+  // Strip accidental wrapping quotes
+  if (
+    (k.startsWith('"') && k.endsWith('"')) ||
+    (k.startsWith("'") && k.endsWith("'"))
+  ) {
+    k = k.slice(1, -1).trim();
+  }
+
+  // Normalise Windows newlines and literal \n sequences
+  k = k.replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
+
+  return k;
 }
 
 function getGoogleAuth() {
   const email = (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
-  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "";
-  const privateKey = normalizePrivateKey(keyRaw);
+  const privateKey = getPrivateKeyFromEnv();
 
   if (!email) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL");
-  if (!privateKey) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY");
+  if (!privateKey) {
+    throw new Error(
+      "Missing GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64)"
+    );
+  }
+
+  // Validate key early (gives clearer error than downstream OpenSSL)
+  try {
+    crypto.createPrivateKey(privateKey);
+  } catch (e) {
+    throw new Error(`Service account private key invalid: ${e?.message || e}`);
+  }
 
   return new google.auth.JWT({
     email,
@@ -161,7 +195,11 @@ export default async function handler(req, res) {
 
     // GET: Read PrayerTimes
     if (req.method === "GET") {
-      const rows = await readSheetValues(sheets, sheetId, PRAYERTIMES_SHEET_NAME);
+      const rows = await readSheetValues(
+        sheets,
+        sheetId,
+        PRAYERTIMES_SHEET_NAME
+      );
       return res.status(200).json({
         ok: true,
         sheet: PRAYERTIMES_SHEET_NAME,
@@ -186,11 +224,15 @@ export default async function handler(req, res) {
       }
 
       if (!patches.length) {
-        return res.status(400).json({ ok: false, error: "No patches provided" });
+        return res
+          .status(400)
+          .json({ ok: false, error: "No patches provided" });
       }
 
       if (patches.length > 1000) {
-        return res.status(400).json({ ok: false, error: "Too many changes in one save" });
+        return res
+          .status(400)
+          .json({ ok: false, error: "Too many changes in one save" });
       }
 
       const data = patches.map((p) => {
@@ -205,7 +247,9 @@ export default async function handler(req, res) {
           throw new Error(`Invalid col in patch: ${JSON.stringify(p)}`);
         }
         if (!isValidTimeHHMM(value)) {
-          throw new Error(`Invalid time "${p?.value}" at r${r} c${c}. Use HH:MM`);
+          throw new Error(
+            `Invalid time "${p?.value}" at r${r} c${c}. Use HH:MM`
+          );
         }
 
         const a1 = `${colToA1(c)}${r}`;

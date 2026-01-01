@@ -1,30 +1,40 @@
 // api/admin/settings.js
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
+import crypto from "crypto";
 
 /* ------------------ helpers ------------------ */
 
-function normalizePrivateKey(keyRaw) {
-  if (!keyRaw) return "";
-  let k = String(keyRaw).trim();
+/**
+ * ✅ Robust private key loader.
+ * Prefer base64 env var (avoids newline/quote/CRLF issues on Vercel),
+ * fallback to raw PEM env var.
+ */
+function getPrivateKeyFromEnv() {
+  const b64 = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64 || "").trim();
+  if (b64) {
+    return Buffer.from(b64, "base64").toString("utf8");
+  }
 
-  if (k.includes("\\n")) return k.replace(/\\n/g, "\n");
-  if (k.includes("\n")) return k;
+  let k = String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
 
-  const header = "-----BEGIN PRIVATE KEY-----";
-  const footer = "-----END PRIVATE KEY-----";
+  // Strip accidental wrapping quotes
+  if (
+    (k.startsWith('"') && k.endsWith('"')) ||
+    (k.startsWith("'") && k.endsWith("'"))
+  ) {
+    k = k.slice(1, -1).trim();
+  }
 
-  k = k.replace(header, "").replace(footer, "").replace(/\s+/g, "");
-  const wrapped = k.match(/.{1,64}/g)?.join("\n") || k;
+  // Normalise Windows newlines and literal \n sequences
+  k = k.replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
 
-  return `${header}\n${wrapped}\n${footer}\n`;
+  return k;
 }
 
 async function verifyGoogleIdToken(req) {
   const authHeader = req.headers.authorization || "";
-  const token = authHeader.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
   if (!token) {
     const e = new Error("Missing Bearer token");
@@ -57,13 +67,23 @@ async function verifyGoogleIdToken(req) {
 
 async function getSheetsClient() {
   const email = (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
-  const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "";
+  const privateKey = getPrivateKeyFromEnv();
 
-  if (!email || !keyRaw) {
-    throw new Error("Missing service account env vars");
+  if (!email) {
+    throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL");
+  }
+  if (!privateKey) {
+    throw new Error(
+      "Missing GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64)"
+    );
   }
 
-  const privateKey = normalizePrivateKey(keyRaw);
+  // Validate key early (clearer than downstream OpenSSL errors)
+  try {
+    crypto.createPrivateKey(privateKey);
+  } catch (e) {
+    throw new Error(`Service account private key invalid: ${e?.message || e}`);
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
@@ -79,8 +99,7 @@ async function getSheetsClient() {
 
 /* ------------------ sheet helpers ------------------ */
 
-const SETTINGS_SHEET_NAME =
-  process.env.GOOGLE_SETTINGS_SHEET_NAME || "Settings";
+const SETTINGS_SHEET_NAME = process.env.GOOGLE_SETTINGS_SHEET_NAME || "Settings";
 
 async function getUserRoleFromSheet(sheets, sheetId, email) {
   const res = await sheets.spreadsheets.values.get({
@@ -91,10 +110,7 @@ async function getUserRoleFromSheet(sheets, sheetId, email) {
   const rows = res.data.values || [];
   for (let i = 1; i < rows.length; i++) {
     const [group, key, value] = rows[i] || [];
-    if (
-      group === "adminUsers" &&
-      String(key || "").toLowerCase() === email
-    ) {
+    if (group === "adminUsers" && String(key || "").toLowerCase() === email) {
       return String(value || "").toLowerCase();
     }
   }
@@ -126,12 +142,10 @@ export default async function handler(req, res) {
     const sheets = await getSheetsClient();
 
     // allow admin + editor
-    const { email, role } = await requireRole(
-      req,
-      sheets,
-      sheetId,
-      ["admin", "editor"]
-    );
+    const { email, role } = await requireRole(req, sheets, sheetId, [
+      "admin",
+      "editor",
+    ]);
 
     /* ---------- GET ---------- */
     if (req.method === "GET") {
@@ -151,13 +165,9 @@ export default async function handler(req, res) {
     /* ---------- POST ---------- */
     if (req.method === "POST") {
       const body =
-        typeof req.body === "string"
-          ? JSON.parse(req.body || "{}")
-          : req.body || {};
+        typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
 
-      const updatesIn = Array.isArray(body.updates)
-        ? body.updates
-        : [];
+      const updatesIn = Array.isArray(body.updates) ? body.updates : [];
 
       if (!updatesIn.length) {
         return res.status(400).json({
@@ -180,10 +190,7 @@ export default async function handler(req, res) {
       }
 
       const nowIso = new Date().toISOString();
-      const updates = [
-        ...updatesIn,
-        { Group: "meta", Key: "lastUpdated", Value: nowIso },
-      ];
+      const updates = [...updatesIn, { Group: "meta", Key: "lastUpdated", Value: nowIso }];
 
       const data = [];
       const applied = [];
@@ -236,7 +243,6 @@ export default async function handler(req, res) {
 
     res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
-
   } catch (err) {
     const msg = err?.message || String(err);
 
@@ -248,6 +254,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, error: msg });
     }
 
+    // keep existing behaviour for auth-ish errors
     return res.status(401).json({ ok: false, error: msg });
   }
 }
