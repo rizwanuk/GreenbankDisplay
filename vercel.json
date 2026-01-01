@@ -1,0 +1,62 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+
+  "crons": [],
+
+  "redirects": [
+    { "source": "/mobile", "destination": "/mobile/", "permanent": false }
+  ],
+
+  "headers": [
+    {
+      "source": "/mobile/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" },
+        { "key": "Service-Worker-Allowed", "value": "/mobile/" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/mobile/",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
+      ]
+    },
+    {
+      "source": "/mobile/manifest.webmanifest",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
+      ]
+    },
+    {
+      "source": "/mobile/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
+      ]
+    }
+  ],
+
+  "rewrites": [
+    { "source": "/api/met/(.*)", "destination": "/api/met.js?path=$1" },
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/embed", "destination": "/embed.html" },
+    { "source": "/slideshow", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
