@@ -16,6 +16,9 @@ import MobileUpcomingList from "../Components/MobileUpcomingList";
 import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
 import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
 
+// ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
+import { getSettingsUrl } from "../utils/getSettingsUrl";
+
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -155,12 +158,17 @@ export default function MobileScreen() {
 
     const poll = async () => {
       try {
-        // ✅ must be a PUBLIC endpoint (no admin token)
-        const r = await fetch("/api/settings", { cache: "no-store" });
-        const j = await r.json();
+        // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
+const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const j = await r.json();
 
-        const rows = j.rows || j.values || j.settings || [];
-        const next = extractLastUpdatedFromSettingsRows(rows);
+// ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
+const rows = Array.isArray(j)
+  ? j
+  : (j.rows || j.values || j.settings || []);
+
+const next = extractLastUpdatedFromSettingsRows(rows);
+
 
         if (!lastUpdatedRef.current) {
           lastUpdatedRef.current = next || "";

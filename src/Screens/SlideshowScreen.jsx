@@ -19,6 +19,9 @@ import usePrayerTimes from "../hooks/usePrayerTimes";
 import useDeviceId from "../hooks/useDeviceId";
 import useRemoteDeviceConfig from "../hooks/useRemoteDeviceConfig";
 
+// ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
+import { getSettingsUrl } from "../utils/getSettingsUrl";
+
 /* ---------------- helpers ---------------- */
 
 function buildSettingsMap(rows) {
@@ -195,12 +198,16 @@ export default function SlideshowScreen() {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-        // If your public settings endpoint is different, change it here:
-        const r = await fetch("/api/settings", { cache: "no-store" });
-        const j = await r.json();
+const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const j = await r.json();
 
-        const rows = j.rows || j.values || j.settings || [];
-        const next = extractLastUpdatedFromSettingsRows(rows);
+// ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
+const rows = Array.isArray(j)
+  ? j
+  : (j.rows || j.values || j.settings || []);
+
+const next = extractLastUpdatedFromSettingsRows(rows);
+
 
         if (!lastUpdatedRef.current) {
           lastUpdatedRef.current = next || "";
@@ -340,9 +347,7 @@ export default function SlideshowScreen() {
         {/* Footer tick + optional remote error */}
         <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-3">
           <span className="text-green-400">●</span>
-          <span>
-            Last updated{lastUpdatedStr ? `: ${lastUpdatedStr}` : ": —"}
-          </span>
+          <span>Last updated{lastUpdatedStr ? `: ${lastUpdatedStr}` : ": —"}</span>
           {remoteErr ? (
             <span className="text-red-300">• Remote: {String(remoteErr)}</span>
           ) : null}

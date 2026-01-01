@@ -17,6 +17,9 @@ import useNow from "./hooks/useNow";
 import { getCurrentPrayerState } from "./utils/getCurrentPrayerState";
 import applyJummahOverride from "./helpers/applyJummahOverride";
 
+// ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
+import { getSettingsUrl } from "./utils/getSettingsUrl";
+
 moment.locale("en-gb");
 
 /* ---------------- helpers ---------------- */
@@ -72,11 +75,17 @@ export default function Embed2Screen() {
 
     const poll = async () => {
       try {
-        const r = await fetch("/api/settings", { cache: "no-store" });
-        const j = await r.json();
+        // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
+const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const j = await r.json();
 
-        const rows = j.rows || j.values || j.settings || [];
-        const next = extractLastUpdatedFromSettingsRows(rows);
+// ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
+const rows = Array.isArray(j)
+  ? j
+  : (j.rows || j.values || j.settings || []);
+
+const next = extractLastUpdatedFromSettingsRows(rows);
+
 
         if (!prevLastUpdated.current) {
           prevLastUpdated.current = next || "";
@@ -381,7 +390,9 @@ export default function Embed2Screen() {
                 <th className="text-left py-1 w-1/6"></th>
                 {prayers.map((key) => {
                   const enLabel =
-                    key === "dhuhr" && isFridayToday ? L.jummah || "Jum‘ah" : L[key] || capitalize(key);
+                    key === "dhuhr" && isFridayToday
+                      ? L.jummah || "Jum‘ah"
+                      : L[key] || capitalize(key);
                   const arLabel =
                     key === "dhuhr" && isFridayToday ? A.jummah || "" : A[key] || "";
                   const isActive = !isMakroohNow && key === activePrayerKeyToday;
@@ -500,7 +511,9 @@ export default function Embed2Screen() {
                 <th className="text-left py-1 w-1/6"></th>
                 {prayers.map((key) => {
                   const enLabel =
-                    key === "dhuhr" && isFridayTomorrow ? L.jummah || "Jum‘ah" : L[key] || capitalize(key);
+                    key === "dhuhr" && isFridayTomorrow
+                      ? L.jummah || "Jum‘ah"
+                      : L[key] || capitalize(key);
                   const arLabel =
                     key === "dhuhr" && isFridayTomorrow ? A.jummah || "" : A[key] || "";
 

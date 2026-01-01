@@ -4,9 +4,11 @@ import useSheetWithCache from "./useSheetWithCache";
 const SETTINGS_DATA_URL =
   "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/settings";
 
-// Reuse your meta `lastUpdated` cell to invalidate cache
+// IMPORTANT:
+// OpenSheet does NOT support query filtering.
+// Use the full settings tab for cache invalidation as well.
 const SETTINGS_META_URL =
-  "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/settings?group=meta&key=lastUpdated";
+  "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/settings";
 
 export default function useSettings() {
   return useSheetWithCache({

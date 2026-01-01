@@ -16,6 +16,9 @@ import useNow from "./hooks/useNow";
 import { getCurrentPrayerState } from "./utils/getCurrentPrayerState";
 import applyJummahOverride from "./helpers/applyJummahOverride";
 
+// ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
+import { getSettingsUrl } from "./utils/getSettingsUrl";
+
 moment.locale("en-gb");
 
 /* ---------------- helpers ---------------- */
@@ -74,11 +77,16 @@ export default function EmbedScreen() {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-        const r = await fetch("/api/settings", { cache: "no-store" });
-        const j = await r.json();
+const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const j = await r.json();
 
-        const rows = j.rows || j.values || j.settings || [];
-        const next = extractLastUpdatedFromSettingsRows(rows);
+// ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
+const rows = Array.isArray(j)
+  ? j
+  : (j.rows || j.values || j.settings || []);
+
+const next = extractLastUpdatedFromSettingsRows(rows);
+
 
         // seed
         if (!prevLastUpdated.current) {

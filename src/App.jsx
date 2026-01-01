@@ -16,6 +16,9 @@ import AppErrorBoundary from "./Components/AppErrorBoundary";
 import { buildSettingsMap, getTheme } from "./utils/helpers";
 import { getEnglishLabels, getArabicLabels } from "./utils/labels";
 
+// ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
+import { getSettingsUrl } from "./utils/getSettingsUrl";
+
 // Weather
 import WeatherCardUnified from "./Components/WeatherCardUnified";
 
@@ -207,11 +210,16 @@ function App() {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-        const r = await fetch("/api/settings", { cache: "no-store" });
-        const j = await r.json();
+const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const j = await r.json();
 
-        const rows = j.rows || j.values || j.settings || [];
-        const next = extractLastUpdatedFromSettingsRows(rows);
+// ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
+const rows = Array.isArray(j)
+  ? j
+  : (j.rows || j.values || j.settings || []);
+
+const next = extractLastUpdatedFromSettingsRows(rows);
+
 
         // seed
         if (!prevLastUpdated.current) {
@@ -384,7 +392,8 @@ function App() {
           </div>
 
           <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
-            ● Last updated at {lastUpdated ? moment(lastUpdated).format("HH:mm:ss") : "—"}
+            ● Last updated at {lastUpdated ? moment(lastUpdated).format("DD MMM YYYY, HH:mm:ss") : "—"}
+
             {remoteErr ? (
               <span className="ml-2 text-red-400">• Remote: {String(remoteErr)}</span>
             ) : null}

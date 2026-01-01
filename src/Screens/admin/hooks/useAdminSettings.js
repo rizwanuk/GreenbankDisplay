@@ -1,7 +1,6 @@
 // src/Screens/admin/hooks/useAdminSettings.js
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { rowsToGroups } from "../utils/rowsToGroups";
-import { groupsToRows } from "../utils/groupsToRows";
 
 const TOKEN_KEY = "gbm_admin_id_token";
 
@@ -80,8 +79,31 @@ export function useAdminSettings() {
       const t = localStorage.getItem(TOKEN_KEY);
       if (!t) throw new Error("Missing admin token. Please sign in again.");
 
-      const g = rowsToGroups(rows);
-      const payloadRows = [["Group", "Key", "Value"], ...groupsToRows(g)];
+      // Convert current rows to the API's expected format: { updates: [...] }
+      const updates = [];
+
+      const hasHeader =
+        Array.isArray(rows?.[0]) &&
+        rows[0][0] === "Group" &&
+        rows[0][1] === "Key" &&
+        rows[0][2] === "Value";
+
+      const startIdx = hasHeader ? 1 : 0;
+
+      for (let i = startIdx; i < (rows || []).length; i++) {
+        const [group, key, value] = rows[i] || [];
+        if (group && key) {
+          updates.push({
+            group,
+            key,
+            value: String(value ?? ""),
+          });
+        }
+      }
+
+      if (!updates.length) {
+        throw new Error("No updates provided");
+      }
 
       const r = await fetch("/api/admin/settings", {
         method: "POST",
@@ -89,7 +111,7 @@ export function useAdminSettings() {
           Authorization: `Bearer ${t}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ rows: payloadRows }),
+        body: JSON.stringify({ updates }),
       });
 
       const j = await r.json().catch(() => null);
