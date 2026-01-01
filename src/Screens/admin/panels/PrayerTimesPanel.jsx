@@ -250,9 +250,7 @@ export default function PrayerTimesPanel() {
     for (const [, v] of dirty.entries()) {
       const normalized = normalizeTime(v.to);
       if (!isValidTimeHHMM(normalized)) {
-        setErr(
-          `Invalid time "${v.to}" at sheet row ${v.absRowIndex + 2} (${v.colKey}). Use HH:MM (e.g. 07:15).`
-        );
+        setErr(`Invalid time "${v.to}" at sheet row ${v.absRowIndex + 2} (${v.colKey}). Use HH:MM (e.g. 07:15).`);
         return;
       }
     }
@@ -261,12 +259,10 @@ export default function PrayerTimesPanel() {
     try {
       const token = localStorage.getItem("gbm_admin_id_token");
 
-      // ✅ Format expected by API: { sheet, patches: [{ r, c, value }] }
-      // r = 1-based sheet row number (header is row 1, first data row is 2)
-      // c = 1-based sheet column number (A=1)
+      // ✅ API expects 1-based row/col patches:
       const patches = Array.from(dirty.values()).map((v) => ({
-        r: 2 + v.absRowIndex,
-        c: 1 + v.colIndex,
+        r: 2 + v.absRowIndex,          // header row is 1
+        c: 1 + v.colIndex,             // API expects 1-based column
         value: normalizeTime(v.to),
       }));
 
