@@ -23,10 +23,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // ✅ Local dev: route Vite /api/* to Vercel serverless functions (vercel dev)
-      // Run: `vercel dev --listen 3000` in a second terminal
+      // ✅ Local dev: route Vite /api/* to the local dev API runner
+      // Run in a second terminal: `node scripts/dev-api.mjs`
       "/api": {
-        target: "http://localhost:3000",
+        target: "http://127.0.0.1:3000",
         changeOrigin: true,
         secure: false,
       },
@@ -58,6 +58,8 @@ export default defineConfig({
   },
   define: {
     // Always set a non-empty version: package.json → git SHA → 'dev'
-    "import.meta.env.VITE_APP_VERSION": JSON.stringify(pkgVersion || gitSha || "dev"),
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(
+      pkgVersion || gitSha || "dev"
+    ),
   },
 });

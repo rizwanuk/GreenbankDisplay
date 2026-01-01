@@ -10,9 +10,45 @@ import PrayerRulesPanel from "./admin/panels/PrayerRulesPanel";
 import JummahTimesPanel from "./admin/panels/JummahTimesPanel";
 import TestModePanel from "./admin/panels/TestModePanel";
 import IslamicCalendarPanel from "./admin/panels/IslamicCalendarPanel";
+import PrayerTimesPanel from "./admin/panels/PrayerTimesPanel";
 import SignInPanel from "./admin/components/SignInPanel";
 
 const PANELS = [
+  {
+    id: "islamicCalendar",
+    title: "Islamic Calendar",
+    desc: "Preview today’s Hijri date and adjust offset / month normalisation.",
+    emoji: "🌙",
+    render: (props) => <IslamicCalendarPanel {...props} />,
+  },
+  {
+    id: "prayertimes",
+    title: "Prayer Times",
+    desc: "View (and soon edit) the daily adhan & jama'ah times from the PrayerTimes sheet.",
+    emoji: "⏱️",
+    render: (props) => <PrayerTimesPanel {...props} />,
+  },
+  {
+    id: "jummah",
+    title: "Jummah Times",
+    desc: "Per-month Jummah Jama'ah times used across the app.",
+    emoji: "🗓️",
+    render: (props) => <JummahTimesPanel {...props} />,
+  },
+  {
+    id: "mosque",
+    title: "Mosque",
+    desc: "Name, address, website and logo used across the app.",
+    emoji: "📍",
+    render: (props) => <MosquePanel {...props} />,
+  },
+  {
+    id: "rules",
+    title: "Prayer Rules",
+    desc: "Makrooh windows, Ishraq, Jama'ah highlight duration.",
+    emoji: "🕌",
+    render: (props) => <PrayerRulesPanel {...props} />,
+  },
   {
     id: "labels",
     title: "Labels",
@@ -26,34 +62,6 @@ const PANELS = [
     desc: "Edit Theme_3 / Theme_4 styling for desktop and mobile.",
     emoji: "🎨",
     render: (props) => <ThemePanel {...props} />,
-  },
-  {
-    id: "mosque",
-    title: "Mosque",
-    desc: "Name, address, website and logo used across the app.",
-    emoji: "📍",
-    render: (props) => <MosquePanel {...props} />,
-  },
-  {
-    id: "islamicCalendar",
-    title: "Islamic Calendar",
-    desc: "Preview today’s Hijri date and adjust offset / month normalisation.",
-    emoji: "🌙",
-    render: (props) => <IslamicCalendarPanel {...props} />,
-  },
-  {
-    id: "rules",
-    title: "Prayer Rules",
-    desc: "Makrooh windows, Ishraq, Jama'ah highlight duration.",
-    emoji: "🕌",
-    render: (props) => <PrayerRulesPanel {...props} />,
-  },
-  {
-    id: "jummah",
-    title: "Jummah Times",
-    desc: "Per-month Jummah Jama'ah times used across the app.",
-    emoji: "🗓️",
-    render: (props) => <JummahTimesPanel {...props} />,
   },
   {
     id: "test",
@@ -102,8 +110,8 @@ export default function AdminScreen() {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
-  // Which panel is expanded (nice for mobile)
-  const [openId, setOpenId] = useState("labels");
+  // ✅ No cards open by default
+  const [openId, setOpenId] = useState("");
 
   // Derived auth state
   const token = getToken();
@@ -194,6 +202,8 @@ export default function AdminScreen() {
                   onChange={(e) => setOpenId(e.target.value)}
                   className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm outline-none"
                 >
+                  {/* ✅ Placeholder so we don't force-open a panel */}
+                  <option value="">Select a panel…</option>
                   {PANELS.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -238,8 +248,8 @@ export default function AdminScreen() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <SignInPanel
               onSignedIn={() => {
-                // After sign-in, reload settings and open the first panel
-                setOpenId("labels");
+                // After sign-in, reload settings and keep all panels closed
+                setOpenId("");
                 reload();
               }}
             />
