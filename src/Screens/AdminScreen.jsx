@@ -118,6 +118,19 @@ export default function AdminScreen() {
   const authError = isAuthErrorMessage(error);
   const needsSignIn = !token || authError;
 
+  // ✅ NEW: Sign out (clear token + profile + reload)
+  function onSignOut() {
+    try {
+      localStorage.removeItem("gbm_admin_id_token");
+      localStorage.removeItem("gbm_admin_email");
+      localStorage.removeItem("gbm_admin_name");
+      localStorage.removeItem("gbm_admin_picture");
+    } catch {
+      // ignore
+    }
+    window.location.reload();
+  }
+
   // If we detect an expired/invalid token, clear it so UI reliably shows sign-in.
   useEffect(() => {
     if (authError) clearToken();
@@ -184,6 +197,17 @@ export default function AdminScreen() {
               >
                 Refresh
               </button>
+
+              {/* ✅ NEW: Sign out (only when signed in) */}
+              {!needsSignIn && (
+                <button
+                  onClick={onSignOut}
+                  className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 active:scale-[0.99]"
+                  title="Sign out"
+                >
+                  Sign out
+                </button>
+              )}
 
               <button
                 onClick={onSave}
