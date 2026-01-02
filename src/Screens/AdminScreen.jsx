@@ -131,13 +131,17 @@ export default function AdminScreen() {
   async function onSave() {
     setSavedMsg("");
     setSaving(true);
-    const r = await saveAll();
-    setSaving(false);
 
+    const r = await saveAll();
+
+    // ✅ If save succeeded, immediately reload settings so panels reflect latest values
     if (r?.ok) {
+      await reload();
       setSavedMsg("Saved");
       setTimeout(() => setSavedMsg(""), 1200);
     }
+
+    setSaving(false);
   }
 
   async function onRefresh() {
