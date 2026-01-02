@@ -4,6 +4,15 @@ import { rowsToGroups } from "../utils/rowsToGroups";
 
 const TOKEN_KEY = "gbm_admin_id_token";
 
+function hasHeaderRow(r0) {
+  return (
+    Array.isArray(r0) &&
+    r0[0] === "Group" &&
+    r0[1] === "Key" &&
+    r0[2] === "Value"
+  );
+}
+
 export function useAdminSettings() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -33,7 +42,7 @@ export function useAdminSettings() {
       }
 
       setEmail(json.email || "");
-      setRows(json.rows || []);
+      setRows(Array.isArray(json.rows) ? json.rows : []);
     } catch (e) {
       setError(e?.message || String(e));
     } finally {
@@ -47,27 +56,38 @@ export function useAdminSettings() {
 
   const groups = useMemo(() => rowsToGroups(rows), [rows]);
 
-  // Update a single value locally (in rows array)
+  /**
+   * Get the raw string value from the underlying rows table.
+   * This is useful to avoid "0" being coerced to 0 and then treated as falsy in UI fallbacks.
+   */
+  const getRawValue = useCallback((group, key) => {
+    const r = Array.isArray(rows) ? rows : [];
+    const startIdx = hasHeaderRow(r[0]) ? 1 : 0;
+
+    for (let i = startIdx; i < r.length; i++) {
+      if (r[i]?.[0] === group && r[i]?.[1] === key) {
+        return String(r[i]?.[2] ?? "");
+      }
+    }
+    return "";
+  }, [rows]);
+
+  // Update a single value locally (in rows array) — ALWAYS stored as a string
   const setValue = useCallback((group, key, value) => {
     setRows((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
+      const startIdx = hasHeaderRow(next[0]) ? 1 : 0;
 
-      const hasHeader =
-        Array.isArray(next[0]) &&
-        next[0][0] === "Group" &&
-        next[0][1] === "Key" &&
-        next[0][2] === "Value";
-
-      const startIdx = hasHeader ? 1 : 0;
+      const v = String(value ?? ""); // IMPORTANT: keep "0" as "0"
 
       for (let i = startIdx; i < next.length; i++) {
         if (next[i]?.[0] === group && next[i]?.[1] === key) {
-          next[i] = [group, key, String(value ?? "")];
+          next[i] = [group, key, v];
           return next;
         }
       }
 
-      next.push([group, key, String(value ?? "")]);
+      next.push([group, key, v]);
       return next;
     });
   }, []);
@@ -79,24 +99,21 @@ export function useAdminSettings() {
       const t = localStorage.getItem(TOKEN_KEY);
       if (!t) throw new Error("Missing admin token. Please sign in again.");
 
-      // Convert current rows to the API's expected format: { updates: [...] }
+      // Convert current rows to the API's expected canonical format: { updates: [{Group,Key,Value}] }
       const updates = [];
 
-      const hasHeader =
-        Array.isArray(rows?.[0]) &&
-        rows[0][0] === "Group" &&
-        rows[0][1] === "Key" &&
-        rows[0][2] === "Value";
+      const r = Array.isArray(rows) ? rows : [];
+      const startIdx = hasHeaderRow(r[0]) ? 1 : 0;
 
-      const startIdx = hasHeader ? 1 : 0;
+      for (let i = startIdx; i < r.length; i++) {
+        const [group, key, value] = r[i] || [];
 
-      for (let i = startIdx; i < (rows || []).length; i++) {
-        const [group, key, value] = rows[i] || [];
+        // Only group+key must exist; value may legitimately be "0" or ""
         if (group && key) {
           updates.push({
-            group,
-            key,
-            value: String(value ?? ""),
+            Group: String(group),
+            Key: String(key),
+            Value: String(value ?? ""), // keep exact string form
           });
         }
       }
@@ -105,7 +122,7 @@ export function useAdminSettings() {
         throw new Error("No updates provided");
       }
 
-      const r = await fetch("/api/admin/settings", {
+      const resp = await fetch("/api/admin/settings", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${t}`,
@@ -114,8 +131,8 @@ export function useAdminSettings() {
         body: JSON.stringify({ updates }),
       });
 
-      const j = await r.json().catch(() => null);
-      if (!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+      const j = await resp.json().catch(() => null);
+      if (!resp.ok || !j?.ok) throw new Error(j?.error || `HTTP ${resp.status}`);
 
       await load();
       return { ok: true };
@@ -131,6 +148,7 @@ export function useAdminSettings() {
     error,
     rows,
     groups,
+    getRawValue, // NEW
     setValue,
     reload: load,
     saveAll,
