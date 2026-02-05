@@ -1,15 +1,13 @@
-// src/hooks/usePrayerTimes.js
 import useSheetWithCache from "./useSheetWithCache";
-import { tab, lastUpdatedMeta } from "../constants/sheets";
 
-const PRAYERS_DATA_URL = tab("PrayerTimes");
-const PRAYERS_META_URL = lastUpdatedMeta();
+const PRAYERS_DATA_URL = "/data/prayer-times.json";
+const PRAYERS_META_URL = "/data/version.json"; // ✅ version file drives refresh
 
 export default function usePrayerTimes() {
   return useSheetWithCache({
     dataUrl: PRAYERS_DATA_URL,
-    metaUrl: PRAYERS_META_URL, // set to null if you don't want meta polling
+    metaUrl: PRAYERS_META_URL,
     cacheKey: "cachedPrayerTimes",
-    checkIntervalMs: 2 * 60 * 1000,
+    checkIntervalMs: 5 * 60 * 1000, // keep as 5 mins for now
   });
 }

@@ -15,10 +15,11 @@ import { useEffect, useState } from "react";
  *
  * Optional params:
  * - metaUrl: url that returns a small meta object/array with a last-updated marker
- * - checkIntervalMs: how often to check meta (default 120s)
+ * - checkIntervalMs: how often to check meta
  *
- * Returns:
- * - data (default empty array)
+ * IMPORTANT:
+ * This hook RETURNS AN ARRAY (backwards compatible).
+ * We attach refreshStatus onto the returned array as a property.
  */
 export default function useSheetWithCache({
   dataUrl,
@@ -27,6 +28,27 @@ export default function useSheetWithCache({
   checkIntervalMs = 120000,
 }) {
   const [data, setData] = useState([]);
+
+  // ✅ NEW: refresh status (for footer indicator)
+  const [lastCheckedAt, setLastCheckedAt] = useState(null);
+  const [nextCheckAt, setNextCheckAt] = useState(null);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+
+  // Track browser online/offline
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // 1) Bootstrap from cache (fast paint)
   useEffect(() => {
@@ -86,6 +108,7 @@ export default function useSheetWithCache({
     if (!metaUrl) return;
 
     let alive = true;
+
     const readRemoteStamp = (meta) => {
       // Try a few common shapes:
       // - [{ Value: "ISO" }] or [{ value: "ISO" }]
@@ -97,12 +120,20 @@ export default function useSheetWithCache({
     };
 
     const check = async () => {
+      const now = new Date();
+      setLastCheckedAt(now);
+      setNextCheckAt(new Date(now.getTime() + checkIntervalMs));
+
+      // If offline, don't attempt remote fetch (but keep times updated)
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
       try {
         const res = await fetch(metaUrl, { cache: "no-store" });
         const meta = await res.json();
         if (!alive) return;
 
         const remoteStamp = readRemoteStamp(meta);
+
         const cached = localStorage.getItem(cacheKey);
         const localStamp = cached ? JSON.parse(cached).timestamp : null;
 
@@ -118,7 +149,6 @@ export default function useSheetWithCache({
         }
       } catch (e) {
         // non-fatal
-        // console.log(`Meta check failed for ${cacheKey}`, e);
       }
     };
 
@@ -132,5 +162,16 @@ export default function useSheetWithCache({
     };
   }, [metaUrl, dataUrl, cacheKey, checkIntervalMs]);
 
-  return data;
+  // ✅ RETURN AN ARRAY (backwards compatible) + attach status as a property
+  const out = Array.isArray(data) ? data : [];
+  const outArr = [...out];
+
+  return Object.assign(outArr, {
+    refreshStatus: {
+      lastCheckedAt,
+      nextCheckAt,
+      isOnline,
+      intervalMs: checkIntervalMs,
+    },
+  });
 }

@@ -1,43 +1,49 @@
-# Ignore dependencies
+# ================================
+# Dependencies
+# ================================
 node_modules/
+server/node_modules/
 
-# Ignore build output
+# ================================
+# Build output
+# ================================
 dist/
 .vite/
 .cache/
+.vercel/
 
-# Ignore system files
-.DS_Store
-Thumbs.db
+# ================================
+# Environment / config files
+# ================================
+.env
+.env.*
+.env*.local
+!.env.example
+server/.env
 
-# Ignore logs
+# ================================
+# Logs
+# ================================
 *.log
 npm-debug.log*
 
-# Ignore Vercel build output (if any)
-.vercel/
-
-# Optional: Ignore env/config files
-.env
-
-# Ignore reserved device file on Windows
+# ================================
+# OS / system files
+# ================================
+.DS_Store
+Thumbs.db
 NUL
-# Dependencies & builds
-node_modules/
-dist/
-.vite/
 
-# Local env files (keep secrets out of Git)
-.env
-.env.*
-!.env.example
+# ================================
+# Secrets / credentials (DO NOT COMMIT)
+# ================================
+Client ID Google.txt
+Service account.txt
+check-sa.js
+client_secret_*.json
+greenbankdisplay-admin-*.json
 
-server/.env
-
-server/.env
-server/node_modules/
-
-.vercel
+# ================================
+# App-specific ignores
+# ================================
 /src/version.js
-
-.env*.local

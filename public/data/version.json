@@ -1,0 +1,12 @@
+{
+  "lastUpdated": "2026-02-05T00:02:06.327Z",
+  "hash": "931c72b3adc4a823683d5c9db6d006c438111046306e93779be10dbac07fc123",
+  "sources": {
+    "settings": "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/settings",
+    "prayerTimes": "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/PrayerTimes"
+  },
+  "counts": {
+    "settingsRows": 321,
+    "prayerTimesRows": 366
+  }
+}

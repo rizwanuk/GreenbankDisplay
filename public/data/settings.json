@@ -1,0 +1,1616 @@
+[
+  {
+    "Group": "meta",
+    "Key": "lastUpdated",
+    "Value": "2026-02-04T23:52:42.078Z"
+  },
+  {
+    "Group": "adminUsers",
+    "Key": "rizwan.uk@gmail.com",
+    "Value": "admin"
+  },
+  {
+    "Group": "adminUsers",
+    "Key": "eid.bristol@gmail.com",
+    "Value": "editor"
+  },
+  {
+    "Group": "labels",
+    "Key": "fajr",
+    "Value": "Fajr"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "fajr",
+    "Value": "فجر"
+  },
+  {
+    "Group": "labels",
+    "Key": "dhuhr",
+    "Value": "Zuhr"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "dhuhr",
+    "Value": "ظهر"
+  },
+  {
+    "Group": "labels",
+    "Key": "asr",
+    "Value": "Asar"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "asr",
+    "Value": "عصر"
+  },
+  {
+    "Group": "labels",
+    "Key": "maghrib",
+    "Value": "Maghrib"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "maghrib",
+    "Value": "مغرب"
+  },
+  {
+    "Group": "labels",
+    "Key": "isha",
+    "Value": "Esha"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "isha",
+    "Value": "عشاء"
+  },
+  {
+    "Group": "labels",
+    "Key": "sunrise",
+    "Value": "Shouruq"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "sunrise",
+    "Value": "شروق"
+  },
+  {
+    "Group": "labels",
+    "Key": "ishraq",
+    "Value": "Ishraq"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "ishraq",
+    "Value": "إشراق"
+  },
+  {
+    "Group": "labels",
+    "Key": "begins",
+    "Value": "Begins"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "begins",
+    "Value": "أذان"
+  },
+  {
+    "Group": "labels",
+    "Key": "jamaah",
+    "Value": "Jama'ah"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "jamaah",
+    "Value": "جماعة"
+  },
+  {
+    "Group": "labels",
+    "Key": "jummah",
+    "Value": "Jum'ah"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "jummah",
+    "Value": "جمعة"
+  },
+  {
+    "Group": "labels",
+    "Key": "nafl",
+    "Value": "Nafl"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "nafl",
+    "Value": "نفل"
+  },
+  {
+    "Group": "labels",
+    "Key": "eidFitr",
+    "Value": "Eid-ul-Fitr"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "eidFitr",
+    "Value": "عيد الفطر"
+  },
+  {
+    "Group": "labels",
+    "Key": "eidAdha",
+    "Value": "Eid-ul-Adha"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "eidAdha",
+    "Value": "عيد الأضحى"
+  },
+  {
+    "Group": "labels",
+    "Key": "muharram",
+    "Value": "Muḥarram"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "muharram",
+    "Value": "مُحَرَّم"
+  },
+  {
+    "Group": "labels",
+    "Key": "safar",
+    "Value": "Ṣafar"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "safar",
+    "Value": "صَفَر"
+  },
+  {
+    "Group": "labels",
+    "Key": "rabiAwal",
+    "Value": "Rabīʿ al-ʾAwwal"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "rabiAwal",
+    "Value": "رَبِيع ٱلْأَوَّل"
+  },
+  {
+    "Group": "labels",
+    "Key": "rabiThani",
+    "Value": "Rabīʿ al-ʾĀkhir"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "rabiThani",
+    "Value": "رَبِيع ٱلْآخِر"
+  },
+  {
+    "Group": "labels",
+    "Key": "jumadaAwal",
+    "Value": "Jumādā al-ʾŪlā"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "jumadaAwal",
+    "Value": "جُمَادَىٰ ٱلْأُولَىٰ"
+  },
+  {
+    "Group": "labels",
+    "Key": "jumadaThani",
+    "Value": "Jumādā al-ʾĀkhirah"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "jumadaThani",
+    "Value": "جُمَادَىٰ ٱلْآخِرَة"
+  },
+  {
+    "Group": "labels",
+    "Key": "rajab",
+    "Value": "Rajab"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "rajab",
+    "Value": "رَجَب"
+  },
+  {
+    "Group": "labels",
+    "Key": "shaban",
+    "Value": "Shaʿbān"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "shaban",
+    "Value": "شَعْبَان"
+  },
+  {
+    "Group": "labels",
+    "Key": "ramadan",
+    "Value": "Ramaḍān"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "ramadan",
+    "Value": "رَمَضَان"
+  },
+  {
+    "Group": "labels",
+    "Key": "shawwal",
+    "Value": "Shawwāl"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "shawwal",
+    "Value": "شَوَّال"
+  },
+  {
+    "Group": "labels",
+    "Key": "dhulQadah",
+    "Value": "Ḏū al-Qaʿdah"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "dhulQadah",
+    "Value": "ذُو ٱلْقَعْدَة"
+  },
+  {
+    "Group": "labels",
+    "Key": "dhulHijjah",
+    "Value": "Ḏū al-Ḥijjah"
+  },
+  {
+    "Group": "labels.arabic",
+    "Key": "dhulHijjah",
+    "Value": "ذُو ٱلْحِجَّة"
+  },
+  {
+    "Group": "islamicCalendar",
+    "Key": "offset",
+    "Value": "-1"
+  },
+  {
+    "Group": "islamicCalendar",
+    "Key": "normalizeTo30DayMonths",
+    "Value": "FALSE"
+  },
+  {
+    "Group": "timings",
+    "Key": "makroohBeforeSunrise",
+    "Value": "1"
+  },
+  {
+    "Group": "timings",
+    "Key": "makroohAfterSunrise",
+    "Value": "10"
+  },
+  {
+    "Group": "timings",
+    "Key": "makroohBeforeZuhr",
+    "Value": "10"
+  },
+  {
+    "Group": "timings",
+    "Key": "makroohBeforeAsr",
+    "Value": "0"
+  },
+  {
+    "Group": "timings",
+    "Key": "makroohBeforeMaghrib",
+    "Value": "10"
+  },
+  {
+    "Group": "timings",
+    "Key": "makroohBeforeIsha",
+    "Value": "0"
+  },
+  {
+    "Group": "timings",
+    "Key": "showIshraq",
+    "Value": "30"
+  },
+  {
+    "Group": "timings",
+    "Key": "jamaahHighlightDuration",
+    "Value": "5"
+  },
+  {
+    "Group": "toggles",
+    "Key": "fakeTimeEnabled",
+    "Value": "FALSE"
+  },
+  {
+    "Group": "toggles",
+    "Key": "fakeTime",
+    "Value": "04:01"
+  },
+  {
+    "Group": "toggles",
+    "Key": "clock24Hours",
+    "Value": "FALSE"
+  },
+  {
+    "Group": "toggles",
+    "Key": "numberUpcomingPrayers",
+    "Value": "6"
+  },
+  {
+    "Group": "mosque",
+    "Key": "name",
+    "Value": "Greenbank Masjid "
+  },
+  {
+    "Group": "mosque",
+    "Key": "address",
+    "Value": "Castle Green Buildings, Greenbank Road, Bristol, BS5 6HE"
+  },
+  {
+    "Group": "mosque",
+    "Key": "webpage",
+    "Value": "greenbankbristol.org"
+  },
+  {
+    "Group": "mosque",
+    "Key": "logoUrl",
+    "Value": "https://greenbankbristol.org/wp-content/uploads/2025/05/GBM-transp-Invert.png"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "January",
+    "Value": "13:15"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "February",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "March",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "April",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "May",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "June",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "July",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "August",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "September",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "October",
+    "Value": "13:30"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "November",
+    "Value": "13:15"
+  },
+  {
+    "Group": "jummahTimes",
+    "Key": "December",
+    "Value": "13:15"
+  },
+  {
+    "Group": "toggles",
+    "Key": "theme",
+    "Value": "Theme_4"
+  },
+  {
+    "Group": "weather",
+    "Key": "lat",
+    "Value": "51.467951"
+  },
+  {
+    "Group": "weather",
+    "Key": "lon",
+    "Value": "-2.55724"
+  },
+  {
+    "Group": "secrets",
+    "Key": "metofficeApiKey",
+    "Value": "eyJ4NXQjUzI1NiI6Ik5XVTVZakUxTkRjeVl6a3hZbUl4TkdSaFpqSmpOV1l6T1dGaE9XWXpNMk0yTWpRek5USm1OVEE0TXpOaU9EaG1NVFJqWVdNellXUm1ZalUyTTJJeVpBPT0iLCJraWQiOiJnYXRld2F5X2NlcnRpZmljYXRlX2FsaWFzIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ==.eyJzdWIiOiJyaXp3YW5AZ3JlZW5iYW5rYnJpc3RvbC5vcmdAY2FyYm9uLnN1cGVyIiwiYXBwbGljYXRpb24iOnsib3duZXIiOiJyaXp3YW5AZ3JlZW5iYW5rYnJpc3RvbC5vcmciLCJ0aWVyUXVvdGFUeXBlIjpudWxsLCJ0aWVyIjoiVW5saW1pdGVkIiwibmFtZSI6InNpdGVfc3BlY2lmaWMtZTJmM2IyOTAtYWZjYS00N2E2LWFjZTYtZTRkMzUxODZmNjQxIiwiaWQiOjIyNzc4LCJ1dWlkIjoiZGE3MTM5ZDItZWU4ZC00OGZhLWE0ZTctMDQwZTkxNTkwZGI2In0sImlzcyI6Imh0dHBzOlwvXC9hcGktbWFuYWdlci5hcGktbWFuYWdlbWVudC5tZXRvZmZpY2UuY2xvdWQ6NDQzXC9vYXV0aDJcL3Rva2VuIiwidGllckluZm8iOnsid2RoX3NpdGVfc3BlY2lmaWNfZnJlZSI6eyJ0aWVyUXVvdGFUeXBlIjoicmVxdWVzdENvdW50IiwiZ3JhcGhRTE1heENvbXBsZXhpdHkiOjAsImdyYXBoUUxNYXhEZXB0aCI6MCwic3RvcE9uUXVvdGFSZWFjaCI6dHJ1ZSwic3Bpa2VBcnJlc3RMaW1pdCI6MCwic3Bpa2VBcnJlc3RVbml0Ijoic2VjIn19LCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInN1YnNjcmliZWRBUElzIjpbeyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IlNpdGVTcGVjaWZpY0ZvcmVjYXN0IiwiY29udGV4dCI6Ilwvc2l0ZXNwZWNpZmljXC92MCIsInB1Ymxpc2hlciI6IkphZ3Vhcl9DSSIsInZlcnNpb24iOiJ2MCIsInN1YnNjcmlwdGlvblRpZXIiOiJ3ZGhfc2l0ZV9zcGVjaWZpY19mcmVlIn1dLCJ0b2tlbl90eXBlIjoiYXBpS2V5IiwiaWF0IjoxNzU1Mjk1NzYzLCJqdGkiOiIxNjBkYTY2Ny0xNjIyLTQzYzktOWQwYy1mZDg4MDgxZDFlNDQifQ==.CPc7zQzWOtk-m7cBSEuPm3lH3OoZ5KZlrOXPMqAcH48mC4r9Y5tM_nkt5jANlbmvtQTxtSUvoVrBYdQkYXfFXE_KxMWxcQ5wPHkU9s3J_XGQDGsVGSRtNXgh1QgVIhgP9bKeCYjS8GoFbIE6c_LY61zkbHgIkIkHLxHXxjMsNJMgi0VBAxbHqFeb_uw4CsYmfmPbnt5zAnHmsZ8OjOVgQsKtf2HQB14sjuto7mhP7O-Vrdwny24hWnr7BH0aBAsFEB4tKTyqtWsHQEzsrvjn_gswFVM4GFIagBoVSGlRMSVyBO0EuNtOLetXwD-7CY_s-2VQT8ewplL62ga0-G5z0g=="
+  },
+  {
+    "Group": "weather",
+    "Key": "mode",
+    "Value": "3h",
+    "undefined": "// optional default: off|now|3h|today"
+  },
+  {
+    "Group": "weather",
+    "Key": "dailyBudget",
+    "Value": "300"
+  },
+  {
+    "Group": "infoCard",
+    "Key": "rotateInterval",
+    "Value": "16"
+  },
+  {
+    "Group": "infoCard",
+    "Key": "overrideMessage",
+    "Value": "Say: ‘Subhan’Allah’ – 33 times, ‘Alhamdulillah’ – 33 times, and ‘Allahu’Akbar’ – 33 times – and then:\n\nلاَ إِلَهَ إِلاَّ اللهُ وَحْدَهُ لاَ شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَىْءٍ قَدِيرٌ\n\n"
+  },
+  {
+    "Group": "infoCard",
+    "Key": "overrideDuration",
+    "Value": "300"
+  },
+  {
+    "Group": "infoCardMessages",
+    "Key": "1",
+    "Value": "{\"message\":\"The Prophet (ﷺ) was asked, “What deeds are loved most by Allah?” He said, “The most regular constant deeds even though they may be few.” [Bukhari]\",\"start\":\"2025-07-06T11:00\",\"end\":\"2026-01-31T13:59\"}"
+  },
+  {
+    "Group": "infoCardMessages",
+    "Key": "2",
+    "Value": "{\"message\":\"Jummah will be 1.30pm from February\",\"start\":\"2025-12-30T11:15\",\"end\":\"2025-12-30T21:15\"}"
+  },
+  {
+    "Group": "infoCardMessages",
+    "Key": "3",
+    "Value": "{\"message\":\"Ramadan likely to start around 18 Feb 2026, see website for updates\",\"start\":\"2025-12-30T11:15\",\"end\":\"2025-12-30T21:15\"}"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "backdropBlur",
+    "Value": "backdrop-blur-md"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "border",
+    "Value": "border border-white/20"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "rounded",
+    "Value": "rounded-2xl"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "shadow",
+    "Value": "shadow-lg"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "nameSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "addressSize",
+    "Value": "text-base"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "urlSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "logoWidth",
+    "Value": "w-20"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "paddingY",
+    "Value": "py-4"
+  },
+  {
+    "Group": "theme.Theme_4.header",
+    "Key": "paddingX",
+    "Value": "px-6"
+  },
+  {
+    "Group": "theme.Theme_4.clock",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.clock",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_4.clock",
+    "Key": "bgColor",
+    "Value": "bg-gray-800",
+    "undefined": "bg-black"
+  },
+  {
+    "Group": "theme.Theme_4.clock",
+    "Key": "textColor",
+    "Value": "text-lime-300"
+  },
+  {
+    "Group": "theme.Theme_4.clock",
+    "Key": "fontSize",
+    "Value": "text-[180px]"
+  },
+  {
+    "Group": "theme.Theme_4.clock",
+    "Key": "amPmSize",
+    "Value": "text-base"
+  },
+  {
+    "Group": "theme.Theme_4.dateCard",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.dateCard",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.dateCard",
+    "Key": "bgColor",
+    "Value": "bg-gray-800",
+    "undefined": "bg-emerald-800"
+  },
+  {
+    "Group": "theme.Theme_4.dateCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_4.dateCard",
+    "Key": "englishDateSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_4.dateCard",
+    "Key": "islamicDateSize",
+    "Value": "text-6xl"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-300"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "jamaahColor",
+    "Value": "bg-emerald-700"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "makroohColor",
+    "Value": "bg-red-700"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "nameSize",
+    "Value": "text-8xl"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-6xl"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "jamaahTextSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_4.currentPrayer",
+    "Key": "timeRowSize",
+    "Value": "text-4xl md:text-6xl"
+  },
+  {
+    "Group": "theme.Theme_4.upcomingPrayer",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.upcomingPrayer",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.upcomingPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800",
+    "undefined": "bg-gray-950"
+  },
+  {
+    "Group": "theme.Theme_4.upcomingPrayer",
+    "Key": "textColor",
+    "Value": "text-lime-300"
+  },
+  {
+    "Group": "theme.Theme_4.upcomingPrayer",
+    "Key": "headerSize",
+    "Value": "text-3xl"
+  },
+  {
+    "Group": "theme.Theme_4.upcomingPrayer",
+    "Key": "rowSize",
+    "Value": "text-7xl sm:text-8xl md:text-9xl"
+  },
+  {
+    "Group": "theme.Theme_4.zawaalColour",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.zawaalColour",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.jamaahHighlight",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.jamaahHighlight",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800",
+    "undefined": "bg-white/5"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "jamaahColor",
+    "Value": "bg-emerald-700"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-300"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "nameSize",
+    "Value": "text-6xl sm:text-7xl md:text-8xl"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-5xl sm:text-6xl md:text-7xl"
+  },
+  {
+    "Group": "theme.Theme_4.nextPrayer",
+    "Key": "countdownSize",
+    "Value": "text-3xl md:text-5xl"
+  },
+  {
+    "Group": "theme.Theme_4.infoCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900",
+    "undefined": "Tailwind class for background color"
+  },
+  {
+    "Group": "theme.Theme_4.infoCard",
+    "Key": "textColor",
+    "Value": "text-white",
+    "undefined": "Tailwind text color class"
+  },
+  {
+    "Group": "theme.Theme_4.infoCard",
+    "Key": "fontEng",
+    "Value": "Rubik",
+    "undefined": "Font family for message text"
+  },
+  {
+    "Group": "theme.Theme_4.infoCard",
+    "Key": "textSize",
+    "Value": "text-5xl",
+    "undefined": "Tailwind class for font size"
+  },
+  {
+    "Group": "theme.Theme_4.infoCard",
+    "Key": "height",
+    "Value": "30rem"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowClock",
+    "Key": "textColor",
+    "Value": "text-yellow-400"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowClock",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowClock",
+    "Key": "fontSize",
+    "Value": "text-8xl"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowDateCard",
+    "Key": "textColor",
+    "Value": "text-yellow-400"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowDateCard",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowDateCard",
+    "Key": "fontSize",
+    "Value": "text-4xl"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowDateCard",
+    "Key": "englishDateSize",
+    "Value": "text-xl"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowDateCard",
+    "Key": "islamicDateSize",
+    "Value": "text-lg"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-400"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayer",
+    "Key": "fontSize",
+    "Value": "text-xl"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayer",
+    "Key": "fontSizeInner",
+    "Value": "text-xs"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayerCard",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayerCard",
+    "Key": "textColor",
+    "Value": "text-yellow-400"
+  },
+  {
+    "Group": "theme.Theme_4.slideshowCurrentPrayerCard",
+    "Key": "fontSize",
+    "Value": "text-xs"
+  },
+  {
+    "Group": "theme.Theme_4.weatherCard",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "theme.Theme_4.weatherCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_4.weatherCard",
+    "Key": "tileBgColor",
+    "Value": "bg-white/5"
+  },
+  {
+    "Group": "theme.Theme_4.weatherCard",
+    "Key": "tileBorder",
+    "Value": "border-white/10"
+  },
+  {
+    "Group": "theme.Theme_4.weatherCard",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "themeMobile.Theme_4.header",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "themeMobile.Theme_4.header",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "themeMobile.Theme_4.header",
+    "Key": "border",
+    "Value": "border border-white/20"
+  },
+  {
+    "Group": "themeMobile.Theme_4.header",
+    "Key": "cardBgColor",
+    "Value": "bg-white/10"
+  },
+  {
+    "Group": "themeMobile.Theme_4.header",
+    "Key": "cardHoverBgColor",
+    "Value": "hover:bg-white/15"
+  },
+  {
+    "Group": "themeMobile.Theme_4.header",
+    "Key": "cardBorderColor",
+    "Value": "border-white/10"
+  },
+  {
+    "Group": "themeMobile.Theme_4.dateCard",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "themeMobile.Theme_4.dateCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "themeMobile.Theme_4.dateCard",
+    "Key": "borderColor",
+    "Value": "border-white/10"
+  },
+  {
+    "Group": "themeMobile.Theme_4.dateCard",
+    "Key": "englishDateSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "themeMobile.Theme_4.dateCard",
+    "Key": "islamicDateSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-300"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "jamaahColor",
+    "Value": "bg-emerald-700"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "makroohColor",
+    "Value": "bg-red-700"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "nameSize",
+    "Value": "text-lg"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "timeRowSize",
+    "Value": "text-base"
+  },
+  {
+    "Group": "themeMobile.Theme_4.currentPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-lg"
+  },
+  {
+    "Group": "themeMobile.Theme_4.nextPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "themeMobile.Theme_4.nextPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-300"
+  },
+  {
+    "Group": "themeMobile.Theme_4.nextPrayer",
+    "Key": "countdownSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "themeMobile.Theme_4.nextPrayer",
+    "Key": "nameSize",
+    "Value": "text-xl"
+  },
+  {
+    "Group": "themeMobile.Theme_4.nextPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-base"
+  },
+  {
+    "Group": "themeMobile.Theme_4.upcomingPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "themeMobile.Theme_4.upcomingPrayer",
+    "Key": "textColor",
+    "Value": "text-lime-300"
+  },
+  {
+    "Group": "themeMobile.Theme_4.upcomingPrayer",
+    "Key": "headerSize",
+    "Value": "text-xs"
+  },
+  {
+    "Group": "themeMobile.Theme_4.upcomingPrayer",
+    "Key": "rowSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "slideshow",
+    "Key": "duration",
+    "Value": "8"
+  },
+  {
+    "Group": "slideshow",
+    "Key": "slide1",
+    "Value": "{\"type\":\"image\", \"content\":\"https://greenbankbristol.org/wp-content/uploads/2025/11/Find-a-spouse.png\", \"start\":\"2025-11-20T01:20:00\", \"end\":\"2025-12-31T20:00:00\"}"
+  },
+  {
+    "Group": "slideshow",
+    "Key": "slide2",
+    "Value": "{\"type\":\"image\", \"content\":\"https://greenbankbristol.org/wp-content/uploads/2025/11/Ramadan-arts-craft-2026.png\", \"start\":\"2025-12-24T01:20:00\", \"end\":\"2025-12-04T21:47:00\"}"
+  },
+  {
+    "Group": "slideshow",
+    "Key": "slide3",
+    "Value": "{\"type\":\"image\", \"content\":\"https://greenbankbristol.org/wp-content/uploads/2025/12/Janazah-2.png\", \"start\":\"2025-11-04T13:00:00\", \"end\":\"2025-12-06T23:00:00\"}"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "bgColor",
+    "Value": "bg-white/10"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "nameSize",
+    "Value": "text-5xl sm:text-6xl"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "nameSizeArabic",
+    "Value": "text-4xl sm:text-5xl"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "timeRowSize",
+    "Value": "text-2xl sm:text-4xl"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "fontEng",
+    "Value": "font-rubik"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "fontAra",
+    "Value": "Tajawal"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "badges.current",
+    "Value": "bg-white/10 text-white"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "makroohColor",
+    "Value": "bg-red-700/80"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "jamaahColor",
+    "Value": "bg-green-700"
+  },
+  {
+    "Group": "theme.slideshowPrayerCard",
+    "Key": "jamaahTextSize",
+    "Value": "text-4xl"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "bgColor",
+    "Value": "bg-greenbank"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "backdropBlur",
+    "Value": "backdrop-blur-md"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "border",
+    "Value": "border border-white/20"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "rounded",
+    "Value": "rounded-2xl"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "shadow",
+    "Value": "shadow-lg"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "nameSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "addressSize",
+    "Value": "text-base"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "urlSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "logoWidth",
+    "Value": "w-20"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "paddingY",
+    "Value": "py-4"
+  },
+  {
+    "Group": "theme.Theme_3.header",
+    "Key": "paddingX",
+    "Value": "px-6"
+  },
+  {
+    "Group": "theme.Theme_3.clock",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_3.clock",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_3.clock",
+    "Key": "bgColor",
+    "Value": "bg-greenbank"
+  },
+  {
+    "Group": "theme.Theme_3.clock",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_3.clock",
+    "Key": "fontSize",
+    "Value": "text-[180px]"
+  },
+  {
+    "Group": "theme.Theme_3.clock",
+    "Key": "amPmSize",
+    "Value": "text-base"
+  },
+  {
+    "Group": "theme.Theme_3.dateCard",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_3.dateCard",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_3.dateCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "theme.Theme_3.dateCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_3.dateCard",
+    "Key": "englishDateSize",
+    "Value": "text-7xl"
+  },
+  {
+    "Group": "theme.Theme_3.dateCard",
+    "Key": "islamicDateSize",
+    "Value": "text-6xl"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "bgColor",
+    "Value": "bg-greenbank"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "textColor",
+    "Value": "bg-gray-900"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "jamaahColor",
+    "Value": "bg-emerald-700"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "makroohColor",
+    "Value": "bg-red-900"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "nameSize",
+    "Value": "text-8xl"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-6xl"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "jamaahTextSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_3.currentPrayer",
+    "Key": "timeRowSize",
+    "Value": "text-4xl md:text-6xl"
+  },
+  {
+    "Group": "theme.Theme_3.upcomingPrayer",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_3.upcomingPrayer",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_3.upcomingPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-900"
+  },
+  {
+    "Group": "theme.Theme_3.upcomingPrayer",
+    "Key": "textColor",
+    "Value": "text-cyan-400"
+  },
+  {
+    "Group": "theme.Theme_3.upcomingPrayer",
+    "Key": "headerSize",
+    "Value": "text-3xl"
+  },
+  {
+    "Group": "theme.Theme_3.upcomingPrayer",
+    "Key": "rowSize",
+    "Value": "text-7xl sm:text-8xl md:text-9xl"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "fontAra",
+    "Value": "Amiri"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-900"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "jamaahColor",
+    "Value": "bg-emerald-700"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "textColor",
+    "Value": "text-cyan-400"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "nameSize",
+    "Value": "text-6xl sm:text-7xl md:text-8xl"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-5xl sm:text-6xl md:text-7xl"
+  },
+  {
+    "Group": "theme.Theme_3.nextPrayer",
+    "Key": "countdownSize",
+    "Value": "text-3xl md:text-5xl"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "rotateInterval",
+    "Value": "15"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "overrideMessage",
+    "Value": "ٱللَّهُــــمَّ أَجِرْنِــــي مِنَ النَّــــارِ"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "overrideDuration",
+    "Value": "300"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "fontEng",
+    "Value": "Rubik"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "textSize",
+    "Value": "text-5xl"
+  },
+  {
+    "Group": "theme.Theme_3.infoCard",
+    "Key": "height",
+    "Value": "30rem"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowClock",
+    "Key": "textColor",
+    "Value": "text-cyan-400"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowClock",
+    "Key": "bgColor",
+    "Value": "bg-gray-900"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowClock",
+    "Key": "fontSize",
+    "Value": "text-8xl"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowDateCard",
+    "Key": "textColor",
+    "Value": "text-cyan-400"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowDateCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowDateCard",
+    "Key": "fontSize",
+    "Value": "text-4xl"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowDateCard",
+    "Key": "englishDateSize",
+    "Value": "text-xl"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowDateCard",
+    "Key": "islamicDateSize",
+    "Value": "text-lg"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayer",
+    "Key": "bgColor",
+    "Value": "bg-emerald-800"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayer",
+    "Key": "textColor",
+    "Value": "text-cyan-400"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayer",
+    "Key": "fontSize",
+    "Value": "text-xl"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayer",
+    "Key": "fontSizeInner",
+    "Value": "text-xs"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayerCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-800"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayerCard",
+    "Key": "textColor",
+    "Value": "text-cyan-400"
+  },
+  {
+    "Group": "theme.Theme_3.slideshowCurrentPrayerCard",
+    "Key": "fontSize",
+    "Value": "text-xs"
+  },
+  {
+    "Group": "theme.Theme_3.weatherCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "theme.Theme_3.weatherCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "theme.Theme_3.weatherCard",
+    "Key": "tileBgColor",
+    "Value": "bg-white/5"
+  },
+  {
+    "Group": "theme.Theme_3.weatherCard",
+    "Key": "tileBorder",
+    "Value": "border-white/10"
+  },
+  {
+    "Group": "theme.Theme_3.weatherCard",
+    "Key": "fontEng",
+    "Value": "Poppins"
+  },
+  {
+    "Group": "themeMobile.Theme_3.header",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "themeMobile.Theme_3.header",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "themeMobile.Theme_3.header",
+    "Key": "border",
+    "Value": "border border-white/20"
+  },
+  {
+    "Group": "themeMobile.Theme_3.header",
+    "Key": "cardBgColor",
+    "Value": "bg-white/10"
+  },
+  {
+    "Group": "themeMobile.Theme_3.header",
+    "Key": "cardHoverBgColor",
+    "Value": "hover:bg-white/15"
+  },
+  {
+    "Group": "themeMobile.Theme_3.header",
+    "Key": "cardBorderColor",
+    "Value": "border-white/10"
+  },
+  {
+    "Group": "themeMobile.Theme_3.dateCard",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "themeMobile.Theme_3.dateCard",
+    "Key": "textColor",
+    "Value": "text-white"
+  },
+  {
+    "Group": "themeMobile.Theme_3.dateCard",
+    "Key": "borderColor",
+    "Value": "border-white/10"
+  },
+  {
+    "Group": "themeMobile.Theme_3.dateCard",
+    "Key": "englishDateSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "themeMobile.Theme_3.dateCard",
+    "Key": "islamicDateSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-300"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "jamaahColor",
+    "Value": "bg-emerald-700"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "makroohColor",
+    "Value": "bg-red-700"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "nameSize",
+    "Value": "text-lg"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "timeRowSize",
+    "Value": "text-base"
+  },
+  {
+    "Group": "themeMobile.Theme_3.currentPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-lg"
+  },
+  {
+    "Group": "themeMobile.Theme_3.nextPrayer",
+    "Key": "bgColor",
+    "Value": "bg-gray-800"
+  },
+  {
+    "Group": "themeMobile.Theme_3.nextPrayer",
+    "Key": "textColor",
+    "Value": "text-yellow-300"
+  },
+  {
+    "Group": "themeMobile.Theme_3.nextPrayer",
+    "Key": "countdownSize",
+    "Value": "text-sm"
+  },
+  {
+    "Group": "themeMobile.Theme_3.nextPrayer",
+    "Key": "nameSize",
+    "Value": "text-xl"
+  },
+  {
+    "Group": "themeMobile.Theme_3.nextPrayer",
+    "Key": "nameSizeArabic",
+    "Value": "text-base"
+  },
+  {
+    "Group": "themeMobile.Theme_3.upcomingPrayer",
+    "Key": "bgColor",
+    "Value": "bg-emerald-900"
+  },
+  {
+    "Group": "themeMobile.Theme_3.upcomingPrayer",
+    "Key": "textColor",
+    "Value": "text-lime-300"
+  },
+  {
+    "Group": "themeMobile.Theme_3.upcomingPrayer",
+    "Key": "headerSize",
+    "Value": "text-xs"
+  },
+  {
+    "Group": "themeMobile.Theme_3.upcomingPrayer",
+    "Key": "rowSize",
+    "Value": "text-sm"
+  }
+]
