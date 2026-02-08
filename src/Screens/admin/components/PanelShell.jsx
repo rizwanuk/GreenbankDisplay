@@ -3,16 +3,31 @@ import React, { useMemo, useState } from "react";
 export default function ReadOnlySettingsTable({ rows }) {
   const [q, setQ] = useState("");
 
+  // ✅ Guard: rows might be undefined/null while data is loading or panel is missing data
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const hasAnyRows = safeRows.length > 1; // 1st row is header in your sheet shape
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return rows.slice(1);
-    return rows.slice(1).filter((r) => {
+
+    // If no data loaded yet
+    if (!hasAnyRows) return [];
+
+    // No search: return all data rows (skip header)
+    if (!needle) return safeRows.slice(1);
+
+    // Search: filter data rows
+    return safeRows.slice(1).filter((r) => {
       const g = String(r?.[0] || "").toLowerCase();
       const k = String(r?.[1] || "").toLowerCase();
       const v = String(r?.[2] || "").toLowerCase();
       return g.includes(needle) || k.includes(needle) || v.includes(needle);
     });
-  }, [rows, q]);
+  }, [safeRows, q, hasAnyRows]);
+
+  const emptyMessage = !hasAnyRows
+    ? "No settings loaded yet."
+    : "No matches.";
 
   return (
     <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
@@ -51,10 +66,11 @@ export default function ReadOnlySettingsTable({ rows }) {
                 </td>
               </tr>
             ))}
+
             {!filtered.length ? (
               <tr>
                 <td colSpan={3} className="p-3 text-white/60">
-                  No matches.
+                  {emptyMessage}
                 </td>
               </tr>
             ) : null}

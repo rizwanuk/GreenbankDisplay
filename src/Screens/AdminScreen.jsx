@@ -11,6 +11,7 @@ import JummahTimesPanel from "./admin/panels/JummahTimesPanel";
 import TestModePanel from "./admin/panels/TestModePanel";
 import IslamicCalendarPanel from "./admin/panels/IslamicCalendarPanel";
 import PrayerTimesPanel from "./admin/panels/PrayerTimesPanel";
+import SlideshowPanel from "./admin/panels/SlideshowPanel"; // ✅ NEW
 import SignInPanel from "./admin/components/SignInPanel";
 
 const PANELS = [
@@ -63,6 +64,16 @@ const PANELS = [
     emoji: "🎨",
     render: (props) => <ThemePanel {...props} />,
   },
+
+  // ✅ NEW: Slideshow settings
+  {
+    id: "slideshow",
+    title: "Slideshow",
+    desc: "Edit slide duration and the slides shown on the slideshow screen.",
+    emoji: "🖼️",
+    render: (props) => <SlideshowPanel {...props} />,
+  },
+
   {
     id: "test",
     title: "Test Mode",
