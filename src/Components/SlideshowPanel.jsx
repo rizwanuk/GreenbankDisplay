@@ -75,14 +75,27 @@ export default function SlideshowPanel({ settingsMap }) {
           </div>
         )}
 
-        {currentSlide.type === "embed" && (currentSlide.embedHtml || currentSlide.content) && (
+        {currentSlide.type === "embed" &&
+          (currentSlide.embedHtml || currentSlide.content) && (
+            <div className="w-full h-full flex items-center justify-center overflow-hidden">
+              <div
+                className="w-full h-full"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    currentSlide.embedHtml ||
+                    `<iframe src="${currentSlide.content}" style="width:100vw;height:100vh;border:0;margin:0;padding:0;" frameborder="0" allowfullscreen></iframe>`,
+                }}
+              />
+            </div>
+          )}
+
+        {/* ✅ HTML CTA SLIDE */}
+        {currentSlide.type === "html" && currentSlide.content && (
           <div className="w-full h-full flex items-center justify-center overflow-hidden">
             <div
               className="w-full h-full"
               dangerouslySetInnerHTML={{
-                __html:
-                  currentSlide.embedHtml ||
-                  `<iframe src="${currentSlide.content}" style="width:100vw;height:100vh;border:0;margin:0;padding:0;" frameborder="0" allowfullscreen></iframe>`,
+                __html: currentSlide.content,
               }}
             />
           </div>

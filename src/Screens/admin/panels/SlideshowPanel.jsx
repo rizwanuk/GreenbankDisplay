@@ -280,6 +280,9 @@ export default function SlideshowPanel({ groups, setValue }) {
             const startIncomplete = !startSplit.date && !!startSplit.time;
             const endIncomplete = !endSplit.date && !!endSplit.time;
 
+            const isHtml = (s.type || "image") === "html";
+            const isImage = (s.type || "image") === "image";
+
             return (
               <div
                 key={s.key}
@@ -312,18 +315,47 @@ export default function SlideshowPanel({ groups, setValue }) {
                   </button>
                 </div>
 
+                {/* ✅ Type now supports Image + HTML CTA (no other changes) */}
                 <SelectInput
                   label="Type"
                   value={s.type || "image"}
-                  options={[{ label: "Image", value: "image" }]}
+                  options={[
+                    { label: "Image", value: "image" },
+                    { label: "HTML CTA", value: "html" },
+                  ]}
                   onChange={(v) => updateSlide(s.key, { type: v })}
                 />
 
-                <TextInput
-                  label="Image URL"
-                  value={s.content || ""}
-                  onChange={(v) => updateSlide(s.key, { content: v })}
-                />
+                {/* ✅ Image URL input (unchanged for image slides) */}
+                {isImage && (
+                  <TextInput
+                    label="Image URL"
+                    value={s.content || ""}
+                    onChange={(v) => updateSlide(s.key, { content: v })}
+                  />
+                )}
+
+                {/* ✅ HTML CTA editor + preview */}
+                {isHtml && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">HTML (CTA)</div>
+                    <div className="text-xs opacity-70">
+                      Paste your CTA HTML here. You can include a &lt;style&gt; block at the top.
+                    </div>
+
+                    <textarea
+                      className="w-full min-h-[160px] rounded-xl bg-black/40 border border-white/15 px-3 py-2 text-xs font-mono"
+                      placeholder="<style>...</style>\n<div>...</div>"
+                      value={s.content || ""}
+                      onChange={(e) => updateSlide(s.key, { content: e.target.value })}
+                    />
+
+                    <div className="text-xs opacity-60">Live preview:</div>
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 overflow-auto max-h-[260px]">
+                      <div dangerouslySetInnerHTML={{ __html: s.content || "" }} />
+                    </div>
+                  </div>
+                )}
 
                 <DateTimeRow
                   label="Start (optional)"
