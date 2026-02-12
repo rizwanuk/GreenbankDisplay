@@ -1,18 +1,26 @@
-import { useEffect, useState } from "react";
+import useSheetWithCache from "./useSheetWithCache";
+import { tab, lastUpdatedMeta } from "../constants/sheets";
 
-/** LocalStorage-backed state hook, reusable across screens */
-export default function useUiSetting(key, defaultValue = "") {
-  const [value, setValue] = useState(() => {
-    try { const v = localStorage.getItem(key); return v !== null ? v : defaultValue; }
-    catch { return defaultValue; }
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
+
+export default function useSettings() {
+  const SETTINGS_URL = tab("settings");
+  const META_URL = lastUpdatedMeta();
+
+  return useSheetWithCache({
+    dataUrl: SETTINGS_URL,
+    metaUrl: META_URL,
+    cacheKey: "cachedSettings",
+
+    // ⚡ Fast locally
+    // 🌍 Sensible polling in production (no Vercel impact)
+    checkIntervalMs: isLocalhost ? 2000 : 30000,
+
+    // 🔔 Admin save + cross-tab refresh
+    invalidateKey: "gbm_settings_invalidate",
+    channelName: "gbm_settings_channel",
   });
-
-  useEffect(() => {
-    try {
-      if (value === undefined || value === null) localStorage.removeItem(key);
-      else localStorage.setItem(key, value);
-    } catch {}
-  }, [key, value]);
-
-  return [value, setValue];
 }

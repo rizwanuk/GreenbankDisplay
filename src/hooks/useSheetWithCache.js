@@ -1,131 +1,148 @@
-// src/hooks/useSheetWithCache.js
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * Generic "Google Sheet via API + localStorage cache + optional meta polling" hook.
- *
- * Behavior:
- * - Boots from localStorage immediately if present.
- * - Always fetches fresh data once on mount.
- * - Optionally polls a meta endpoint; if "lastUpdated" changes, it refetches data.
- *
- * Required params:
- * - dataUrl: url that returns the sheet data (array of rows)
- * - cacheKey: localStorage key (e.g., "cachedSettings" / "cachedPrayerTimes")
- *
- * Optional params:
- * - metaUrl: url that returns a small meta object/array with a last-updated marker
- * - checkIntervalMs: how often to check meta
- *
- * IMPORTANT:
- * This hook RETURNS AN ARRAY (backwards compatible).
- * We attach refreshStatus onto the returned array as a property.
- */
 export default function useSheetWithCache({
   dataUrl,
   cacheKey,
   metaUrl = null,
   checkIntervalMs = 120000,
+  invalidateKey = null,
+  channelName = null,
 }) {
   const [data, setData] = useState([]);
-
-  // ✅ NEW: refresh status (for footer indicator)
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
   const [nextCheckAt, setNextCheckAt] = useState(null);
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
 
-  // Track browser online/offline
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+  const refreshInFlightRef = useRef(false);
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+  // -------------------------
+  // Online / Offline handling
+  // -------------------------
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
 
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
     };
   }, []);
 
-  // 1) Bootstrap from cache (fast paint)
-  useEffect(() => {
+  // -------------------------
+  // Cache helpers
+  // -------------------------
+  const putCache = useCallback(
+    (rows, timestamp) => {
+      try {
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            data: rows,
+            timestamp: timestamp || new Date().toISOString(),
+          })
+        );
+      } catch {}
+    },
+    [cacheKey]
+  );
+
+  const getCache = useCallback(() => {
     try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && Array.isArray(parsed.data)) {
-          setData(parsed.data);
-        }
-      }
-    } catch (e) {
-      // non-fatal
-      console.warn(`Failed to read cache for ${cacheKey}`, e);
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
     }
   }, [cacheKey]);
 
-  // Helper: store to cache
-  const putCache = (rows, timestamp) => {
-    try {
-      localStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          data: rows,
-          timestamp: timestamp || new Date().toISOString(),
-        })
-      );
-    } catch (e) {
-      // non-fatal
-      console.warn(`Failed to write cache for ${cacheKey}`, e);
+  const readRemoteStamp = (meta) => {
+    if (Array.isArray(meta) && meta.length) {
+      const metaRow =
+        meta.find((r) => r?.Group === "meta" && r?.Key === "lastUpdated") ||
+        null;
+      if (metaRow?.Value) return metaRow.Value;
+
+      return meta[0]?.Value || meta[0]?.value || null;
     }
+    return meta?.lastupdated || meta?.lastUpdated || null;
   };
 
-  // 2) Fetch fresh once on mount
-  useEffect(() => {
-    let alive = true;
-    (async () => {
+  // -------------------------
+  // Core refresh
+  // -------------------------
+  const refreshNow = useCallback(
+    async ({ reason = "manual" } = {}) => {
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+
       try {
+        if (!navigator.onLine) return;
+
         const res = await fetch(dataUrl, { cache: "no-store" });
         const json = await res.json();
-        if (!alive) return;
-        if (Array.isArray(json)) {
-          setData(json);
-          putCache(json);
+
+        const rows = Array.isArray(json)
+          ? json
+          : Array.isArray(json?.rows)
+          ? json.rows
+          : null;
+
+        if (Array.isArray(rows)) {
+          setData(rows);
+          putCache(rows);
+
+          if (channelName && "BroadcastChannel" in window) {
+            const bc = new BroadcastChannel(channelName);
+            bc.postMessage({ type: "cacheUpdated", cacheKey, reason });
+            bc.close();
+          }
         }
       } catch (e) {
-        console.warn(`Initial fetch failed for ${cacheKey}`, e);
+        console.warn("Refresh failed:", e);
+      } finally {
+        refreshInFlightRef.current = false;
       }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [dataUrl, cacheKey]);
+    },
+    [dataUrl, cacheKey, putCache, channelName]
+  );
 
-  // 3) Poll meta for updates (optional)
+  // -------------------------
+  // Boot from cache
+  // -------------------------
+  useEffect(() => {
+    const cached = getCache();
+    if (cached?.data) {
+      setData(cached.data);
+    }
+  }, [getCache]);
+
+  // -------------------------
+  // Initial fetch
+  // -------------------------
+  useEffect(() => {
+    refreshNow({ reason: "mount" });
+  }, [refreshNow]);
+
+  // -------------------------
+  // Poll meta for changes
+  // -------------------------
   useEffect(() => {
     if (!metaUrl) return;
 
     let alive = true;
-
-    const readRemoteStamp = (meta) => {
-      // Try a few common shapes:
-      // - [{ Value: "ISO" }] or [{ value: "ISO" }]
-      // - { lastupdated: "ISO" } / { lastUpdated: "ISO" }
-      if (Array.isArray(meta) && meta.length) {
-        return meta[0]?.Value || meta[0]?.value || null;
-      }
-      return meta?.lastupdated || meta?.lastUpdated || null;
-    };
 
     const check = async () => {
       const now = new Date();
       setLastCheckedAt(now);
       setNextCheckAt(new Date(now.getTime() + checkIntervalMs));
 
-      // If offline, don't attempt remote fetch (but keep times updated)
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      if (!navigator.onLine) return;
 
       try {
         const res = await fetch(metaUrl, { cache: "no-store" });
@@ -133,36 +150,94 @@ export default function useSheetWithCache({
         if (!alive) return;
 
         const remoteStamp = readRemoteStamp(meta);
-
-        const cached = localStorage.getItem(cacheKey);
-        const localStamp = cached ? JSON.parse(cached).timestamp : null;
+        const cached = getCache();
+        const localStamp = cached?.timestamp || null;
 
         if (remoteStamp && remoteStamp !== localStamp) {
-          // refetch data
           const rr = await fetch(dataUrl, { cache: "no-store" });
-          const rows = await rr.json();
+          const dj = await rr.json();
+          const rows = Array.isArray(dj)
+            ? dj
+            : Array.isArray(dj?.rows)
+            ? dj.rows
+            : null;
+
           if (!alive) return;
           if (Array.isArray(rows)) {
             setData(rows);
             putCache(rows, remoteStamp);
+
+            if (channelName && "BroadcastChannel" in window) {
+              const bc = new BroadcastChannel(channelName);
+              bc.postMessage({ type: "metaChanged", cacheKey });
+              bc.close();
+            }
           }
         }
-      } catch (e) {
-        // non-fatal
-      }
+      } catch {}
     };
 
     const id = setInterval(check, checkIntervalMs);
-    // Run once on mount too
     check();
 
     return () => {
       alive = false;
       clearInterval(id);
     };
-  }, [metaUrl, dataUrl, cacheKey, checkIntervalMs]);
+  }, [metaUrl, dataUrl, cacheKey, checkIntervalMs, putCache, channelName, getCache]);
 
-  // ✅ RETURN AN ARRAY (backwards compatible) + attach status as a property
+  // -------------------------
+  // Storage sync
+  // -------------------------
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === cacheKey && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed?.data) setData(parsed.data);
+        } catch {}
+      }
+
+      if (invalidateKey && e.key === invalidateKey) {
+        refreshNow({ reason: "invalidate" });
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [cacheKey, invalidateKey, refreshNow]);
+
+  // -------------------------
+  // BroadcastChannel sync
+  // -------------------------
+  useEffect(() => {
+    if (!channelName || !("BroadcastChannel" in window)) return;
+
+    const bc = new BroadcastChannel(channelName);
+
+    const onMsg = (e) => {
+      if (
+        e?.data?.type === "cacheUpdated" ||
+        e?.data?.type === "metaChanged" ||
+        e?.data?.type === "invalidate"
+      ) {
+        const cached = getCache();
+        if (cached?.data) {
+          setData(cached.data);
+        } else {
+          refreshNow({ reason: "broadcast" });
+        }
+      }
+    };
+
+    bc.addEventListener("message", onMsg);
+
+    return () => {
+      bc.removeEventListener("message", onMsg);
+      bc.close();
+    };
+  }, [channelName, getCache, refreshNow]);
+
   const out = Array.isArray(data) ? data : [];
   const outArr = [...out];
 
@@ -173,5 +248,6 @@ export default function useSheetWithCache({
       isOnline,
       intervalMs: checkIntervalMs,
     },
+    refreshNow,
   });
 }

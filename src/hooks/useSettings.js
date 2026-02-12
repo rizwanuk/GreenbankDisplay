@@ -1,13 +1,27 @@
 import useSheetWithCache from "./useSheetWithCache";
+import { tab, lastUpdatedMeta } from "../constants/sheets";
 
-const SETTINGS_DATA_URL = "/data/settings.json";
-const SETTINGS_META_URL = "/data/version.json"; // ✅ version file drives refresh
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
 
 export default function useSettings() {
+  // ✅ Direct OpenSheet URLs (no Vercel invocations)
+  const SETTINGS_URL = tab("settings");
+  const META_URL = lastUpdatedMeta(); // settings tab contains meta/lastUpdated row
+
   return useSheetWithCache({
-    dataUrl: SETTINGS_DATA_URL,
-    metaUrl: SETTINGS_META_URL,
+    dataUrl: SETTINGS_URL,
+    metaUrl: META_URL,
     cacheKey: "cachedSettings",
-    checkIntervalMs: 5 * 60 * 1000, // keep as 5 mins for now
+
+    // ✅ localhost: very fast checks
+    // ✅ production: still fast enough to feel "immediate" but not noisy
+    checkIntervalMs: isLocalhost ? 2000 : 30000,
+
+    // ✅ instant cross-tab sync + admin save invalidation
+    invalidateKey: "gbm_settings_invalidate",
+    channelName: "gbm_settings_channel",
   });
 }

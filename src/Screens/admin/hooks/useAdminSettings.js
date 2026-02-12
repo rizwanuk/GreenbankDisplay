@@ -4,6 +4,10 @@ import { rowsToGroups } from "../utils/rowsToGroups";
 
 const TOKEN_KEY = "gbm_admin_id_token";
 
+// ✅ NEW: used to notify other screens to refresh settings immediately
+const SETTINGS_INVALIDATE_KEY = "gbm_settings_invalidate";
+const SETTINGS_BROADCAST_CHANNEL = "gbm_settings_channel";
+
 function hasHeaderRow(r0) {
   return (
     Array.isArray(r0) &&
@@ -193,6 +197,22 @@ export function useAdminSettings() {
       }
 
       await load();
+
+      // ✅ NEW: Immediately tell other open screens (main/slideshow/embed/mobile) to refresh settings
+      // This is same-origin only (localhost or your deployed domain). No Vercel impact by itself.
+      try {
+        localStorage.setItem(SETTINGS_INVALIDATE_KEY, String(Date.now()));
+      } catch (_) {}
+
+      // ✅ NEW: Faster cross-tab messaging in modern browsers
+      try {
+        if ("BroadcastChannel" in window) {
+          const bc = new BroadcastChannel(SETTINGS_BROADCAST_CHANNEL);
+          bc.postMessage({ type: "invalidate", at: Date.now() });
+          bc.close();
+        }
+      } catch (_) {}
+
       return { ok: true };
     } catch (e) {
       const msg = e?.message || String(e);
