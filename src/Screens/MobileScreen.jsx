@@ -14,7 +14,10 @@ import MobileCurrentCard from "../Components/MobileCurrentCard";
 import MobileNextCard from "../Components/MobileNextCard";
 import MobileUpcomingList from "../Components/MobileUpcomingList";
 import MobileSettingsSheet from "../Components/pwa/MobileSettingsSheet";
-import { registerMobileSW, applySWUpdate } from "../pwa/registerMobileSW";
+import { registerMobileSW, applySWUpdate, checkForUpdates } from "../pwa/registerMobileSW";
+
+// ✅ Sticky top actions
+import MobileTopActions from "../Components/MobileTopActions";
 
 // ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
 import { getSettingsUrl } from "../utils/getSettingsUrl";
@@ -159,16 +162,13 @@ export default function MobileScreen() {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-const r = await fetch(getSettingsUrl(), { cache: "no-store" });
-const j = await r.json();
+        const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+        const j = await r.json();
 
-// ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
-const rows = Array.isArray(j)
-  ? j
-  : (j.rows || j.values || j.settings || []);
+        // ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
+        const rows = Array.isArray(j) ? j : j.rows || j.values || j.settings || [];
 
-const next = extractLastUpdatedFromSettingsRows(rows);
-
+        const next = extractLastUpdatedFromSettingsRows(rows);
 
         if (!lastUpdatedRef.current) {
           lastUpdatedRef.current = next || "";
@@ -383,30 +383,70 @@ const next = extractLastUpdatedFromSettingsRows(rows);
       }}
     >
       <div className="w-full md:max-w-[420px] md:rounded-[28px] md:border md:border-white/10 md:shadow-2xl md:overflow-hidden">
-        <div
-          className={[
-            "flex items-center justify-between px-4 py-3 border-b",
-            themeHeader.bgColor || "bg-[#0b0f1a]",
-            themeHeader.textColor || "text-white",
-            themeHeader.border || themeHeader.borderColor || "border-white/10",
-          ].join(" ")}
-        >
-          <div className="min-w-0">
-            <div className="text-lg font-semibold truncate">Greenbank Masjid - Prayer times</div>
-            <div className="text-xs opacity-75">Mobile view</div>
-          </div>
-          <button
-            aria-label="Settings"
+        {/* ✅ Sticky header + action bar together */}
+        <div className="sticky top-0 z-40">
+          <div
             className={[
-              "px-3 py-1.5 rounded-lg border",
-              themeHeader.cardBgColor || "bg-white/10",
-              themeHeader.cardHoverBgColor || "hover:bg-white/15",
-              themeHeader.cardBorderColor || "border-white/10",
+              "flex items-center justify-between px-4 py-3 border-b",
+              themeHeader.bgColor || "bg-[#0b0f1a]",
+              themeHeader.textColor || "text-white",
+              themeHeader.border || themeHeader.borderColor || "border-white/10",
             ].join(" ")}
-            onClick={requestOpenSettings}
           >
-            ⚙️
-          </button>
+            {/* ✅ UPDATED: Icon + shorter title */}
+            <div className="min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 border border-white/10">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                    <path d="M12 3l7 6v11H5V9l7-6Z" stroke="currentColor" strokeWidth="1.6" />
+                    <path
+                      d="M9 20v-6a3 3 0 0 1 6 0v6"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                  </svg>
+                </span>
+
+                <div className="min-w-0">
+                  <div className="text-[15px] font-semibold truncate leading-tight">
+                    Greenbank Masjid
+                  </div>
+                  <div className="text-[11px] opacity-80 leading-tight">
+                    Prayer Times • Mobile
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ✅ Settings icon */}
+            <button
+              aria-label="Settings"
+              className={[
+                "h-10 w-10 rounded-xl border inline-flex items-center justify-center",
+                themeHeader.cardBgColor || "bg-white/10",
+                themeHeader.cardHoverBgColor || "hover:bg-white/15",
+                themeHeader.cardBorderColor || "border-white/10",
+              ].join(" ")}
+              onClick={requestOpenSettings}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                <path
+                  d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                />
+                <path
+                  d="M19.4 13a7.9 7.9 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L4.6 11a7.9 7.9 0 0 0 .1 2L2.7 14.5l2 3.5 2.4-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.5-2.1-1.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  opacity="0.9"
+                />
+              </svg>
+            </button>
+          </div>
+
+          {/* ✅ Top action bar (More removed) */}
+          <MobileTopActions slideshowUrl="/slideshow" zIndex={80} show={{ more: false }} />
         </div>
 
         <main className="px-4 py-4 space-y-3">
@@ -443,6 +483,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
             yesterdayRow={yRow}
             settingsMap={settingsMap}
           />
+
           <MobileNextCard
             theme={themeNextPrayer}
             todayRow={todayRow}
@@ -451,6 +492,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
             arabicLabels={arabic}
             settingsMap={settingsMap}
           />
+
           <MobileUpcomingList
             theme={themeUpcomingPrayer}
             upcoming={upcomingWithKeys}
