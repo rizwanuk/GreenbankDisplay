@@ -71,28 +71,15 @@
     }
   ],
 
-  "rewrites": [
+  "routes": [
+    { "src": "/api/met/(.*)", "dest": "/api/met.js?path=$1" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+
+    { "src": "/embed", "dest": "/embed.html" },
+    { "src": "/slideshow", "dest": "/index.html" },
+
     { "handle": "filesystem" },
 
-    {
-      "source": "/api/met/(.*)",
-      "destination": "/api/met.js?path=$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/embed",
-      "destination": "/embed.html"
-    },
-    {
-      "source": "/slideshow",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
