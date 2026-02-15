@@ -1,5 +1,7 @@
 // src/Components/MobileTopActions.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import QuranViewer from "./quran/QuranViewer";
+
 
 /**
  * Backwards compatible:
@@ -153,7 +155,8 @@ export default function MobileTopActions({
             </div>
 
             {/* Overlay body */}
-            <div className="flex-1 px-4 pb-4 pt-3 overflow-auto">
+            <div className="flex-1 px-4 pb-4 pt-3 overflow-hidden">
+
               <div className="rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
                 {/* ✅ Messages: safe loader + timeout fallback */}
                 {openKey === "messages" && (
@@ -230,7 +233,7 @@ export default function MobileTopActions({
                   </div>
                 )}
 
-                {/* ✅ Adhkar: no iframe yet, friendly notice only */}
+                {/* ✅ Adhkar: placeholder for now */}
                 {openKey === "adhkar" && (
                   <ComingSoon
                     icon={<IconTasbih className="opacity-90" />}
@@ -239,14 +242,8 @@ export default function MobileTopActions({
                   />
                 )}
 
-                {/* ✅ Quran: no iframe yet, friendly notice only */}
-                {openKey === "quran" && (
-                  <ComingSoon
-                    icon={<IconBook className="opacity-90" />}
-                    title="Qur’an"
-                    body="This feature will be updated soon (native Qur’an reader)."
-                  />
-                )}
+                {/* ✅ Quran: NEW native viewer */}
+                {openKey === "quran" && <QuranViewer />}
 
                 {/* More panel remains in code, but you are hiding it with show={{more:false}} */}
                 {openKey === "more" && (
@@ -340,13 +337,12 @@ function IconTasbih({ className = "" }) {
   return (
     <IconBase className={className}>
       <path
-        d="M12 3c2 2 2 4 0 6s-2 4 0 6 2 4 0 6"
+        d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z"
         stroke="currentColor"
         strokeWidth="1.6"
-        opacity="0.9"
       />
       <path
-        d="M8 6.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm8 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
+        d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7"
         stroke="currentColor"
         strokeWidth="1.6"
       />
@@ -358,12 +354,12 @@ function IconBook({ className = "" }) {
   return (
     <IconBase className={className}>
       <path
-        d="M6 4h10a2 2 0 0 1 2 2v14H8a2 2 0 0 0-2 2V4Z"
+        d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z"
         stroke="currentColor"
         strokeWidth="1.6"
       />
-      <path d="M8 6h8" stroke="currentColor" strokeWidth="1.6" opacity="0.7" />
-      <path d="M8 9h8" stroke="currentColor" strokeWidth="1.6" opacity="0.5" />
+      <path d="M8 7h8" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M8 10h8" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
   );
 }
@@ -374,7 +370,7 @@ function IconMore({ className = "" }) {
       <path
         d="M6 12h.01M12 12h.01M18 12h.01"
         stroke="currentColor"
-        strokeWidth="2.6"
+        strokeWidth="3"
         strokeLinecap="round"
       />
     </IconBase>
