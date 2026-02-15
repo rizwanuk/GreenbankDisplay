@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QuranViewer from "./quran/QuranViewer";
 
-
 /**
  * Backwards compatible:
  * - slideshowUrl, zIndex, className work exactly as before
@@ -61,7 +60,6 @@ export default function MobileTopActions({
   // Reset / setup Messages load watchdog when opening Messages
   useEffect(() => {
     if (openKey !== "messages") {
-      // cleanup if leaving Messages
       setMsgLoaded(false);
       setMsgTimedOut(false);
       if (msgTimeoutRef.current) {
@@ -71,14 +69,13 @@ export default function MobileTopActions({
       return;
     }
 
-    // entering Messages
     setMsgLoaded(false);
     setMsgTimedOut(false);
 
     if (msgTimeoutRef.current) clearTimeout(msgTimeoutRef.current);
     msgTimeoutRef.current = setTimeout(() => {
       setMsgTimedOut(true);
-    }, 4500); // 4.5s fallback
+    }, 4500);
 
     return () => {
       if (msgTimeoutRef.current) {
@@ -96,6 +93,8 @@ export default function MobileTopActions({
     setMsgAttempt((n) => n + 1);
     flash("Retrying…");
   };
+
+  const isQuran = openKey === "quran";
 
   return (
     <>
@@ -155,105 +154,107 @@ export default function MobileTopActions({
             </div>
 
             {/* Overlay body */}
-            <div className="flex-1 px-4 pb-4 pt-3 overflow-hidden">
-
-              <div className="rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-                {/* ✅ Messages: safe loader + timeout fallback */}
-                {openKey === "messages" && (
-                  <div className="p-4">
-                    {/* Header notice */}
-                    <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
-                          <IconChat />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="font-bold leading-tight">Messages</div>
-                          <div className="text-sm opacity-80 leading-snug">
-                            If the slideshow doesn’t load, it will be improved soon. You can retry below.
+            {/* KEY CHANGE:
+               - Quran gets full height with minimal padding and NO extra "card" wrapper.
+               - Others keep the existing padded card layout. */}
+            <div className={isQuran ? "flex-1 px-2 pb-2 pt-2 overflow-hidden" : "flex-1 px-4 pb-4 pt-3 overflow-hidden"}>
+              {isQuran ? (
+                // ✅ Quran: full height, no extra wrapper (QuranViewer handles its own UI)
+                <div className="h-full">
+                  <QuranViewer />
+                </div>
+              ) : (
+                <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
+                  {/* ✅ Messages: safe loader + timeout fallback */}
+                  {openKey === "messages" && (
+                    <div className="p-4">
+                      <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
+                        <div className="flex items-start gap-3">
+                          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
+                            <IconChat />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-bold leading-tight">Messages</div>
+                            <div className="text-sm opacity-80 leading-snug">
+                              If the slideshow doesn’t load, it will be improved soon. You can retry below.
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          onClick={retryMessages}
-                          className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                        >
-                          Retry
-                        </button>
-                        <a
-                          href={slideshowUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                        >
-                          Open in browser
-                        </a>
-                      </div>
-                    </div>
-
-                    {/* Loading state */}
-                    {!msgLoaded && !msgTimedOut && (
-                      <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
-                        <div className="flex items-center gap-3">
-                          <Spinner />
-                          <div className="text-sm opacity-85">Loading slideshow…</div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={retryMessages}
+                            className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                          >
+                            Retry
+                          </button>
+                          <a
+                            href={slideshowUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                          >
+                            Open in browser
+                          </a>
                         </div>
                       </div>
-                    )}
 
-                    {/* Timeout fallback */}
-                    {msgTimedOut && !msgLoaded && (
-                      <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
-                        <div className="text-sm">
-                          <div className="font-semibold mb-1">Still loading…</div>
-                          <div className="opacity-85">
-                            This may be due to a slow connection or the browser blocking embedded content.
-                            This will be improved soon.
+                      {!msgLoaded && !msgTimedOut && (
+                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
+                          <div className="flex items-center gap-3">
+                            <Spinner />
+                            <div className="text-sm opacity-85">Loading slideshow…</div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Iframe container */}
-                    <div className="rounded-2xl border border-white/15 bg-black/25 overflow-hidden">
-                      <div className="h-[calc(100vh-260px)]">
-                        <iframe
-                          key={msgAttempt} // forces reload on retry
-                          title="Messages Slideshow"
-                          src={slideshowUrl}
-                          className="w-full h-full"
-                          style={{ border: 0 }}
-                          allow="autoplay; fullscreen"
-                          onLoad={() => setMsgLoaded(true)}
-                        />
+                      {msgTimedOut && !msgLoaded && (
+                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
+                          <div className="text-sm">
+                            <div className="font-semibold mb-1">Still loading…</div>
+                            <div className="opacity-85">
+                              This may be due to a slow connection or the browser blocking embedded content.
+                              This will be improved soon.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="rounded-2xl border border-white/15 bg-black/25 overflow-hidden">
+                        <div className="h-[calc(100vh-260px)]">
+                          <iframe
+                            key={msgAttempt}
+                            title="Messages Slideshow"
+                            src={slideshowUrl}
+                            className="w-full h-full"
+                            style={{ border: 0 }}
+                            allow="autoplay; fullscreen"
+                            onLoad={() => setMsgLoaded(true)}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* ✅ Adhkar: placeholder for now */}
-                {openKey === "adhkar" && (
-                  <ComingSoon
-                    icon={<IconTasbih className="opacity-90" />}
-                    title="Adhkar"
-                    body="This feature will be updated soon (Google Sheet-driven adhkar rotator)."
-                  />
-                )}
+                  {/* ✅ Adhkar: placeholder */}
+                  {openKey === "adhkar" && (
+                    <ComingSoon
+                      icon={<IconTasbih className="opacity-90" />}
+                      title="Adhkar"
+                      body="This feature will be updated soon (Google Sheet-driven adhkar rotator)."
+                    />
+                  )}
 
-                {/* ✅ Quran: NEW native viewer */}
-                {openKey === "quran" && <QuranViewer />}
-
-                {/* More panel remains in code, but you are hiding it with show={{more:false}} */}
-                {openKey === "more" && (
-                  <ComingSoon
-                    icon={<IconMore className="opacity-90" />}
-                    title="More"
-                    body="More shortcuts will be added soon."
-                  />
-                )}
-              </div>
+                  {/* More panel */}
+                  {openKey === "more" && (
+                    <ComingSoon
+                      icon={<IconMore className="opacity-90" />}
+                      title="More"
+                      body="More shortcuts will be added soon."
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Toast */}
@@ -308,14 +309,7 @@ function Spinner() {
 
 function IconBase({ children, className = "" }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      className={className}
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" className={className} aria-hidden="true">
       {children}
     </svg>
   );

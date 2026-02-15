@@ -14,15 +14,19 @@ export default function PdfJsPage({
   onNumPages,
   onError,
   onRendered,
+  onLoading, // optional
 }) {
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
-  const [doc, setDoc] = useState(null);
 
-  // ✅ Store callbacks in refs so they don't trigger reloads
+  const [doc, setDoc] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // ✅ Keep callbacks in refs so they don't retrigger effects
   const onNumPagesRef = useRef(onNumPages);
   const onErrorRef = useRef(onError);
   const onRenderedRef = useRef(onRendered);
+  const onLoadingRef = useRef(onLoading);
 
   useEffect(() => {
     onNumPagesRef.current = onNumPages;
@@ -36,10 +40,27 @@ export default function PdfJsPage({
     onRenderedRef.current = onRendered;
   }, [onRendered]);
 
-  // ✅ Load document ONLY when URL changes
+  useEffect(() => {
+    onLoadingRef.current = onLoading;
+  }, [onLoading]);
+
+  // ✅ Bucket width so tiny 1–2px changes don't cause constant rerenders
+  const widthBucket = useMemo(() => {
+    const w = Number(containerWidthPx) || 0;
+    if (w <= 0) return 0;
+    // bucket to 8px increments
+    return Math.max(0, Math.round(w / 8) * 8);
+  }, [containerWidthPx]);
+
+  const effectiveZoom = useMemo(() => {
+    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1.2;
+  }, [zoom]);
+
+  // ✅ Load document only when URL changes (don’t blank doc immediately)
   useEffect(() => {
     let alive = true;
-    setDoc(null);
+    setLoading(true);
+    onLoadingRef.current?.(true);
 
     const loadingTask = pdfjsLib.getDocument({
       url,
@@ -57,6 +78,11 @@ export default function PdfJsPage({
       .catch((e) => {
         if (!alive) return;
         onErrorRef.current?.(e?.message || "Failed to load PDF.");
+      })
+      .finally(() => {
+        if (!alive) return;
+        setLoading(false);
+        onLoadingRef.current?.(false);
       });
 
     return () => {
@@ -67,16 +93,23 @@ export default function PdfJsPage({
     };
   }, [url]);
 
-  const effectiveZoom = useMemo(() => {
-    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1.2;
-  }, [zoom]);
+  // ✅ Prevent redundant renders
+  const lastRenderKeyRef = useRef("");
 
-  // Render page whenever doc/page/zoom/width changes
+  // ✅ Render page whenever doc/page/zoom/widthBucket changes
   useEffect(() => {
     if (!doc) return;
-    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
     const clampedPage = Math.min(Math.max(1, pageNumber || 1), doc.numPages);
+
+    // if we don’t yet have a reasonable width, still render using zoom only
+    const safeWidth = widthBucket > 50 ? widthBucket : 0;
+
+    const renderKey = `${url}|p:${clampedPage}|z:${effectiveZoom.toFixed(3)}|w:${safeWidth}|fit:${fitWidth ? 1 : 0}`;
+    if (lastRenderKeyRef.current === renderKey) return;
+    lastRenderKeyRef.current = renderKey;
 
     let cancelled = false;
 
@@ -98,34 +131,33 @@ export default function PdfJsPage({
         // Fit-to-width scaling
         let scale = effectiveZoom;
 
-        // extra safety padding to prevent 1–2px overflow causing scrollbars
-        const safePad = 16;
+        // More generous pad to avoid micro overflow
+        const safePad = 20;
 
-        if (fitWidth && containerWidthPx && containerWidthPx > 50) {
-          const target = Math.max(50, containerWidthPx - safePad);
+        if (fitWidth && safeWidth) {
+          const target = Math.max(50, safeWidth - safePad);
           scale = (target / baseViewport.width) * effectiveZoom;
         }
+
         const viewport = page.getViewport({ scale });
 
-        const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d", { alpha: false });
-
         const dpr = window.devicePixelRatio || 1;
 
         // Internal buffer size (sharp)
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
 
-        // Visual size (prevent horizontal overflow)
-        canvas.style.width = "100%";
-        canvas.style.maxWidth = `${Math.floor(viewport.width)}px`;
+        // Visual size: fixed pixel width, but never exceed container
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
         canvas.style.height = `${Math.floor(viewport.height)}px`;
+        canvas.style.maxWidth = "100%";
         canvas.style.display = "block";
 
         // Reset transform
         ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-        // ✅ Paint a white background (removes “dark behind” feel + reduces flicker)
+        // Paint white background (prevents “dark behind” flicker)
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -161,11 +193,13 @@ export default function PdfJsPage({
         renderTaskRef.current = null;
       }
     };
-  }, [doc, pageNumber, effectiveZoom, fitWidth, containerWidthPx]);
+  }, [doc, pageNumber, effectiveZoom, fitWidth, widthBucket, url]);
 
   return (
     <div className="w-full flex justify-center overflow-x-hidden">
       <canvas ref={canvasRef} className="rounded-xl" />
+      {/* If you ever want a subtle loader, we can add it here.
+          Keeping it empty for now to avoid layout changes. */}
     </div>
   );
 }
