@@ -1,3 +1,4 @@
+// src/Components/quran/QuranViewer.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PdfJsPage from "./PdfJsPage";
 import { buildJuzList } from "../../utils/quranFiles";
@@ -45,11 +46,9 @@ export default function QuranViewer() {
   const [jumpJuz, setJumpJuz] = useState(currentJuz);
   const [jumpPage, setJumpPage] = useState(page);
 
-  // quick Juz input (compact)
   const [quickJuzInput, setQuickJuzInput] = useState(String(currentJuz));
   useEffect(() => setQuickJuzInput(String(currentJuz)), [currentJuz]);
 
-  // surah placeholder input
   const [surahInput, setSurahInput] = useState(surah ? String(surah) : "");
   useEffect(() => setSurahInput(surah ? String(surah) : ""), [surah]);
 
@@ -59,6 +58,9 @@ export default function QuranViewer() {
 
   // Auto-advance throttle
   const lastAutoNavRef = useRef(0);
+
+  // ✅ Pending navigation (fixes Jump/Bookmarks race conditions)
+  const pendingPageRef = useRef(null); // number | "LAST" | null
 
   // Persist
   useEffect(() => localStorage.setItem(LS_LAST_JUZ, String(currentJuz)), [currentJuz]);
@@ -74,7 +76,7 @@ export default function QuranViewer() {
     [juzList, currentJuz]
   );
 
-  // ✅ Measure the ACTUAL scroll container width (this fixes “page too small”)
+  // ✅ Measure the ACTUAL scroll container width (prevents “page too small”)
   useEffect(() => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
@@ -99,11 +101,23 @@ export default function QuranViewer() {
     };
   }, []);
 
-  // When Juz changes: reset to page 1
+  // ✅ When Juz changes: load pending page if set, otherwise page 1
   useEffect(() => {
     setErr("");
-    setPage(1);
     setNumPages(1);
+
+    const pending = pendingPageRef.current;
+    pendingPageRef.current = null;
+
+    if (pending === "LAST") {
+      // wait for numPages to load, then jump to last
+      setPage(1);
+    } else if (typeof pending === "number" && Number.isFinite(pending) && pending > 0) {
+      setPage(pending);
+    } else {
+      setPage(1);
+    }
+
     setJumpJuz(currentJuz);
     setJumpPage(1);
 
@@ -112,9 +126,18 @@ export default function QuranViewer() {
     });
   }, [currentJuz]);
 
-  // Clamp page when numPages updates
+  // Clamp page when numPages updates (also supports pending LAST)
   useEffect(() => {
-    setPage((p) => Math.min(Math.max(1, p), numPages || 1));
+    const n = numPages || 1;
+
+    // If we intended "LAST", jump now that we know numPages
+    if (pendingPageRef.current === "LAST") {
+      pendingPageRef.current = null;
+      setPage(n);
+      return;
+    }
+
+    setPage((p) => Math.min(Math.max(1, p), n));
   }, [numPages]);
 
   // When page changes, scroll to top (reader-style)
@@ -127,15 +150,30 @@ export default function QuranViewer() {
   const goPrevPage = () => setPage((p) => Math.max(1, p - 1));
   const goNextPage = () => setPage((p) => Math.min(numPages || 1, p + 1));
 
-  const goPrevJuz = () => setCurrentJuz((j) => Math.max(1, j - 1));
-  const goNextJuz = () => setCurrentJuz((j) => Math.min(30, j + 1));
+  const goPrevJuz = () => {
+    if (currentJuz <= 1) return;
+    pendingPageRef.current = "LAST";
+    setCurrentJuz((j) => Math.max(1, j - 1));
+  };
+
+  const goNextJuz = () => {
+    if (currentJuz >= 30) return;
+    pendingPageRef.current = 1;
+    setCurrentJuz((j) => Math.min(30, j + 1));
+  };
 
   const handleNumPages = useCallback((n) => setNumPages(n || 1), []);
   const handleError = useCallback((m) => setErr(m), []);
 
   const quickGoJuz = () => {
     const j = Math.min(30, Math.max(1, Number(quickJuzInput) || 1));
-    if (j !== currentJuz) setCurrentJuz(j);
+    if (j !== currentJuz) {
+      pendingPageRef.current = 1;
+      setCurrentJuz(j);
+      setShowControls(false);
+      setShowJump(false);
+      setShowBookmarks(false);
+    }
   };
 
   const saveSurahPlaceholder = () => {
@@ -149,12 +187,15 @@ export default function QuranViewer() {
     const p = Math.max(1, Number(jumpPage) || 1);
 
     if (j !== currentJuz) {
+      pendingPageRef.current = p;
       setCurrentJuz(j);
-      setTimeout(() => setPage(p), 0);
     } else {
       setPage(p);
     }
+
     setShowJump(false);
+    setShowControls(false);
+    setShowBookmarks(false);
   };
 
   const addCurrentBookmark = () => {
@@ -172,16 +213,18 @@ export default function QuranViewer() {
   const openBookmark = (b) => {
     setErr("");
     if (b.juz !== currentJuz) {
+      pendingPageRef.current = Math.max(1, Number(b.page) || 1);
       setCurrentJuz(b.juz);
-      setTimeout(() => setPage(b.page || 1), 0);
     } else {
-      setPage(b.page || 1);
+      setPage(Math.max(1, Number(b.page) || 1));
     }
     if (b.surah) setSurah(b.surah);
     setShowBookmarks(false);
+    setShowJump(false);
+    setShowControls(false);
   };
 
-  // ✅ Auto-advance on scroll bottom/top (throttled)
+  // Auto-advance on scroll bottom/top (throttled)
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -199,6 +242,7 @@ export default function QuranViewer() {
         setPage((p) => Math.min(numPages || 1, p + 1));
       } else if (currentJuz < 30) {
         lastAutoNavRef.current = now;
+        pendingPageRef.current = 1;
         setCurrentJuz((j) => Math.min(30, j + 1));
       }
     } else if (atTop) {
@@ -207,15 +251,20 @@ export default function QuranViewer() {
         setPage((p) => Math.max(1, p - 1));
       } else if (currentJuz > 1) {
         lastAutoNavRef.current = now;
+        pendingPageRef.current = "LAST";
         setCurrentJuz((j) => Math.max(1, j - 1));
-        setTimeout(() => setPage(9999), 0); // last page of previous Juz (best effort)
       }
     }
   };
 
+  const onEnter = (e, fn) => {
+    if (e.key === "Enter") fn();
+  };
+
   return (
-    <div className="h-full flex flex-col px-2 pt-2 pb-3">
-      {/* ✅ Compact top bar */}
+    // ✅ min-h-0 is critical so the scroll area can actually grow/shrink in a flex column
+    <div className="h-full min-h-0 flex flex-col px-2 pt-2 pb-3">
+      {/* Compact top bar */}
       <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
@@ -267,7 +316,7 @@ export default function QuranViewer() {
         </div>
       </div>
 
-      {/* ✅ Optional sheets */}
+      {/* Controls sheet */}
       {showControls && (
         <div className="mt-2 rounded-2xl border border-white/15 bg-black/25 p-3">
           <div className="flex items-center justify-between">
@@ -311,6 +360,7 @@ export default function QuranViewer() {
             <input
               value={quickJuzInput}
               onChange={(e) => setQuickJuzInput(e.target.value)}
+              onKeyDown={(e) => onEnter(e, quickGoJuz)}
               inputMode="numeric"
               className="w-14 rounded-lg border border-white/15 bg-black/25 px-2 py-2 text-sm outline-none"
             />
@@ -344,6 +394,7 @@ export default function QuranViewer() {
             <input
               value={surahInput}
               onChange={(e) => setSurahInput(e.target.value)}
+              onKeyDown={(e) => onEnter(e, saveSurahPlaceholder)}
               inputMode="numeric"
               placeholder="1–114"
               className="w-20 rounded-lg border border-white/15 bg-black/25 px-2 py-2 text-sm outline-none"
@@ -376,6 +427,7 @@ export default function QuranViewer() {
         </div>
       )}
 
+      {/* Jump sheet */}
       {showJump && (
         <div className="mt-2 rounded-2xl border border-white/15 bg-black/25 p-3">
           <div className="flex items-center justify-between">
@@ -393,6 +445,7 @@ export default function QuranViewer() {
             <input
               value={jumpJuz}
               onChange={(e) => setJumpJuz(e.target.value)}
+              onKeyDown={(e) => onEnter(e, applyJump)}
               inputMode="numeric"
               className="w-20 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm outline-none"
             />
@@ -400,6 +453,7 @@ export default function QuranViewer() {
             <input
               value={jumpPage}
               onChange={(e) => setJumpPage(e.target.value)}
+              onKeyDown={(e) => onEnter(e, applyJump)}
               inputMode="numeric"
               className="w-20 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm outline-none"
             />
@@ -411,12 +465,11 @@ export default function QuranViewer() {
             </button>
           </div>
 
-          <div className="mt-2 text-xs opacity-70">
-            Surah jump mapping will be added later.
-          </div>
+          <div className="mt-2 text-xs opacity-70">Surah jump mapping will be added later.</div>
         </div>
       )}
 
+      {/* Bookmarks sheet */}
       {showBookmarks && (
         <div className="mt-2 rounded-2xl border border-white/15 bg-black/25 p-3">
           <div className="flex items-center justify-between">
@@ -476,15 +529,16 @@ export default function QuranViewer() {
       )}
 
       {/* ✅ PDF panel fills remaining height */}
-      <div className="mt-2 flex-1 rounded-2xl border border-white/15 bg-black/20 overflow-hidden flex flex-col">
+      <div className="mt-2 flex-1 min-h-0 rounded-2xl border border-white/15 bg-black/20 overflow-hidden flex flex-col">
         {/* ✅ Only this area scrolls */}
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto overflow-x-hidden bg-white"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-white"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
-          <div className="p-2">
+          {/* remove extra horizontal padding so the page can truly fill width */}
+          <div className="py-2">
             <PdfJsPage
               url={current.path}
               pageNumber={page}
@@ -497,7 +551,7 @@ export default function QuranViewer() {
           </div>
         </div>
 
-        {/* ✅ Bottom nav (always visible) */}
+        {/* Bottom nav (always visible) */}
         <div className="border-t border-black/10 bg-white/95 backdrop-blur px-3 py-2 flex items-center gap-2">
           <button
             onClick={goPrevPage}

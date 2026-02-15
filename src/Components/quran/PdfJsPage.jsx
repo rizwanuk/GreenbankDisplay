@@ -8,59 +8,30 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 export default function PdfJsPage({
   url,
   pageNumber,
-  zoom = 1.2,
+  zoom = 1.0,
   fitWidth = true,
   containerWidthPx,
   onNumPages,
   onError,
   onRendered,
-  onLoading, // optional
 }) {
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
-
   const [doc, setDoc] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  // ✅ Keep callbacks in refs so they don't retrigger effects
+  // keep callbacks stable (avoid reload loops)
   const onNumPagesRef = useRef(onNumPages);
   const onErrorRef = useRef(onError);
   const onRenderedRef = useRef(onRendered);
-  const onLoadingRef = useRef(onLoading);
 
-  useEffect(() => {
-    onNumPagesRef.current = onNumPages;
-  }, [onNumPages]);
+  useEffect(() => void (onNumPagesRef.current = onNumPages), [onNumPages]);
+  useEffect(() => void (onErrorRef.current = onError), [onError]);
+  useEffect(() => void (onRenderedRef.current = onRendered), [onRendered]);
 
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-
-  useEffect(() => {
-    onRenderedRef.current = onRendered;
-  }, [onRendered]);
-
-  useEffect(() => {
-    onLoadingRef.current = onLoading;
-  }, [onLoading]);
-
-  // ✅ Bucket width so tiny 1–2px changes don't cause constant rerenders
-  const widthBucket = useMemo(() => {
-    const w = Number(containerWidthPx) || 0;
-    if (w <= 0) return 0;
-    // bucket to 8px increments
-    return Math.max(0, Math.round(w / 8) * 8);
-  }, [containerWidthPx]);
-
-  const effectiveZoom = useMemo(() => {
-    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1.2;
-  }, [zoom]);
-
-  // ✅ Load document only when URL changes (don’t blank doc immediately)
+  // Load document when URL changes
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    onLoadingRef.current?.(true);
+    setDoc(null);
 
     const loadingTask = pdfjsLib.getDocument({
       url,
@@ -78,11 +49,6 @@ export default function PdfJsPage({
       .catch((e) => {
         if (!alive) return;
         onErrorRef.current?.(e?.message || "Failed to load PDF.");
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-        onLoadingRef.current?.(false);
       });
 
     return () => {
@@ -93,24 +59,16 @@ export default function PdfJsPage({
     };
   }, [url]);
 
-  // ✅ Prevent redundant renders
-  const lastRenderKeyRef = useRef("");
+  const effectiveZoom = useMemo(() => {
+    const z = Number(zoom);
+    return Number.isFinite(z) && z > 0 ? z : 1.0;
+  }, [zoom]);
 
-  // ✅ Render page whenever doc/page/zoom/widthBucket changes
+  // Render page whenever doc/page/zoom/width changes
   useEffect(() => {
-    if (!doc) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!doc || !canvasRef.current) return;
 
     const clampedPage = Math.min(Math.max(1, pageNumber || 1), doc.numPages);
-
-    // if we don’t yet have a reasonable width, still render using zoom only
-    const safeWidth = widthBucket > 50 ? widthBucket : 0;
-
-    const renderKey = `${url}|p:${clampedPage}|z:${effectiveZoom.toFixed(3)}|w:${safeWidth}|fit:${fitWidth ? 1 : 0}`;
-    if (lastRenderKeyRef.current === renderKey) return;
-    lastRenderKeyRef.current = renderKey;
-
     let cancelled = false;
 
     async function render() {
@@ -129,49 +87,41 @@ export default function PdfJsPage({
         const baseViewport = page.getViewport({ scale: 1 });
 
         // Fit-to-width scaling
+        const safeGutter = 12; // avoid 1–2px overflow on iOS
         let scale = effectiveZoom;
 
-        // More generous pad to avoid micro overflow
-        const safePad = 20;
-
-        if (fitWidth && safeWidth) {
-          const target = Math.max(50, safeWidth - safePad);
+        if (fitWidth && containerWidthPx && containerWidthPx > 80) {
+          const target = Math.max(80, containerWidthPx - safeGutter);
           scale = (target / baseViewport.width) * effectiveZoom;
         }
 
         const viewport = page.getViewport({ scale });
 
+        const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d", { alpha: false });
         const dpr = window.devicePixelRatio || 1;
 
-        // Internal buffer size (sharp)
+        // internal buffer (sharp)
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
 
-        // Visual size: fixed pixel width, but never exceed container
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-        canvas.style.maxWidth = "100%";
+        // ✅ visually fill width (no centering container)
         canvas.style.display = "block";
+        canvas.style.width = "100%";
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
 
-        // Reset transform
+        // reset and paint white
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-        // Paint white background (prevents “dark behind” flicker)
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Apply DPR transform
+        // DPR transform
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.imageSmoothingEnabled = true;
 
-        const renderTask = page.render({
-          canvasContext: ctx,
-          viewport,
-        });
-
-        renderTaskRef.current = renderTask;
-        await renderTask.promise;
+        const task = page.render({ canvasContext: ctx, viewport });
+        renderTaskRef.current = task;
+        await task.promise;
 
         if (cancelled) return;
         onRenderedRef.current?.();
@@ -193,13 +143,11 @@ export default function PdfJsPage({
         renderTaskRef.current = null;
       }
     };
-  }, [doc, pageNumber, effectiveZoom, fitWidth, widthBucket, url]);
+  }, [doc, pageNumber, effectiveZoom, fitWidth, containerWidthPx]);
 
   return (
-    <div className="w-full flex justify-center overflow-x-hidden">
+    <div className="w-full overflow-x-hidden">
       <canvas ref={canvasRef} className="rounded-xl" />
-      {/* If you ever want a subtle loader, we can add it here.
-          Keeping it empty for now to avoid layout changes. */}
     </div>
   );
 }
