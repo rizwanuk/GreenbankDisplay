@@ -72,6 +72,8 @@
   ],
 
   "rewrites": [
+    { "handle": "filesystem" },
+
     {
       "source": "/api/met/(.*)",
       "destination": "/api/met.js?path=$1"
