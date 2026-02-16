@@ -9,37 +9,46 @@ export default function PdfJsPage({
   url,
   pageNumber,
   zoom = 1.0,
-  fitWidth = true,
-  containerWidthPx,
   onNumPages,
   onError,
   onRendered,
 }) {
+  const wrapperRef     = useRef(null);
   const canvasRef      = useRef(null);
   const renderTaskRef  = useRef(null);
   const [doc, setDoc]  = useState(null);
 
-  // Keep callbacks stable — avoid reload loops
-  const onNumPagesRef  = useRef(onNumPages);
-  const onErrorRef     = useRef(onError);
-  const onRenderedRef  = useRef(onRendered);
-  useEffect(() => void (onNumPagesRef.current  = onNumPages), [onNumPages]);
-  useEffect(() => void (onErrorRef.current     = onError),    [onError]);
-  useEffect(() => void (onRenderedRef.current  = onRendered), [onRendered]);
+  // Measure the wrapper's actual pixel width — this is the ground truth
+  const [wrapperWidth, setWrapperWidth] = useState(0);
 
-  // ── Load document when URL changes ──────────────────────────────────────
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.floor(el.getBoundingClientRect().width);
+      if (w > 0) setWrapperWidth(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Keep callbacks stable
+  const onNumPagesRef = useRef(onNumPages);
+  const onErrorRef    = useRef(onError);
+  const onRenderedRef = useRef(onRendered);
+  useEffect(() => void (onNumPagesRef.current = onNumPages), [onNumPages]);
+  useEffect(() => void (onErrorRef.current    = onError),    [onError]);
+  useEffect(() => void (onRenderedRef.current = onRendered), [onRendered]);
+
+  // ── Load document ────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
     setDoc(null);
 
-    const loadingTask = pdfjsLib.getDocument({
-      url,
-      withCredentials: false,
-      disableAutoFetch: false,
-      disableStream: false,
-    });
-
-    loadingTask.promise
+    const task = pdfjsLib.getDocument({ url, withCredentials: false });
+    task.promise
       .then((loaded) => {
         if (!alive) return;
         setDoc(loaded);
@@ -52,7 +61,7 @@ export default function PdfJsPage({
 
     return () => {
       alive = false;
-      try { loadingTask.destroy(); } catch {}
+      try { task.destroy(); } catch {}
     };
   }, [url]);
 
@@ -62,14 +71,14 @@ export default function PdfJsPage({
   }, [zoom]);
 
   // ── Render page ──────────────────────────────────────────────────────────
+  // Re-runs whenever doc, page, zoom, OR the measured wrapper width changes
   useEffect(() => {
-    if (!doc || !canvasRef.current) return;
+    if (!doc || !canvasRef.current || wrapperWidth < 10) return;
 
     const clampedPage = Math.min(Math.max(1, pageNumber || 1), doc.numPages);
     let cancelled = false;
 
     async function render() {
-      // Cancel any in-flight render
       if (renderTaskRef.current) {
         try { renderTaskRef.current.cancel(); } catch {}
         renderTaskRef.current = null;
@@ -82,38 +91,34 @@ export default function PdfJsPage({
         const baseViewport = page.getViewport({ scale: 1 });
         const dpr          = window.devicePixelRatio || 1;
 
-        // Fit-to-width: use the full container width, no gutter
-        let scale = effectiveZoom;
-        if (fitWidth && containerWidthPx && containerWidthPx > 80) {
-          scale = (containerWidthPx / baseViewport.width) * effectiveZoom;
-        }
+        // Scale so the page fills the wrapper exactly, then apply zoom
+        const fitScale = wrapperWidth / baseViewport.width;
+        const scale    = fitScale * effectiveZoom;
 
         const viewport = page.getViewport({ scale });
         const canvas   = canvasRef.current;
         const ctx      = canvas.getContext("2d", { alpha: false });
 
-        // Physical pixel buffer (sharp on retina)
-        canvas.width  = Math.floor(viewport.width  * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
+        // Physical pixel buffer (sharp on retina / high-DPI)
+        canvas.width  = Math.round(viewport.width  * dpr);
+        canvas.height = Math.round(viewport.height * dpr);
 
-        // CSS size: fill width exactly, height proportional
+        // CSS display size — fill wrapper width, proportional height
         canvas.style.display = "block";
-        canvas.style.width   = "100%";
-        canvas.style.height  = `${Math.floor(viewport.height)}px`;
+        canvas.style.width   = `${wrapperWidth}px`;
+        canvas.style.height  = `${Math.round(viewport.height)}px`;
 
-        // White background fill
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // DPR scaling
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
+        ctx.imageSmoothingEnabled  = true;
+        ctx.imageSmoothingQuality  = "high";
 
-        const task = page.render({ canvasContext: ctx, viewport });
-        renderTaskRef.current = task;
-        await task.promise;
+        const renderTask = page.render({ canvasContext: ctx, viewport });
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
 
         if (cancelled) return;
         onRenderedRef.current?.();
@@ -133,13 +138,11 @@ export default function PdfJsPage({
         renderTaskRef.current = null;
       }
     };
-  }, [doc, pageNumber, effectiveZoom, fitWidth, containerWidthPx]);
+  }, [doc, pageNumber, effectiveZoom, wrapperWidth]);
 
-  // No wrapper padding — canvas fills parent edge-to-edge.
-  // The parent's rounded-2xl clip handles the border radius.
   return (
-    <div className="w-full overflow-x-hidden">
-      <canvas ref={canvasRef} style={{ display: "block", width: "100%" }} />
+    <div ref={wrapperRef} style={{ width: "100%", lineHeight: 0 }}>
+      <canvas ref={canvasRef} style={{ display: "block" }} />
     </div>
   );
 }
