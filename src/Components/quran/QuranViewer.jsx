@@ -4,96 +4,105 @@ import PdfJsPage from "./PdfJsPage";
 import { buildJuzList } from "../../utils/quranFiles";
 import useQuranBookmarks from "../../hooks/useQuranBookmarks";
 
-const LS_LAST_JUZ = "gbm_quran_last_juz";
-const LS_LAST_PAGE = "gbm_quran_last_page";
-const LS_LAST_ZOOM = "gbm_quran_zoom";
+const LS_LAST_JUZ   = "gbm_quran_last_juz";
+const LS_LAST_PAGE  = "gbm_quran_last_page";
+const LS_LAST_ZOOM  = "gbm_quran_zoom";
 const LS_LAST_SURAH = "gbm_quran_last_surah";
 
+// ---------------------------------------------------------------------------
+// Navigation is driven by a single { juz, page } state object so there are
+// zero race conditions between juz, page, and numPages updates.
+//
+// The "jump to last page of previous juz" problem is solved with a ref flag
+// (wantLastPageRef) that is consumed *inside* handleNumPages — the only place
+// where numPages is known — instead of in a separate useEffect.
+// ---------------------------------------------------------------------------
+
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
 export default function QuranViewer() {
-  const juzList = useMemo(() => buildJuzList(), []);
+  const juzList  = useMemo(() => buildJuzList(), []);
   const { bookmarks, addBookmark, removeBookmark, clearAll } = useQuranBookmarks();
 
-  const [currentJuz, setCurrentJuz] = useState(() => {
-    const raw = Number(localStorage.getItem(LS_LAST_JUZ) || "1");
-    return Number.isFinite(raw) ? Math.min(30, Math.max(1, raw)) : 1;
+  // ── Core navigation state ────────────────────────────────────────────────
+  const [nav, setNav] = useState(() => {
+    const juz  = clamp(Number(localStorage.getItem(LS_LAST_JUZ)  || 1), 1, 30);
+    const page = clamp(Number(localStorage.getItem(LS_LAST_PAGE) || 1), 1, 9999);
+    return {
+      juz:  Number.isFinite(juz)  ? juz  : 1,
+      page: Number.isFinite(page) ? page : 1,
+    };
   });
 
-  const [page, setPage] = useState(() => {
-    const raw = Number(localStorage.getItem(LS_LAST_PAGE) || "1");
-    return Number.isFinite(raw) && raw > 0 ? raw : 1;
-  });
+  // numPages comes from the PDF; null = not yet loaded for current juz
+  const [numPages, setNumPages] = useState(null);
 
-  const [numPages, setNumPages] = useState(1);
+  // When true, the NEXT handleNumPages call should land on the last page
+  const wantLastPageRef = useRef(false);
 
   const [zoom, setZoom] = useState(() => {
     const raw = Number(localStorage.getItem(LS_LAST_ZOOM) || "1.0");
-    return Number.isFinite(raw) ? Math.min(2.5, Math.max(0.7, raw)) : 1.0;
+    return Number.isFinite(raw) ? clamp(raw, 0.7, 2.5) : 1.0;
   });
 
   const [surah, setSurah] = useState(() => {
     const raw = Number(localStorage.getItem(LS_LAST_SURAH) || "");
-    return Number.isFinite(raw) && raw > 0 ? raw : "";
+    return Number.isFinite(raw) && raw >= 1 && raw <= 114 ? raw : "";
   });
 
   const fitWidth = true;
-
   const [err, setErr] = useState("");
+  const [rendering, setRendering] = useState(true);
 
-  const [showBookmarks, setShowBookmarks] = useState(false);
-  const [showJump, setShowJump] = useState(false);
-  const [showControls, setShowControls] = useState(false);
+  // ── Panel state ──────────────────────────────────────────────────────────
+  const [activePanel, setActivePanel] = useState(null);
+  const togglePanel = (name) => setActivePanel((v) => (v === name ? null : name));
 
-  const [jumpJuz, setJumpJuz] = useState(currentJuz);
-  const [jumpPage, setJumpPage] = useState(page);
+  // Jump form inputs
+  const [jumpJuz,  setJumpJuz]  = useState(nav.juz);
+  const [jumpPage, setJumpPage] = useState(nav.page);
 
-  const [quickJuzInput, setQuickJuzInput] = useState(String(currentJuz));
-  useEffect(() => setQuickJuzInput(String(currentJuz)), [currentJuz]);
+  const [quickJuzInput, setQuickJuzInput] = useState(String(nav.juz));
+  const [surahInput,    setSurahInput]    = useState(surah ? String(surah) : "");
 
-  const [surahInput, setSurahInput] = useState(surah ? String(surah) : "");
-  useEffect(() => setSurahInput(surah ? String(surah) : ""), [surah]);
-
-  // Scroll + sizing refs
-  const scrollRef = useRef(null);
+  // Scroll + sizing
+  const scrollRef          = useRef(null);
   const [containerWidthPx, setContainerWidthPx] = useState(0);
+
+  // Refs for stale-closure-safe access inside event handlers
+  const navRef      = useRef(nav);
+  const numPagesRef = useRef(numPages);
+  useEffect(() => { navRef.current      = nav;      }, [nav]);
+  useEffect(() => { numPagesRef.current = numPages; }, [numPages]);
 
   // Auto-advance throttle
   const lastAutoNavRef = useRef(0);
 
-  // ✅ Pending navigation (fixes Jump/Bookmarks race conditions)
-  const pendingPageRef = useRef(null); // number | "LAST" | null
-
-  // Persist
-  useEffect(() => localStorage.setItem(LS_LAST_JUZ, String(currentJuz)), [currentJuz]);
-  useEffect(() => localStorage.setItem(LS_LAST_PAGE, String(page)), [page]);
-  useEffect(() => localStorage.setItem(LS_LAST_ZOOM, String(zoom)), [zoom]);
+  // ── Persist ──────────────────────────────────────────────────────────────
+  useEffect(() => localStorage.setItem(LS_LAST_JUZ,  String(nav.juz)),  [nav.juz]);
+  useEffect(() => localStorage.setItem(LS_LAST_PAGE, String(nav.page)), [nav.page]);
+  useEffect(() => localStorage.setItem(LS_LAST_ZOOM, String(zoom)),     [zoom]);
   useEffect(() => {
     if (surah) localStorage.setItem(LS_LAST_SURAH, String(surah));
-    else localStorage.removeItem(LS_LAST_SURAH);
+    else       localStorage.removeItem(LS_LAST_SURAH);
   }, [surah]);
 
   const current = useMemo(
-    () => juzList.find((j) => j.n === currentJuz) || juzList[0],
-    [juzList, currentJuz]
+    () => juzList.find((j) => j.n === nav.juz) || juzList[0],
+    [juzList, nav.juz]
   );
 
-  // ✅ Measure the ACTUAL scroll container width (prevents “page too small”)
+  // ── Container width ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
-
-    const measure = () => {
-      const w = el.getBoundingClientRect().width;
-      setContainerWidthPx(Math.max(0, Math.floor(w)));
-    };
-
+    const measure = () =>
+      setContainerWidthPx(Math.max(0, Math.floor(el.getBoundingClientRect().width)));
     measure();
-
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-
     window.addEventListener("orientationchange", measure);
     window.addEventListener("resize", measure);
-
     return () => {
       ro.disconnect();
       window.removeEventListener("orientationchange", measure);
@@ -101,487 +110,467 @@ export default function QuranViewer() {
     };
   }, []);
 
-  // ✅ When Juz changes: load pending page if set, otherwise page 1
+  // ── Reset on juz change ──────────────────────────────────────────────────
+  const prevJuzRef = useRef(nav.juz);
   useEffect(() => {
+    if (nav.juz === prevJuzRef.current) return;
+    prevJuzRef.current = nav.juz;
     setErr("");
-    setNumPages(1);
+    setNumPages(null);     // show "…" while loading
+    setRendering(true);
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    });
+  }, [nav.juz]);
 
-    const pending = pendingPageRef.current;
-    pendingPageRef.current = null;
+  // ── Scroll to top on page change ─────────────────────────────────────────
+  const prevPageRef = useRef(nav.page);
+  useEffect(() => {
+    if (nav.page === prevPageRef.current) return;
+    prevPageRef.current = nav.page;
+    setRendering(true);
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    });
+  }, [nav.page]);
 
-    if (pending === "LAST") {
-      // wait for numPages to load, then jump to last
-      setPage(1);
-    } else if (typeof pending === "number" && Number.isFinite(pending) && pending > 0) {
-      setPage(pending);
+  // ── PDF callbacks ────────────────────────────────────────────────────────
+  const handleNumPages = useCallback((n) => {
+    const total = Math.max(1, n || 1);
+    setNumPages(total);
+
+    if (wantLastPageRef.current) {
+      // Going backwards across a juz boundary — land on the final page
+      wantLastPageRef.current = false;
+      setNav((prev) => ({ ...prev, page: total }));
     } else {
-      setPage(1);
+      // Clamp in case a saved/bookmarked page exceeds this juz's total
+      setNav((prev) => ({ ...prev, page: clamp(prev.page, 1, total) }));
     }
+  }, []);
 
-    setJumpJuz(currentJuz);
-    setJumpPage(1);
+  const handleError = useCallback((m) => {
+    setErr(m || "Failed to render.");
+    setRendering(false);
+  }, []);
 
-    requestAnimationFrame(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    });
-  }, [currentJuz]);
+  const handleRendered = useCallback(() => setRendering(false), []);
 
-  // Clamp page when numPages updates (also supports pending LAST)
-  useEffect(() => {
-    const n = numPages || 1;
+  // ── Navigation ───────────────────────────────────────────────────────────
+  // All navigation goes through setNav so juz + page are always atomic.
 
-    // If we intended "LAST", jump now that we know numPages
-    if (pendingPageRef.current === "LAST") {
-      pendingPageRef.current = null;
-      setPage(n);
-      return;
+  // Move back one page; crosses juz boundary if needed
+  const goPrevPage = useCallback(() => {
+    const { juz, page } = navRef.current;
+    if (page > 1) {
+      setNav({ juz, page: page - 1 });
+    } else if (juz > 1) {
+      // Cross boundary backwards — land on last page of previous juz
+      wantLastPageRef.current = true;
+      setNav({ juz: juz - 1, page: 1 }); // page corrected by handleNumPages
     }
+  }, []);
 
-    setPage((p) => Math.min(Math.max(1, p), n));
-  }, [numPages]);
-
-  // When page changes, scroll to top (reader-style)
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    });
-  }, [page]);
-
-  const goPrevPage = () => setPage((p) => Math.max(1, p - 1));
-  const goNextPage = () => setPage((p) => Math.min(numPages || 1, p + 1));
-
-  const goPrevJuz = () => {
-    if (currentJuz <= 1) return;
-    pendingPageRef.current = "LAST";
-    setCurrentJuz((j) => Math.max(1, j - 1));
-  };
-
-  const goNextJuz = () => {
-    if (currentJuz >= 30) return;
-    pendingPageRef.current = 1;
-    setCurrentJuz((j) => Math.min(30, j + 1));
-  };
-
-  const handleNumPages = useCallback((n) => setNumPages(n || 1), []);
-  const handleError = useCallback((m) => setErr(m), []);
-
-  const quickGoJuz = () => {
-    const j = Math.min(30, Math.max(1, Number(quickJuzInput) || 1));
-    if (j !== currentJuz) {
-      pendingPageRef.current = 1;
-      setCurrentJuz(j);
-      setShowControls(false);
-      setShowJump(false);
-      setShowBookmarks(false);
+  // Move forward one page; crosses juz boundary if needed
+  const goNextPage = useCallback(() => {
+    const { juz, page } = navRef.current;
+    const total = numPagesRef.current || 1;
+    if (page < total) {
+      setNav({ juz, page: page + 1 });
+    } else if (juz < 30) {
+      // Cross boundary forwards — start at page 1 of next juz
+      wantLastPageRef.current = false;
+      setNav({ juz: juz + 1, page: 1 });
     }
-  };
+  }, []);
 
-  const saveSurahPlaceholder = () => {
-    const s = Number(surahInput);
-    if (Number.isFinite(s) && s >= 1 && s <= 114) setSurah(s);
-  };
+  // Jump directly to start of a different juz (backwards = last page)
+  const goPrevJuz = useCallback(() => {
+    const { juz } = navRef.current;
+    if (juz <= 1) return;
+    wantLastPageRef.current = true;
+    setNav({ juz: juz - 1, page: 1 });
+  }, []);
 
-  const applyJump = () => {
+  const goNextJuz = useCallback(() => {
+    const { juz } = navRef.current;
+    if (juz >= 30) return;
+    wantLastPageRef.current = false;
+    setNav({ juz: juz + 1, page: 1 });
+  }, []);
+
+  // Quick juz jump from Controls panel input
+  const quickGoJuz = useCallback(() => {
+    const j = clamp(Number(quickJuzInput) || 1, 1, 30);
+    wantLastPageRef.current = false;
+    setNav({ juz: j, page: 1 });
+    setActivePanel(null);
+  }, [quickJuzInput]);
+
+  // Jump panel — juz + page
+  const applyJump = useCallback(() => {
     setErr("");
-    const j = Math.min(30, Math.max(1, Number(jumpJuz) || 1));
+    const j = clamp(Number(jumpJuz)  || 1, 1, 30);
     const p = Math.max(1, Number(jumpPage) || 1);
+    wantLastPageRef.current = false;
+    setNav({ juz: j, page: p });
+    setActivePanel(null);
+  }, [jumpJuz, jumpPage]);
 
-    if (j !== currentJuz) {
-      pendingPageRef.current = p;
-      setCurrentJuz(j);
-    } else {
-      setPage(p);
-    }
-
-    setShowJump(false);
-    setShowControls(false);
-    setShowBookmarks(false);
-  };
-
-  const addCurrentBookmark = () => {
+  // Bookmarks
+  const addCurrentBookmark = useCallback(() => {
     addBookmark({
-      juz: currentJuz,
-      page,
+      juz:   navRef.current.juz,
+      page:  navRef.current.page,
       surah: surah || undefined,
       label: surah ? `Surah ${surah}` : undefined,
     });
-    setShowBookmarks(true);
-    setShowJump(false);
-    setShowControls(false);
-  };
+    setActivePanel("bookmarks");
+  }, [addBookmark, surah]);
 
-  const openBookmark = (b) => {
+  const openBookmark = useCallback((b) => {
     setErr("");
-    if (b.juz !== currentJuz) {
-      pendingPageRef.current = Math.max(1, Number(b.page) || 1);
-      setCurrentJuz(b.juz);
-    } else {
-      setPage(Math.max(1, Number(b.page) || 1));
-    }
+    wantLastPageRef.current = false;
+    setNav({ juz: b.juz, page: Math.max(1, Number(b.page) || 1) });
     if (b.surah) setSurah(b.surah);
-    setShowBookmarks(false);
-    setShowJump(false);
-    setShowControls(false);
-  };
+    setActivePanel(null);
+  }, []);
 
-  // Auto-advance on scroll bottom/top (throttled)
-  const onScroll = () => {
+  // Surah label
+  const saveSurahPlaceholder = useCallback(() => {
+    const s = Number(surahInput);
+    if (Number.isFinite(s) && s >= 1 && s <= 114) setSurah(s);
+  }, [surahInput]);
+
+  // ── Auto-advance on scroll (stable, uses refs only) ──────────────────────
+  const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
 
     const now = Date.now();
-    if (now - lastAutoNavRef.current < 650) return;
+    if (now - lastAutoNavRef.current < 800) return;
 
-    const threshold = 24;
-    const atTop = el.scrollTop <= threshold;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+    const threshold = 32;
+    const atBottom  = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+    const atTop     = el.scrollTop <= threshold;
+    if (!atBottom && !atTop) return;
+
+    const { juz, page } = navRef.current;
+    const total = numPagesRef.current || 1;
 
     if (atBottom) {
-      if (page < (numPages || 1)) {
+      if (page < total) {
         lastAutoNavRef.current = now;
-        setPage((p) => Math.min(numPages || 1, p + 1));
-      } else if (currentJuz < 30) {
+        setNav({ juz, page: page + 1 });
+      } else if (juz < 30) {
         lastAutoNavRef.current = now;
-        pendingPageRef.current = 1;
-        setCurrentJuz((j) => Math.min(30, j + 1));
+        wantLastPageRef.current = false;
+        setNav({ juz: juz + 1, page: 1 });
       }
     } else if (atTop) {
       if (page > 1) {
         lastAutoNavRef.current = now;
-        setPage((p) => Math.max(1, p - 1));
-      } else if (currentJuz > 1) {
+        setNav({ juz, page: page - 1 });
+      } else if (juz > 1) {
         lastAutoNavRef.current = now;
-        pendingPageRef.current = "LAST";
-        setCurrentJuz((j) => Math.max(1, j - 1));
+        wantLastPageRef.current = true;
+        setNav({ juz: juz - 1, page: 1 });
       }
     }
-  };
+  }, []); // intentionally empty deps — uses refs
 
-  const onEnter = (e, fn) => {
-    if (e.key === "Enter") fn();
-  };
+  const onEnter = (e, fn) => { if (e.key === "Enter") fn(); };
 
+  // Disabled states
+  const atVeryStart = nav.juz === 1  && nav.page <= 1;
+  const atVeryEnd   = nav.juz === 30 && nav.page >= (numPages || 1);
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    // ✅ min-h-0 is critical so the scroll area can actually grow/shrink in a flex column
-    <div className="h-full min-h-0 flex flex-col px-2 pt-2 pb-3">
-      {/* Compact top bar */}
-      <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2">
-        <div className="flex items-center gap-2">
+    <div className="h-full min-h-0 flex flex-col">
+
+      {/* ── Top toolbar ───────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2 mx-2 mt-1">
+        <div className="flex items-center gap-1.5">
+
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-extrabold leading-tight">Qur’an</div>
-            <div className="text-xs opacity-80">
-              <span className="font-semibold">Juz-{currentJuz}</span>
-              <span className="opacity-70"> • </span>
-              <span className="font-semibold">
-                Page {page}/{numPages || 1}
-              </span>
-              {surah ? <span className="opacity-70"> • Surah {surah}</span> : null}
+            <div className="text-[11px] font-bold leading-tight opacity-90">Qur'an</div>
+            <div className="text-[11px] opacity-70 leading-tight mt-0.5">
+              Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;
+              <span className="font-semibold text-white/90">{nav.page}</span>
+              /{numPages ?? "…"}
+              {surah ? <span className="opacity-60"> · S{surah}</span> : null}
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              setShowControls((v) => !v);
-              setShowJump(false);
-              setShowBookmarks(false);
-            }}
-            className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold hover:bg-black/35"
-          >
-            Controls
-          </button>
-
-          <button
-            onClick={() => {
-              setShowBookmarks((v) => !v);
-              setShowJump(false);
-              setShowControls(false);
-            }}
-            className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold hover:bg-black/35"
-          >
-            Bookmarks
-          </button>
-
-          <button
-            onClick={() => {
-              setShowJump((v) => !v);
-              setShowBookmarks(false);
-              setShowControls(false);
-              setJumpJuz(currentJuz);
-              setJumpPage(page);
-            }}
-            className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold hover:bg-black/35"
-          >
-            Jump
-          </button>
+          {[
+            { key: "controls",  label: "Controls"  },
+            { key: "bookmarks", label: "Bookmarks" },
+            { key: "jump",      label: "Jump"       },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => {
+                if (key === "jump") { setJumpJuz(nav.juz); setJumpPage(nav.page); }
+                togglePanel(key);
+              }}
+              className={[
+                "rounded-xl border border-white/15 px-2.5 py-1.5 text-[11px] font-semibold transition",
+                activePanel === key
+                  ? "bg-white/20 text-white"
+                  : "bg-black/25 hover:bg-black/35 text-white/90",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Controls sheet */}
-      {showControls && (
-        <div className="mt-2 rounded-2xl border border-white/15 bg-black/25 p-3">
-          <div className="flex items-center justify-between">
-            <div className="font-bold text-sm">Controls</div>
-            <button
-              onClick={() => setShowControls(false)}
-              className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold hover:bg-black/35"
-            >
-              Close
-            </button>
-          </div>
+      {/* ── Panels ────────────────────────────────────────────────────── */}
+      {activePanel && (
+        <div className="mx-2 mt-1.5 rounded-2xl border border-white/15 bg-black/30 backdrop-blur-md p-3 text-white/90">
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              onClick={goPrevJuz}
-              disabled={currentJuz === 1}
-              className={[
-                "rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold",
-                "bg-black/25 hover:bg-black/35",
-                currentJuz === 1 ? "opacity-40 cursor-not-allowed" : "",
-              ].join(" ")}
-            >
-              ◀ Prev Juz
-            </button>
+          {activePanel === "controls" && (
+            <>
+              <PanelHeader title="Controls" onClose={() => setActivePanel(null)} />
 
-            <button
-              onClick={goNextJuz}
-              disabled={currentJuz === 30}
-              className={[
-                "rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold",
-                "bg-black/25 hover:bg-black/35",
-                currentJuz === 30 ? "opacity-40 cursor-not-allowed" : "",
-              ].join(" ")}
-            >
-              Next Juz ▶
-            </button>
-          </div>
-
-          <div className="mt-2 flex items-center gap-2">
-            <div className="text-xs opacity-70">Go Juz</div>
-            <input
-              value={quickJuzInput}
-              onChange={(e) => setQuickJuzInput(e.target.value)}
-              onKeyDown={(e) => onEnter(e, quickGoJuz)}
-              inputMode="numeric"
-              className="w-14 rounded-lg border border-white/15 bg-black/25 px-2 py-2 text-sm outline-none"
-            />
-            <button
-              onClick={quickGoJuz}
-              className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-            >
-              Go
-            </button>
-
-            <div className="ml-auto flex items-center gap-2">
-              <div className="text-xs opacity-70">Zoom</div>
-              <button
-                onClick={() => setZoom((z) => Math.max(0.7, +(z - 0.08).toFixed(2)))}
-                className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-              >
-                −
-              </button>
-              <button
-                onClick={() => setZoom((z) => Math.min(2.2, +(z + 0.08).toFixed(2)))}
-                className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          {/* Surah placeholder */}
-          <div className="mt-2 flex items-center gap-2">
-            <div className="text-xs opacity-70">Surah</div>
-            <input
-              value={surahInput}
-              onChange={(e) => setSurahInput(e.target.value)}
-              onKeyDown={(e) => onEnter(e, saveSurahPlaceholder)}
-              inputMode="numeric"
-              placeholder="1–114"
-              className="w-20 rounded-lg border border-white/15 bg-black/25 px-2 py-2 text-sm outline-none"
-            />
-            <button
-              onClick={saveSurahPlaceholder}
-              className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-            >
-              Set
-            </button>
-
-            <a
-              href={current.path}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-auto rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-            >
-              Open PDF
-            </a>
-          </div>
-
-          <div className="mt-2">
-            <button
-              onClick={addCurrentBookmark}
-              className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-            >
-              + Bookmark this page
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Jump sheet */}
-      {showJump && (
-        <div className="mt-2 rounded-2xl border border-white/15 bg-black/25 p-3">
-          <div className="flex items-center justify-between">
-            <div className="font-bold text-sm">Jump</div>
-            <button
-              onClick={() => setShowJump(false)}
-              className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold hover:bg-black/35"
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="mt-3 flex items-center gap-2">
-            <div className="text-xs opacity-70 w-10">Juz</div>
-            <input
-              value={jumpJuz}
-              onChange={(e) => setJumpJuz(e.target.value)}
-              onKeyDown={(e) => onEnter(e, applyJump)}
-              inputMode="numeric"
-              className="w-20 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm outline-none"
-            />
-            <div className="text-xs opacity-70 w-12">Page</div>
-            <input
-              value={jumpPage}
-              onChange={(e) => setJumpPage(e.target.value)}
-              onKeyDown={(e) => onEnter(e, applyJump)}
-              inputMode="numeric"
-              className="w-20 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm outline-none"
-            />
-            <button
-              onClick={applyJump}
-              className="ml-auto rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-            >
-              Go
-            </button>
-          </div>
-
-          <div className="mt-2 text-xs opacity-70">Surah jump mapping will be added later.</div>
-        </div>
-      )}
-
-      {/* Bookmarks sheet */}
-      {showBookmarks && (
-        <div className="mt-2 rounded-2xl border border-white/15 bg-black/25 p-3">
-          <div className="flex items-center justify-between">
-            <div className="font-bold text-sm">Bookmarks</div>
-            <button
-              onClick={() => setShowBookmarks(false)}
-              className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-semibold hover:bg-black/35"
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="mt-3 space-y-2 max-h-56 overflow-auto">
-            {!bookmarks.length && <div className="text-sm opacity-80">No bookmarks yet.</div>}
-            {bookmarks.map((b) => (
-              <div key={b.id} className="rounded-2xl border border-white/10 bg-black/15 px-3 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <button onClick={() => openBookmark(b)} className="text-left min-w-0 flex-1">
-                    <div className="font-semibold">
-                      Juz-{b.juz} • Page {b.page}
-                      {b.surah ? <span className="opacity-70"> • Surah {b.surah}</span> : null}
-                    </div>
-                    <div className="text-xs opacity-60 mt-1">
-                      {new Date(b.createdAt).toLocaleString()}
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => removeBookmark(b.id)}
-                    className="shrink-0 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-                  >
-                    Remove
-                  </button>
-                </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-2">
+                <PanelBtn onClick={goPrevJuz} disabled={nav.juz <= 1}>◀ Prev Juz</PanelBtn>
+                <PanelBtn onClick={goNextJuz} disabled={nav.juz >= 30}>Next Juz ▶</PanelBtn>
               </div>
-            ))}
-          </div>
 
-          {bookmarks.length > 0 && (
-            <div className="mt-3">
-              <button
-                onClick={clearAll}
-                className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm font-semibold hover:bg-black/35"
-              >
-                Clear all
-              </button>
-            </div>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs opacity-60 w-12 shrink-0">Go Juz</span>
+                <input
+                  value={quickJuzInput}
+                  onChange={(e) => setQuickJuzInput(e.target.value)}
+                  onKeyDown={(e) => onEnter(e, quickGoJuz)}
+                  inputMode="numeric"
+                  className="w-14 rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-sm outline-none"
+                />
+                <PanelBtn onClick={quickGoJuz}>Go</PanelBtn>
+                <span className="ml-auto text-xs opacity-60 shrink-0">Zoom</span>
+                <PanelBtn onClick={() => setZoom((z) => clamp(+(z - 0.1).toFixed(2), 0.7, 2.2))}>−</PanelBtn>
+                <span className="text-xs font-semibold w-9 text-center shrink-0">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <PanelBtn onClick={() => setZoom((z) => clamp(+(z + 0.1).toFixed(2), 0.7, 2.2))}>+</PanelBtn>
+              </div>
+
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs opacity-60 w-12 shrink-0">Surah</span>
+                <input
+                  value={surahInput}
+                  onChange={(e) => setSurahInput(e.target.value)}
+                  onKeyDown={(e) => onEnter(e, saveSurahPlaceholder)}
+                  inputMode="numeric"
+                  placeholder="1–114"
+                  className="w-16 rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-sm outline-none"
+                />
+                <PanelBtn onClick={saveSurahPlaceholder}>Set</PanelBtn>
+                <a
+                  href={current.path}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto rounded-xl border border-white/15 bg-black/25 px-2.5 py-1.5 text-xs font-semibold hover:bg-black/35"
+                >
+                  Open PDF ↗
+                </a>
+              </div>
+
+              <div className="mt-2">
+                <button
+                  onClick={addCurrentBookmark}
+                  className="w-full rounded-xl border border-white/15 bg-black/20 hover:bg-black/30 px-3 py-2 text-xs font-semibold"
+                >
+                  + Bookmark this page
+                </button>
+              </div>
+            </>
+          )}
+
+          {activePanel === "jump" && (
+            <>
+              <PanelHeader title="Jump to…" onClose={() => setActivePanel(null)} />
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                <span className="text-xs opacity-60 w-8 shrink-0">Juz</span>
+                <input
+                  value={jumpJuz}
+                  onChange={(e) => setJumpJuz(e.target.value)}
+                  onKeyDown={(e) => onEnter(e, applyJump)}
+                  inputMode="numeric"
+                  className="w-16 rounded-xl border border-white/15 bg-black/25 px-2.5 py-1.5 text-sm outline-none"
+                />
+                <span className="text-xs opacity-60 w-10 shrink-0">Page</span>
+                <input
+                  value={jumpPage}
+                  onChange={(e) => setJumpPage(e.target.value)}
+                  onKeyDown={(e) => onEnter(e, applyJump)}
+                  inputMode="numeric"
+                  className="w-16 rounded-xl border border-white/15 bg-black/25 px-2.5 py-1.5 text-sm outline-none"
+                />
+                <PanelBtn onClick={applyJump} className="ml-auto">Go</PanelBtn>
+              </div>
+            </>
+          )}
+
+          {activePanel === "bookmarks" && (
+            <>
+              <PanelHeader title="Bookmarks" onClose={() => setActivePanel(null)} />
+              <div className="mt-2.5 space-y-1.5 max-h-52 overflow-y-auto">
+                {!bookmarks.length && (
+                  <div className="text-xs opacity-60 py-2">
+                    No bookmarks yet — open Controls and tap "+ Bookmark this page".
+                  </div>
+                )}
+                {bookmarks.map((b) => (
+                  <div
+                    key={b.id}
+                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 flex items-center gap-2"
+                  >
+                    <button onClick={() => openBookmark(b)} className="flex-1 text-left min-w-0">
+                      <div className="text-xs font-semibold leading-tight">
+                        Juz-{b.juz} · Page {b.page}
+                        {b.surah ? <span className="opacity-60"> · S{b.surah}</span> : null}
+                      </div>
+                      <div className="text-[10px] opacity-50 mt-0.5">
+                        {new Date(b.createdAt).toLocaleString()}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => removeBookmark(b.id)}
+                      className="shrink-0 text-[10px] px-2 py-1 rounded-lg border border-white/10 bg-black/20 hover:bg-black/35 font-semibold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {bookmarks.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="mt-2 rounded-xl border border-white/15 bg-black/20 hover:bg-black/30 px-3 py-1.5 text-xs font-semibold"
+                >
+                  Clear all
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
 
+      {/* ── Error banner ──────────────────────────────────────────────── */}
       {err && (
-        <div className="mt-2 rounded-2xl border border-white/15 bg-black/20 p-3">
-          <div className="font-semibold mb-1">Problem</div>
-          <div className="text-sm opacity-85">{err}</div>
+        <div className="mx-2 mt-1.5 rounded-2xl border border-red-400/30 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+          <span className="font-semibold">Error: </span>{err}
         </div>
       )}
 
-      {/* ✅ PDF panel fills remaining height */}
-      <div className="mt-2 flex-1 min-h-0 rounded-2xl border border-white/15 bg-black/20 overflow-hidden flex flex-col">
-        {/* ✅ Only this area scrolls */}
+      {/* ── PDF viewer ────────────────────────────────────────────────── */}
+      <div className="mx-2 mt-1.5 mb-0 flex-1 min-h-0 rounded-2xl border border-white/10 overflow-hidden flex flex-col bg-white">
+
+        {/* Scrollable page — relative so spinner overlay works */}
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-white"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
-          {/* remove extra horizontal padding so the page can truly fill width */}
-          <div className="py-2">
-            <PdfJsPage
-              url={current.path}
-              pageNumber={page}
-              zoom={zoom}
-              fitWidth={fitWidth}
-              containerWidthPx={containerWidthPx}
-              onNumPages={handleNumPages}
-              onError={handleError}
-            />
-          </div>
+          {rendering && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-white/60">
+              <div className="h-8 w-8 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
+            </div>
+          )}
+
+          <PdfJsPage
+            url={current.path}
+            pageNumber={nav.page}
+            zoom={zoom}
+            fitWidth={fitWidth}
+            containerWidthPx={containerWidthPx}
+            onNumPages={handleNumPages}
+            onError={handleError}
+            onRendered={handleRendered}
+          />
         </div>
 
-        {/* Bottom nav (always visible) */}
-        <div className="border-t border-black/10 bg-white/95 backdrop-blur px-3 py-2 flex items-center gap-2">
+        {/* ── Bottom nav ────────────────────────────────────────────── */}
+        <div className="border-t border-gray-200 bg-gray-50 px-2 py-1.5 flex items-center gap-2 shrink-0">
+
           <button
             onClick={goPrevPage}
-            disabled={page <= 1 && currentJuz === 1}
+            disabled={atVeryStart}
             className={[
-              "rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold",
-              "bg-black/5 hover:bg-black/10",
-              page <= 1 && currentJuz === 1 ? "opacity-40 cursor-not-allowed" : "",
+              "rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold",
+              "bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95",
+              atVeryStart ? "opacity-35 cursor-not-allowed" : "",
             ].join(" ")}
           >
             ◀ Prev
           </button>
 
-          <div className="text-sm font-semibold">
-            Juz-{currentJuz} • {page}/{numPages || 1}
-          </div>
+          {/* Tappable centre — opens Jump panel */}
+          <button
+            onClick={() => { setJumpJuz(nav.juz); setJumpPage(nav.page); togglePanel("jump"); }}
+            className="flex-1 text-center py-1 rounded-xl hover:bg-gray-100 transition"
+          >
+            <div className="text-[11px] font-bold text-gray-700 leading-tight">
+              Juz-{nav.juz}
+            </div>
+            <div className="text-[10px] text-gray-500 leading-tight">
+              {nav.page} / {numPages ?? "…"}
+            </div>
+          </button>
 
           <button
             onClick={goNextPage}
-            disabled={page >= (numPages || 1) && currentJuz === 30}
+            disabled={atVeryEnd}
             className={[
-              "ml-auto rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold",
-              "bg-black/5 hover:bg-black/10",
-              page >= (numPages || 1) && currentJuz === 30 ? "opacity-40 cursor-not-allowed" : "",
+              "rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold",
+              "bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95",
+              atVeryEnd ? "opacity-35 cursor-not-allowed" : "",
             ].join(" ")}
           >
             Next ▶
           </button>
         </div>
       </div>
+
+      <div className="h-2 shrink-0" />
     </div>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function PanelHeader({ title, onClose }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm font-bold">{title}</span>
+      <button
+        onClick={onClose}
+        className="rounded-xl border border-white/15 bg-black/25 px-2.5 py-1 text-xs font-semibold hover:bg-black/35"
+      >
+        Close
+      </button>
+    </div>
+  );
+}
+
+function PanelBtn({ onClick, disabled = false, children, className = "" }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        "rounded-xl border border-white/15 bg-black/25 px-2.5 py-1.5 text-xs font-semibold",
+        "hover:bg-black/35 transition active:scale-95",
+        disabled ? "opacity-35 cursor-not-allowed" : "",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </button>
   );
 }

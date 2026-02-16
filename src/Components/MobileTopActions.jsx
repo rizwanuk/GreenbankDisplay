@@ -16,20 +16,20 @@ export default function MobileTopActions({
   show,
 }) {
   const [openKey, setOpenKey] = useState(null);
-  const [toast, setToast] = useState("");
+  const [toast, setToast]     = useState("");
 
   // Messages iframe safety
-  const [msgLoaded, setMsgLoaded] = useState(false);
+  const [msgLoaded,   setMsgLoaded]   = useState(false);
   const [msgTimedOut, setMsgTimedOut] = useState(false);
-  const [msgAttempt, setMsgAttempt] = useState(0);
+  const [msgAttempt,  setMsgAttempt]  = useState(0);
   const msgTimeoutRef = useRef(null);
 
   const actions = useMemo(() => {
     const base = [
-      { key: "messages", label: "Messages", Icon: IconChat },
-      { key: "adhkar", label: "Adhkar", Icon: IconTasbih },
-      { key: "quran", label: "Qur’an", Icon: IconBook },
-      { key: "more", label: "More", Icon: IconMore },
+      { key: "messages", label: "Messages", Icon: IconChat    },
+      { key: "adhkar",   label: "Adhkar",   Icon: IconTasbih  },
+      { key: "quran",    label: "Qur'an",   Icon: IconBook    },
+      { key: "more",     label: "More",     Icon: IconMore    },
     ];
     if (!show) return base;
     return base.filter((a) => show[a.key] !== false);
@@ -40,9 +40,7 @@ export default function MobileTopActions({
     if (!openKey) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [openKey]);
 
   // Toast helper
@@ -52,36 +50,25 @@ export default function MobileTopActions({
     flash._t = window.setTimeout(() => setToast(""), 1800);
   };
 
-  const title = useMemo(() => {
-    const a = actions.find((x) => x.key === openKey);
-    return a ? a.label : "";
-  }, [openKey, actions]);
+  const title = useMemo(
+    () => actions.find((x) => x.key === openKey)?.label ?? "",
+    [openKey, actions]
+  );
 
   // Reset / setup Messages load watchdog when opening Messages
   useEffect(() => {
     if (openKey !== "messages") {
       setMsgLoaded(false);
       setMsgTimedOut(false);
-      if (msgTimeoutRef.current) {
-        clearTimeout(msgTimeoutRef.current);
-        msgTimeoutRef.current = null;
-      }
+      if (msgTimeoutRef.current) { clearTimeout(msgTimeoutRef.current); msgTimeoutRef.current = null; }
       return;
     }
-
     setMsgLoaded(false);
     setMsgTimedOut(false);
-
     if (msgTimeoutRef.current) clearTimeout(msgTimeoutRef.current);
-    msgTimeoutRef.current = setTimeout(() => {
-      setMsgTimedOut(true);
-    }, 4500);
-
+    msgTimeoutRef.current = setTimeout(() => setMsgTimedOut(true), 4500);
     return () => {
-      if (msgTimeoutRef.current) {
-        clearTimeout(msgTimeoutRef.current);
-        msgTimeoutRef.current = null;
-      }
+      if (msgTimeoutRef.current) { clearTimeout(msgTimeoutRef.current); msgTimeoutRef.current = null; }
     };
   }, [openKey, msgAttempt]);
 
@@ -98,7 +85,7 @@ export default function MobileTopActions({
 
   return (
     <>
-      {/* Action bar */}
+      {/* ── Action bar ──────────────────────────────────────────────────── */}
       <div className={["px-4 pb-3", className].join(" ")}>
         <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg px-2 py-2">
           <div
@@ -107,7 +94,7 @@ export default function MobileTopActions({
           >
             {actions.map((a) => {
               const active = openKey === a.key;
-              const AIcon = a.Icon;
+              const AIcon  = a.Icon;
               return (
                 <button
                   key={a.key}
@@ -129,7 +116,7 @@ export default function MobileTopActions({
         </div>
       </div>
 
-      {/* Full-screen overlay */}
+      {/* ── Full-screen overlay ─────────────────────────────────────────── */}
       {openKey && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm"
@@ -138,8 +125,9 @@ export default function MobileTopActions({
           aria-modal="true"
         >
           <div className="absolute inset-0 flex flex-col">
-            {/* Overlay header */}
-            <div className="px-4 pt-4">
+
+            {/* Overlay header — always shown */}
+            <div className="shrink-0 px-4 pt-4">
               <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
                 <div className="flex items-center justify-between px-3 py-3">
                   <div className="text-base font-bold truncate">{title}</div>
@@ -153,19 +141,22 @@ export default function MobileTopActions({
               </div>
             </div>
 
-            {/* Overlay body */}
-            {/* KEY CHANGE:
-               - Quran gets full height with minimal padding and NO extra "card" wrapper.
-               - Others keep the existing padded card layout. */}
-            <div className={isQuran ? "flex-1 px-2 pb-2 pt-2 overflow-hidden" : "flex-1 px-4 pb-4 pt-3 overflow-hidden"}>
-              {isQuran ? (
-                // ✅ Quran: full height, no extra wrapper (QuranViewer handles its own UI)
-                <div className="h-full">
-                  <QuranViewer />
-                </div>
-              ) : (
+            {/* Overlay body
+                ┌─────────────────────────────────────────────┐
+                │ Quran: no extra padding, QuranViewer owns    │
+                │ every pixel below the header.               │
+                │ Others: padded card layout (unchanged).      │
+                └─────────────────────────────────────────────┘ */}
+            {isQuran ? (
+              // Zero side / bottom padding so QuranViewer fills the screen
+              <div className="flex-1 min-h-0 px-0 pb-0 pt-0 overflow-hidden">
+                <QuranViewer />
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 px-4 pb-4 pt-3 overflow-hidden">
                 <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-                  {/* ✅ Messages: safe loader + timeout fallback */}
+
+                  {/* Messages */}
                   {openKey === "messages" && (
                     <div className="p-4">
                       <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
@@ -176,7 +167,7 @@ export default function MobileTopActions({
                           <div className="min-w-0">
                             <div className="font-bold leading-tight">Messages</div>
                             <div className="text-sm opacity-80 leading-snug">
-                              If the slideshow doesn’t load, it will be improved soon. You can retry below.
+                              If the slideshow doesn't load, it will be improved soon. You can retry below.
                             </div>
                           </div>
                         </div>
@@ -236,7 +227,7 @@ export default function MobileTopActions({
                     </div>
                   )}
 
-                  {/* ✅ Adhkar: placeholder */}
+                  {/* Adhkar placeholder */}
                   {openKey === "adhkar" && (
                     <ComingSoon
                       icon={<IconTasbih className="opacity-90" />}
@@ -254,26 +245,28 @@ export default function MobileTopActions({
                     />
                   )}
                 </div>
-              )}
-            </div>
-
-            {/* Toast */}
-            {toast && (
-              <div
-                className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center"
-                style={{ zIndex: zIndex + 1 }}
-              >
-                <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">
-                  {toast}
-                </div>
               </div>
             )}
           </div>
+
+          {/* Toast */}
+          {toast && (
+            <div
+              className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center"
+              style={{ zIndex: zIndex + 1 }}
+            >
+              <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">
+                {toast}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>
   );
 }
+
+// ── Sub-components ───────────────────────────────────────────────────────────
 
 function ComingSoon({ icon, title, body }) {
   return (
@@ -305,7 +298,7 @@ function Spinner() {
   );
 }
 
-/* ---------------- Icons (inline SVG, no deps) ---------------- */
+/* ── Icons (inline SVG, no deps) ─────────────────────────────────────────── */
 
 function IconBase({ children, className = "" }) {
   return (
@@ -320,8 +313,7 @@ function IconChat({ className = "" }) {
     <IconBase className={className}>
       <path
         d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
+        stroke="currentColor" strokeWidth="1.6"
       />
     </IconBase>
   );
@@ -332,14 +324,9 @@ function IconTasbih({ className = "" }) {
     <IconBase className={className}>
       <path
         d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
+        stroke="currentColor" strokeWidth="1.6"
       />
-      <path
-        d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
+      <path d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
   );
 }
@@ -349,8 +336,7 @@ function IconBook({ className = "" }) {
     <IconBase className={className}>
       <path
         d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
+        stroke="currentColor" strokeWidth="1.6"
       />
       <path d="M8 7h8" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8 10h8" stroke="currentColor" strokeWidth="1.6" />
@@ -361,12 +347,7 @@ function IconBook({ className = "" }) {
 function IconMore({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M6 12h.01M12 12h.01M18 12h.01"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      <path d="M6 12h.01M12 12h.01M18 12h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </IconBase>
   );
 }

@@ -15,20 +15,19 @@ export default function PdfJsPage({
   onError,
   onRendered,
 }) {
-  const canvasRef = useRef(null);
-  const renderTaskRef = useRef(null);
-  const [doc, setDoc] = useState(null);
+  const canvasRef      = useRef(null);
+  const renderTaskRef  = useRef(null);
+  const [doc, setDoc]  = useState(null);
 
-  // keep callbacks stable (avoid reload loops)
-  const onNumPagesRef = useRef(onNumPages);
-  const onErrorRef = useRef(onError);
-  const onRenderedRef = useRef(onRendered);
+  // Keep callbacks stable — avoid reload loops
+  const onNumPagesRef  = useRef(onNumPages);
+  const onErrorRef     = useRef(onError);
+  const onRenderedRef  = useRef(onRendered);
+  useEffect(() => void (onNumPagesRef.current  = onNumPages), [onNumPages]);
+  useEffect(() => void (onErrorRef.current     = onError),    [onError]);
+  useEffect(() => void (onRenderedRef.current  = onRendered), [onRendered]);
 
-  useEffect(() => void (onNumPagesRef.current = onNumPages), [onNumPages]);
-  useEffect(() => void (onErrorRef.current = onError), [onError]);
-  useEffect(() => void (onRenderedRef.current = onRendered), [onRendered]);
-
-  // Load document when URL changes
+  // ── Load document when URL changes ──────────────────────────────────────
   useEffect(() => {
     let alive = true;
     setDoc(null);
@@ -53,9 +52,7 @@ export default function PdfJsPage({
 
     return () => {
       alive = false;
-      try {
-        loadingTask.destroy();
-      } catch {}
+      try { loadingTask.destroy(); } catch {}
     };
   }, [url]);
 
@@ -64,7 +61,7 @@ export default function PdfJsPage({
     return Number.isFinite(z) && z > 0 ? z : 1.0;
   }, [zoom]);
 
-  // Render page whenever doc/page/zoom/width changes
+  // ── Render page ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!doc || !canvasRef.current) return;
 
@@ -72,52 +69,47 @@ export default function PdfJsPage({
     let cancelled = false;
 
     async function render() {
-      try {
-        // Cancel any in-flight render
-        if (renderTaskRef.current) {
-          try {
-            renderTaskRef.current.cancel();
-          } catch {}
-          renderTaskRef.current = null;
-        }
+      // Cancel any in-flight render
+      if (renderTaskRef.current) {
+        try { renderTaskRef.current.cancel(); } catch {}
+        renderTaskRef.current = null;
+      }
 
-        const page = await doc.getPage(clampedPage);
+      try {
+        const page         = await doc.getPage(clampedPage);
         if (cancelled) return;
 
         const baseViewport = page.getViewport({ scale: 1 });
+        const dpr          = window.devicePixelRatio || 1;
 
-        // Fit-to-width scaling
-        const safeGutter = 12; // avoid 1–2px overflow on iOS
+        // Fit-to-width: use the full container width, no gutter
         let scale = effectiveZoom;
-
         if (fitWidth && containerWidthPx && containerWidthPx > 80) {
-          const target = Math.max(80, containerWidthPx - safeGutter);
-          scale = (target / baseViewport.width) * effectiveZoom;
+          scale = (containerWidthPx / baseViewport.width) * effectiveZoom;
         }
 
         const viewport = page.getViewport({ scale });
+        const canvas   = canvasRef.current;
+        const ctx      = canvas.getContext("2d", { alpha: false });
 
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d", { alpha: false });
-        const dpr = window.devicePixelRatio || 1;
-
-        // internal buffer (sharp)
-        canvas.width = Math.floor(viewport.width * dpr);
+        // Physical pixel buffer (sharp on retina)
+        canvas.width  = Math.floor(viewport.width  * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
 
-        // ✅ visually fill width (no centering container)
+        // CSS size: fill width exactly, height proportional
         canvas.style.display = "block";
-        canvas.style.width = "100%";
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        canvas.style.width   = "100%";
+        canvas.style.height  = `${Math.floor(viewport.height)}px`;
 
-        // reset and paint white
+        // White background fill
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // DPR transform
+        // DPR scaling
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
 
         const task = page.render({ canvasContext: ctx, viewport });
         renderTaskRef.current = task;
@@ -137,17 +129,17 @@ export default function PdfJsPage({
     return () => {
       cancelled = true;
       if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch {}
+        try { renderTaskRef.current.cancel(); } catch {}
         renderTaskRef.current = null;
       }
     };
   }, [doc, pageNumber, effectiveZoom, fitWidth, containerWidthPx]);
 
+  // No wrapper padding — canvas fills parent edge-to-edge.
+  // The parent's rounded-2xl clip handles the border radius.
   return (
     <div className="w-full overflow-x-hidden">
-      <canvas ref={canvasRef} className="rounded-xl" />
+      <canvas ref={canvasRef} style={{ display: "block", width: "100%" }} />
     </div>
   );
 }
