@@ -2,13 +2,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QuranViewer from "./quran/QuranViewer";
 
-/**
- * Backwards compatible:
- * - slideshowUrl, zIndex, className work exactly as before
- *
- * Optional:
- * - show: { messages?:bool, adhkar?:bool, quran?:bool, more?:bool }
- */
 export default function MobileTopActions({
   slideshowUrl = "/slideshow",
   zIndex = 80,
@@ -18,24 +11,39 @@ export default function MobileTopActions({
   const [openKey, setOpenKey] = useState(null);
   const [toast, setToast]     = useState("");
 
-  // Messages iframe safety
+  // Messages iframe
   const [msgLoaded,   setMsgLoaded]   = useState(false);
   const [msgTimedOut, setMsgTimedOut] = useState(false);
   const [msgAttempt,  setMsgAttempt]  = useState(0);
   const msgTimeoutRef = useRef(null);
 
+  // Measure the overlay header so we can give the body exact remaining height
+  const headerRef      = useRef(null);
+  const [headerH, setHeaderH] = useState(0);
+
+  useEffect(() => {
+    if (!openKey || !headerRef.current) return;
+    const measure = () => {
+      if (headerRef.current)
+        setHeaderH(headerRef.current.getBoundingClientRect().height);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(headerRef.current);
+    return () => ro.disconnect();
+  }, [openKey]);
+
   const actions = useMemo(() => {
     const base = [
-      { key: "messages", label: "Messages", Icon: IconChat    },
-      { key: "adhkar",   label: "Adhkar",   Icon: IconTasbih  },
-      { key: "quran",    label: "Qur'an",   Icon: IconBook    },
-      { key: "more",     label: "More",     Icon: IconMore    },
+      { key: "messages", label: "Messages", Icon: IconChat   },
+      { key: "adhkar",   label: "Adhkar",   Icon: IconTasbih },
+      { key: "quran",    label: "Qur'an",   Icon: IconBook   },
+      { key: "more",     label: "More",     Icon: IconMore   },
     ];
     if (!show) return base;
     return base.filter((a) => show[a.key] !== false);
   }, [show]);
 
-  // Prevent background scroll while overlay is open
   useEffect(() => {
     if (!openKey) return;
     const prev = document.body.style.overflow;
@@ -43,7 +51,6 @@ export default function MobileTopActions({
     return () => { document.body.style.overflow = prev; };
   }, [openKey]);
 
-  // Toast helper
   const flash = (msg) => {
     setToast(msg);
     window.clearTimeout(flash._t);
@@ -55,7 +62,6 @@ export default function MobileTopActions({
     [openKey, actions]
   );
 
-  // Reset / setup Messages load watchdog when opening Messages
   useEffect(() => {
     if (openKey !== "messages") {
       setMsgLoaded(false);
@@ -101,8 +107,7 @@ export default function MobileTopActions({
                   onClick={() => setOpenKey(active ? null : a.key)}
                   className={[
                     "rounded-xl px-2 py-2 text-[12px] font-semibold",
-                    "border border-white/10",
-                    "transition active:scale-[0.99]",
+                    "border border-white/10 transition active:scale-[0.99]",
                     "flex flex-col items-center justify-center gap-1",
                     active ? "bg-white/20" : "bg-black/20 hover:bg-black/25",
                   ].join(" ")}
@@ -124,36 +129,40 @@ export default function MobileTopActions({
           role="dialog"
           aria-modal="true"
         >
-          <div className="absolute inset-0 flex flex-col">
-
-            {/* Overlay header — always shown */}
-            <div className="shrink-0 px-4 pt-4">
-              <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
-                <div className="flex items-center justify-between px-3 py-3">
-                  <div className="text-base font-bold truncate">{title}</div>
-                  <button
-                    onClick={close}
-                    className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5 text-sm font-semibold hover:bg-black/35"
-                  >
-                    Close
-                  </button>
-                </div>
+          {/* ── Header (measured) ───────────────────────────────────────── */}
+          <div ref={headerRef} className="px-4 pt-4 pb-2">
+            <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
+              <div className="flex items-center justify-between px-3 py-3">
+                <div className="text-base font-bold truncate">{title}</div>
+                <button
+                  onClick={close}
+                  className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5 text-sm font-semibold hover:bg-black/35"
+                >
+                  Close
+                </button>
               </div>
             </div>
+          </div>
 
-            {/* Overlay body
-                ┌─────────────────────────────────────────────┐
-                │ Quran: no extra padding, QuranViewer owns    │
-                │ every pixel below the header.               │
-                │ Others: padded card layout (unchanged).      │
-                └─────────────────────────────────────────────┘ */}
+          {/* ── Body — explicitly sized to remaining viewport height ─────── */}
+          {/* Using calc(100vh - headerH) removes all flex guesswork         */}
+          <div
+            style={{
+              position: "absolute",
+              top: headerH || 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: "hidden",
+            }}
+          >
             {isQuran ? (
-              // h-full + flex-1 + min-h-0 = QuranViewer fills every remaining pixel
-              <div className="flex-1 min-h-0 h-full overflow-hidden flex flex-col">
+              // QuranViewer gets 100% of this precisely-measured space
+              <div style={{ width: "100%", height: "100%" }}>
                 <QuranViewer />
               </div>
             ) : (
-              <div className="flex-1 min-h-0 px-4 pb-4 pt-3 overflow-hidden">
+              <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
                 <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
 
                   {/* Messages */}
@@ -167,24 +176,15 @@ export default function MobileTopActions({
                           <div className="min-w-0">
                             <div className="font-bold leading-tight">Messages</div>
                             <div className="text-sm opacity-80 leading-snug">
-                              If the slideshow doesn't load, it will be improved soon. You can retry below.
+                              If the slideshow doesn't load, you can retry below.
                             </div>
                           </div>
                         </div>
-
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            onClick={retryMessages}
-                            className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                          >
+                          <button onClick={retryMessages} className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
                             Retry
                           </button>
-                          <a
-                            href={slideshowUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                          >
+                          <a href={slideshowUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
                             Open in browser
                           </a>
                         </div>
@@ -203,10 +203,7 @@ export default function MobileTopActions({
                         <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
                           <div className="text-sm">
                             <div className="font-semibold mb-1">Still loading…</div>
-                            <div className="opacity-85">
-                              This may be due to a slow connection or the browser blocking embedded content.
-                              This will be improved soon.
-                            </div>
+                            <div className="opacity-85">May be a slow connection or browser blocking embedded content.</div>
                           </div>
                         </div>
                       )}
@@ -227,22 +224,12 @@ export default function MobileTopActions({
                     </div>
                   )}
 
-                  {/* Adhkar placeholder */}
                   {openKey === "adhkar" && (
-                    <ComingSoon
-                      icon={<IconTasbih className="opacity-90" />}
-                      title="Adhkar"
-                      body="This feature will be updated soon (Google Sheet-driven adhkar rotator)."
-                    />
+                    <ComingSoon icon={<IconTasbih className="opacity-90" />} title="Adhkar" body="Google Sheet-driven adhkar rotator coming soon." />
                   )}
 
-                  {/* More panel */}
                   {openKey === "more" && (
-                    <ComingSoon
-                      icon={<IconMore className="opacity-90" />}
-                      title="More"
-                      body="More shortcuts will be added soon."
-                    />
+                    <ComingSoon icon={<IconMore className="opacity-90" />} title="More" body="More shortcuts will be added soon." />
                   )}
                 </div>
               </div>
@@ -251,13 +238,8 @@ export default function MobileTopActions({
 
           {/* Toast */}
           {toast && (
-            <div
-              className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center"
-              style={{ zIndex: zIndex + 1 }}
-            >
-              <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">
-                {toast}
-              </div>
+            <div className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center" style={{ zIndex: zIndex + 1 }}>
+              <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">{toast}</div>
             </div>
           )}
         </div>
@@ -266,22 +248,15 @@ export default function MobileTopActions({
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────────────
-
 function ComingSoon({ icon, title, body }) {
   return (
     <div className="p-4">
       <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-4">
         <div className="flex items-start gap-3">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
-            {icon}
-          </span>
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-black/25 border border-white/10">{icon}</span>
           <div className="min-w-0">
             <div className="text-lg font-bold leading-tight">{title}</div>
             <div className="mt-1 text-sm opacity-85 leading-snug">{body}</div>
-            <div className="mt-3 text-xs opacity-70">
-              Tip: This is a placeholder to avoid blank screens. It will be upgraded soon.
-            </div>
           </div>
         </div>
       </div>
@@ -290,15 +265,8 @@ function ComingSoon({ icon, title, body }) {
 }
 
 function Spinner() {
-  return (
-    <div
-      className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white/90 animate-spin"
-      aria-hidden="true"
-    />
-  );
+  return <div className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white/90 animate-spin" aria-hidden="true" />;
 }
-
-/* ── Icons (inline SVG, no deps) ─────────────────────────────────────────── */
 
 function IconBase({ children, className = "" }) {
   return (
@@ -311,10 +279,7 @@ function IconBase({ children, className = "" }) {
 function IconChat({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z"
-        stroke="currentColor" strokeWidth="1.6"
-      />
+      <path d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
   );
 }
@@ -322,10 +287,7 @@ function IconChat({ className = "" }) {
 function IconTasbih({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z"
-        stroke="currentColor" strokeWidth="1.6"
-      />
+      <path d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
   );
@@ -334,10 +296,7 @@ function IconTasbih({ className = "" }) {
 function IconBook({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z"
-        stroke="currentColor" strokeWidth="1.6"
-      />
+      <path d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8 7h8" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8 10h8" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
