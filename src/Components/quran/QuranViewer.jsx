@@ -240,23 +240,31 @@ export default function QuranViewer() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      {/* Toolbar */}
+      {/* Toolbar — two rows so nothing overlaps on small screens */}
       <div ref={toolbarRef} className="mx-2 mt-1 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2 shrink-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold leading-tight opacity-90">Qur'an</div>
-            <div className="text-[11px] opacity-70 leading-tight mt-0.5">
-              Juz-{nav.juz}&nbsp;·&nbsp;Page <span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
-            </div>
-          </div>
+
+        {/* Row 1: position info */}
+        <div className="flex items-baseline gap-2 mb-1.5">
+          <span className="text-[12px] font-bold text-white/90 leading-tight">Qur'an</span>
+          <span className="text-[11px] text-white/60 leading-tight">
+            Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;<span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
+          </span>
+        </div>
+
+        {/* Row 2: nav + zoom buttons */}
+        <div className="flex items-center gap-1.5">
           <ToolBtn active={sheet === "juz"}   onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz"   ? null : "juz");   }}>Juz</ToolBtn>
           <ToolBtn active={sheet === "surah"} onClick={() => { setSurahSearch(""); setSheet(sheet === "surah" ? null : "surah"); }}>Surah</ToolBtn>
           <ToolBtn active={sheet === "page"}  onClick={() => { setJumpPage(String(nav.page)); setSheet(sheet === "page"  ? null : "page");  }}>Page</ToolBtn>
           <ToolBtn active={sheet === "bm" || sheet === "bm-save"} onClick={() => setSheet((sheet === "bm" || sheet === "bm-save") ? null : "bm")}>🔖</ToolBtn>
-          <ToolBtn onClick={() => setZoom((z) => clamp(+(z - 0.1).toFixed(2), 0.5, 2.0))}>−</ToolBtn>
-          <span className="text-[10px] font-semibold text-white/70 w-8 text-center shrink-0">{Math.round(zoom * 100)}%</span>
-          <ToolBtn onClick={() => setZoom((z) => clamp(+(z + 0.1).toFixed(2), 0.5, 2.0))}>+</ToolBtn>
+          {/* Zoom pushed to the right */}
+          <div className="ml-auto flex items-center gap-1.5">
+            <ToolBtn onClick={() => setZoom((z) => clamp(+(z - 0.1).toFixed(2), 0.5, 2.0))}>−</ToolBtn>
+            <span className="text-[10px] font-semibold text-white/70 w-8 text-center shrink-0">{Math.round(zoom * 100)}%</span>
+            <ToolBtn onClick={() => setZoom((z) => clamp(+(z + 0.1).toFixed(2), 0.5, 2.0))}>+</ToolBtn>
+          </div>
         </div>
+
       </div>
 
       {/* Sheets */}
