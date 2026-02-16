@@ -1,6 +1,8 @@
 // src/Components/MobileTopActions.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import QuranViewer from "./quran/QuranViewer";
+import AdhkarTracker from "./adhkar/AdhkarTracker";
+
 
 export default function MobileTopActions({
   slideshowUrl = "/slideshow",
@@ -157,9 +159,12 @@ export default function MobileTopActions({
             }}
           >
             {isQuran ? (
-              // QuranViewer gets 100% of this precisely-measured space
               <div style={{ width: "100%", height: "100%" }}>
                 <QuranViewer />
+              </div>
+            ) : openKey === "adhkar" ? (
+              <div style={{ width: "100%", height: "100%" }}>
+                <AdhkarTracker />
               </div>
             ) : (
               <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
@@ -222,10 +227,6 @@ export default function MobileTopActions({
                         </div>
                       </div>
                     </div>
-                  )}
-
-                  {openKey === "adhkar" && (
-                    <ComingSoon icon={<IconTasbih className="opacity-90" />} title="Adhkar" body="Google Sheet-driven adhkar rotator coming soon." />
                   )}
 
                   {openKey === "more" && (
