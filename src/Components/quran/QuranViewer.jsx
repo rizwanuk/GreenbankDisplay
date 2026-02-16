@@ -269,7 +269,7 @@ export default function QuranViewer() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="flex-1 h-full min-h-0 flex flex-col">
 
       {/* ── Top toolbar ───────────────────────────────────────────────── */}
       <div className="mx-2 mt-1 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2">
@@ -416,7 +416,7 @@ export default function QuranViewer() {
       )}
 
       {/* ── PDF viewer ────────────────────────────────────────────────── */}
-      <div className="mx-2 mt-1.5 mb-0 flex-1 min-h-0 rounded-2xl border border-white/10 overflow-hidden flex flex-col bg-white">
+      <div className="mx-2 mt-1.5 mb-2 flex-1 min-h-0 rounded-2xl border border-white/10 overflow-hidden flex flex-col bg-white">
 
         {/* Scrollable page */}
         <div
@@ -479,7 +479,6 @@ export default function QuranViewer() {
         </div>
       </div>
 
-      <div className="h-2 shrink-0" />
     </div>
   );
 }

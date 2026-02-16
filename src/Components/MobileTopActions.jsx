@@ -148,8 +148,8 @@ export default function MobileTopActions({
                 │ Others: padded card layout (unchanged).      │
                 └─────────────────────────────────────────────┘ */}
             {isQuran ? (
-              // Zero side / bottom padding so QuranViewer fills the screen
-              <div className="flex-1 min-h-0 px-0 pb-0 pt-0 overflow-hidden">
+              // h-full + flex-1 + min-h-0 = QuranViewer fills every remaining pixel
+              <div className="flex-1 min-h-0 h-full overflow-hidden flex flex-col">
                 <QuranViewer />
               </div>
             ) : (
