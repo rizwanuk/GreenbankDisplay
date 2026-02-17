@@ -139,6 +139,9 @@ export default function AdhkarTracker() {
   // Dragging state for basket reorder
   const [draggedIndex, setDraggedIndex] = useState(null);
 
+  // Selected set for Library tick UI (selected if appears at least once in basket)
+  const selectedIdSet = useMemo(() => new Set(basket || []), [basket]);
+
   useEffect(() => localStorage.setItem(LS_ADHKAR_SPLASH, showSplash ? "1" : "0"), [showSplash]);
   useEffect(() => localStorage.setItem(LS_ADHKAR_MODE, mode), [mode]);
   useEffect(() => localStorage.setItem(LS_ADHKAR_TARGET, String(target)), [target]);
@@ -425,6 +428,9 @@ export default function AdhkarTracker() {
     setShowSplash(true);
   };
 
+  // Flat Library list (no grouping) — keeps order as defined in presets
+  const libraryList = useMemo(() => ADHKAR_PRESETS || [], []);
+
   return (
     <div
       className="relative h-full flex flex-col"
@@ -591,37 +597,66 @@ export default function AdhkarTracker() {
                 </div>
               )}
 
-              {/* Library tab */}
+              {/* Library tab (FLAT LIST + tick shows selected) */}
               {addTab === "library" && (
-                <div>
-                  {Object.entries(adhkarByCategory).map(([category, presets]) => (
-                    <div key={category} className="mb-6">
-                      <h3 className="text-sm font-bold text-white/60 mb-2 uppercase tracking-wide">{category}</h3>
-                      <div className="space-y-2">
-                        {presets.map((preset) => (
-                          <button
-                            key={preset.id}
-                            onClick={() => addToBasket(preset)}
-                            className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition"
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-lg text-white font-arabic" dir="rtl">
+                <div className="space-y-2">
+                  {libraryList.map((preset) => {
+                    const isSelected = selectedIdSet.has(preset.id);
+                    return (
+                      <button
+                        key={preset.id}
+                        onClick={() => addToBasket(preset)}
+                        className={[
+                          "w-full text-left p-3 rounded-xl border transition",
+                          isSelected
+                            ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/15"
+                            : "bg-white/5 border-white/10 hover:bg-white/10",
+                        ].join(" ")}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* tick */}
+                          <div className="pt-1">
+                            <div
+                              className={[
+                                "w-5 h-5 rounded-md border flex items-center justify-center text-xs font-bold",
+                                isSelected
+                                  ? "border-green-400/60 bg-green-500/20 text-green-200"
+                                  : "border-white/20 bg-white/5 text-white/30",
+                              ].join(" ")}
+                              aria-hidden="true"
+                            >
+                              {isSelected ? "✓" : ""}
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="text-lg text-white font-arabic leading-snug" dir="rtl">
                                 {preset.arabic}
                               </span>
-                              <div className="flex items-center gap-2">
+
+                              <div className="flex items-center gap-2 shrink-0">
                                 <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-300 font-semibold">
                                   {preset.count}×
                                 </span>
-                                <span className="text-xl">+</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/70 border border-white/10">
+                                  {preset.category}
+                                </span>
+                                <span className="text-xl text-white/70">+</span>
                               </div>
                             </div>
-                            <div className="text-sm text-white/80">{preset.transliteration}</div>
+
+                            <div className="text-sm text-white/80 mt-1">{preset.transliteration}</div>
                             <div className="text-xs text-white/50 mt-0.5">{preset.translation}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+
+                            {isSelected ? (
+                              <div className="text-[11px] text-green-300/80 mt-1">Added to session ✓</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
