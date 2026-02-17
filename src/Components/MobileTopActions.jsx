@@ -13,16 +13,16 @@ export default function MobileTopActions({
   show,
 }) {
   const [openKey, setOpenKey] = useState(null);
-  const [toast, setToast]     = useState("");
+  const [toast, setToast] = useState("");
 
   // Messages iframe
-  const [msgLoaded,   setMsgLoaded]   = useState(false);
+  const [msgLoaded, setMsgLoaded] = useState(false);
   const [msgTimedOut, setMsgTimedOut] = useState(false);
-  const [msgAttempt,  setMsgAttempt]  = useState(0);
+  const [msgAttempt, setMsgAttempt] = useState(0);
   const msgTimeoutRef = useRef(null);
 
   // Measure the shared header height (only used for messages / more)
-  const headerRef      = useRef(null);
+  const headerRef = useRef(null);
   const [headerH, setHeaderH] = useState(0);
 
   useEffect(() => {
@@ -39,10 +39,10 @@ export default function MobileTopActions({
 
   const actions = useMemo(() => {
     const base = [
-      { key: "messages", label: "Messages", Icon: IconChat   },
-      { key: "adhkar",   label: "Adhkar",   Icon: IconTasbih },
-      { key: "quran",    label: "Qur'an",   Icon: IconBook   },
-      { key: "more",     label: "More",     Icon: IconMore   },
+      { key: "messages", label: "Messages", Icon: IconChat },
+      { key: "adhkar", label: "Adhkar", Icon: IconTasbih },
+      { key: "quran", label: "Qur'an", Icon: IconBook },
+      { key: "more", label: "More", Icon: IconMore },
     ];
     if (!show) return base;
     return base.filter((a) => show[a.key] !== false);
@@ -52,7 +52,9 @@ export default function MobileTopActions({
     if (!openKey) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [openKey]);
 
   const flash = (msg) => {
@@ -70,7 +72,10 @@ export default function MobileTopActions({
     if (openKey !== "messages") {
       setMsgLoaded(false);
       setMsgTimedOut(false);
-      if (msgTimeoutRef.current) { clearTimeout(msgTimeoutRef.current); msgTimeoutRef.current = null; }
+      if (msgTimeoutRef.current) {
+        clearTimeout(msgTimeoutRef.current);
+        msgTimeoutRef.current = null;
+      }
       return;
     }
     setMsgLoaded(false);
@@ -78,7 +83,10 @@ export default function MobileTopActions({
     if (msgTimeoutRef.current) clearTimeout(msgTimeoutRef.current);
     msgTimeoutRef.current = setTimeout(() => setMsgTimedOut(true), 4500);
     return () => {
-      if (msgTimeoutRef.current) { clearTimeout(msgTimeoutRef.current); msgTimeoutRef.current = null; }
+      if (msgTimeoutRef.current) {
+        clearTimeout(msgTimeoutRef.current);
+        msgTimeoutRef.current = null;
+      }
     };
   }, [openKey, msgAttempt]);
 
@@ -95,16 +103,23 @@ export default function MobileTopActions({
 
   return (
     <>
-      {/* ── Action bar ────────────────────────────────────────────────────── */}
-      <div className={["px-4 pb-3", className].join(" ")}>
+      {/* ── Action bar (safe-area aware) ─────────────────────────────────── */}
+      <div
+        className={["px-4 pb-3", className].join(" ")}
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+        }}
+      >
         <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg px-2 py-2">
           <div
             className="grid gap-2"
-            style={{ gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))`,
+            }}
           >
             {actions.map((a) => {
               const active = openKey === a.key;
-              const AIcon  = a.Icon;
+              const AIcon = a.Icon;
               return (
                 <button
                   key={a.key}
@@ -125,7 +140,7 @@ export default function MobileTopActions({
         </div>
       </div>
 
-      {/* ── Full-screen overlay ───────────────────────────────────────────── */}
+      {/* ── Full-screen overlay ─────────────────────────────────────────── */}
       {openKey && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm"
@@ -133,33 +148,36 @@ export default function MobileTopActions({
           role="dialog"
           aria-modal="true"
         >
-          {/* ── Self-contained panels (Adhkar, Quran) ─────────────────────── */}
-          {/* These handle their own header/nav — we just give them full screen */}
-          {/* and float a Close button in the corner so the user can always exit */}
+          {/* ── Self-contained panels (Adhkar, Quran) ───────────────────── */}
           {isSelfContained ? (
             <div className="absolute inset-0 overflow-hidden">
               {openKey === "adhkar" && <AdhkarTracker />}
-              {openKey === "quran"  && <QuranViewer />}
+              {openKey === "quran" && <QuranViewer />}
 
-              {/* Floating close — sits in top-right, safe-area aware */}
+              {/* Floating close (BOTTOM-RIGHT, safe-area aware) */}
               <button
                 onClick={close}
                 style={{
                   position: "absolute",
-                  top: "max(env(safe-area-inset-top, 12px), 12px)",
                   right: 16,
+                  bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
                   zIndex: 50,
                 }}
-                className="px-3 py-1.5 rounded-xl border border-white/20 bg-black/50 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/65 transition active:scale-95"
+                className="px-4 py-2 rounded-2xl border border-white/20 bg-black/60 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/70 transition active:scale-95"
               >
                 Close
               </button>
             </div>
-
           ) : (
             /* ── Shared-header panels (Messages, More) ─────────────────── */
             <>
-              <div ref={headerRef} className="px-4 pt-4 pb-2">
+              <div
+                ref={headerRef}
+                className="px-4 pb-2"
+                style={{
+                  paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                }}
+              >
                 <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
                   <div className="flex items-center justify-between px-3 py-3">
                     <div className="text-base font-bold truncate">{title}</div>
@@ -185,7 +203,6 @@ export default function MobileTopActions({
               >
                 <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
                   <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-
                     {/* Messages */}
                     {openKey === "messages" && (
                       <div className="p-4">
@@ -195,17 +212,28 @@ export default function MobileTopActions({
                               <IconChat />
                             </span>
                             <div className="min-w-0">
-                              <div className="font-bold leading-tight">Messages</div>
+                              <div className="font-bold leading-tight">
+                                Messages
+                              </div>
                               <div className="text-sm opacity-80 leading-snug">
-                                If the slideshow doesn't load, you can retry below.
+                                If the slideshow doesn't load, you can retry
+                                below.
                               </div>
                             </div>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <button onClick={retryMessages} className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
+                            <button
+                              onClick={retryMessages}
+                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                            >
                               Retry
                             </button>
-                            <a href={slideshowUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
+                            <a
+                              href={slideshowUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                            >
                               Open in browser
                             </a>
                           </div>
@@ -215,7 +243,9 @@ export default function MobileTopActions({
                           <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
                             <div className="flex items-center gap-3">
                               <Spinner />
-                              <div className="text-sm opacity-85">Loading slideshow…</div>
+                              <div className="text-sm opacity-85">
+                                Loading slideshow…
+                              </div>
                             </div>
                           </div>
                         )}
@@ -223,8 +253,13 @@ export default function MobileTopActions({
                         {msgTimedOut && !msgLoaded && (
                           <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
                             <div className="text-sm">
-                              <div className="font-semibold mb-1">Still loading…</div>
-                              <div className="opacity-85">May be a slow connection or browser blocking embedded content.</div>
+                              <div className="font-semibold mb-1">
+                                Still loading…
+                              </div>
+                              <div className="opacity-85">
+                                May be a slow connection or browser blocking
+                                embedded content.
+                              </div>
                             </div>
                           </div>
                         )}
@@ -246,7 +281,11 @@ export default function MobileTopActions({
                     )}
 
                     {openKey === "more" && (
-                      <ComingSoon icon={<IconMore className="opacity-90" />} title="More" body="More shortcuts will be added soon." />
+                      <ComingSoon
+                        icon={<IconMore className="opacity-90" />}
+                        title="More"
+                        body="More shortcuts will be added soon."
+                      />
                     )}
                   </div>
                 </div>
@@ -256,8 +295,13 @@ export default function MobileTopActions({
 
           {/* Toast */}
           {toast && (
-            <div className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center" style={{ zIndex: zIndex + 1 }}>
-              <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">{toast}</div>
+            <div
+              className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center"
+              style={{ zIndex: zIndex + 1 }}
+            >
+              <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">
+                {toast}
+              </div>
             </div>
           )}
         </div>
@@ -271,7 +315,9 @@ function ComingSoon({ icon, title, body }) {
     <div className="p-4">
       <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-4">
         <div className="flex items-start gap-3">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-black/25 border border-white/10">{icon}</span>
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
+            {icon}
+          </span>
           <div className="min-w-0">
             <div className="text-lg font-bold leading-tight">{title}</div>
             <div className="mt-1 text-sm opacity-85 leading-snug">{body}</div>
@@ -283,12 +329,24 @@ function ComingSoon({ icon, title, body }) {
 }
 
 function Spinner() {
-  return <div className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white/90 animate-spin" aria-hidden="true" />;
+  return (
+    <div
+      className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white/90 animate-spin"
+      aria-hidden="true"
+    />
+  );
 }
 
 function IconBase({ children, className = "" }) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" className={className} aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
       {children}
     </svg>
   );
@@ -297,7 +355,11 @@ function IconBase({ children, className = "" }) {
 function IconChat({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
     </IconBase>
   );
 }
@@ -305,8 +367,16 @@ function IconChat({ className = "" }) {
 function IconTasbih({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
     </IconBase>
   );
 }
@@ -314,7 +384,11 @@ function IconTasbih({ className = "" }) {
 function IconBook({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
       <path d="M8 7h8" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8 10h8" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
@@ -324,7 +398,12 @@ function IconBook({ className = "" }) {
 function IconMore({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path d="M6 12h.01M12 12h.01M18 12h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path
+        d="M6 12h.01M12 12h.01M18 12h.01"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
     </IconBase>
   );
 }
