@@ -1,160 +1,84 @@
-// src/utils/adhkarPresets.js
+// src/utils/adhkarHistory.js
+// Stores completed adhkar sessions in localStorage.
+// Each record is a lightweight object so we can store dozens of sessions.
 
-export const ADHKAR_PRESETS = [
-  // After Fajr
-  {
-    id: "fajr-subhanallah",
-    category: "After Fajr",
-    arabic: "سُبْحَانَ اللهِ",
-    transliteration: "SubhanAllah",
-    translation: "Glory be to Allah",
-    count: 33,
-  },
-  {
-    id: "fajr-alhamdulillah",
-    category: "After Fajr",
-    arabic: "الْحَمْدُ لِلَّهِ",
-    transliteration: "Alhamdulillah",
-    translation: "All praise is due to Allah",
-    count: 33,
-  },
-  {
-    id: "fajr-allahu-akbar",
-    category: "After Fajr",
-    arabic: "اللهُ أَكْبَرُ",
-    transliteration: "Allahu Akbar",
-    translation: "Allah is the Greatest",
-    count: 34,
-  },
-  
-  // After Maghrib/Isha
-  {
-    id: "evening-subhanallah",
-    category: "After Maghrib/Isha",
-    arabic: "سُبْحَانَ اللهِ",
-    transliteration: "SubhanAllah",
-    translation: "Glory be to Allah",
-    count: 33,
-  },
-  {
-    id: "evening-alhamdulillah",
-    category: "After Maghrib/Isha",
-    arabic: "الْحَمْدُ لِلَّهِ",
-    transliteration: "Alhamdulillah",
-    translation: "All praise is due to Allah",
-    count: 33,
-  },
-  {
-    id: "evening-allahu-akbar",
-    category: "After Maghrib/Isha",
-    arabic: "اللهُ أَكْبَرُ",
-    transliteration: "Allahu Akbar",
-    translation: "Allah is the Greatest",
-    count: 34,
-  },
+const LS_HISTORY_KEY = "gbm_adhkar_history_v1";
+const MAX_HISTORY = 60; // keep up to 60 sessions
 
-  // General Tasbih
-  {
-    id: "tasbih-subhanallah-100",
-    category: "General Tasbih",
-    arabic: "سُبْحَانَ اللهِ",
-    transliteration: "SubhanAllah",
-    translation: "Glory be to Allah",
-    count: 100,
-  },
-  {
-    id: "tasbih-alhamdulillah-100",
-    category: "General Tasbih",
-    arabic: "الْحَمْدُ لِلَّهِ",
-    transliteration: "Alhamdulillah",
-    translation: "All praise is due to Allah",
-    count: 100,
-  },
-  {
-    id: "tasbih-allahu-akbar-100",
-    category: "General Tasbih",
-    arabic: "اللهُ أَكْبَرُ",
-    transliteration: "Allahu Akbar",
-    translation: "Allah is the Greatest",
-    count: 100,
-  },
-  {
-    id: "tasbih-la-ilaha-illallah",
-    category: "General Tasbih",
-    arabic: "لَا إِلٰهَ إِلَّا اللهُ",
-    transliteration: "La ilaha illallah",
-    translation: "There is no god but Allah",
-    count: 100,
-  },
-  {
-    id: "tasbih-astaghfirullah",
-    category: "General Tasbih",
-    arabic: "أَسْتَغْفِرُ اللهَ",
-    transliteration: "Astaghfirullah",
-    translation: "I seek forgiveness from Allah",
-    count: 100,
-  },
+/**
+ * @typedef {Object} HistoryRecord
+ * @property {string}  id          - unique id (timestamp string)
+ * @property {string}  mode        - "general" | "taraweeh" | "basket"
+ * @property {number}  completedAt - unix ms
+ * @property {number}  totalCount  - total taps / total target (general/taraweeh)
+ * @property {number}  target      - target for general/taraweeh
+ * @property {Array}   items       - for basket: [{id, transliteration, count, completed}]
+ */
 
-  // Ayat al-Kursi
-  {
-    id: "ayat-kursi",
-    category: "After Each Prayer",
-    arabic: "آيَةُ الْكُرْسِيِّ",
-    transliteration: "Ayat al-Kursi",
-    translation: "The Throne Verse (2:255)",
-    count: 1,
-  },
-
-  // Morning/Evening Adhkar
-  {
-    id: "morning-la-ilaha",
-    category: "Morning Adhkar",
-    arabic: "لَا إِلٰهَ إِلَّا اللهُ وَحْدَهُ لَا شَرِيكَ لَهُ",
-    transliteration: "La ilaha illallahu wahdahu la sharika lah",
-    translation: "None has the right to be worshipped but Allah alone",
-    count: 10,
-  },
-  {
-    id: "evening-la-ilaha",
-    category: "Evening Adhkar",
-    arabic: "لَا إِلٰهَ إِلَّا اللهُ وَحْدَهُ لَا شَرِيكَ لَهُ",
-    transliteration: "La ilaha illallahu wahdahu la sharika lah",
-    translation: "None has the right to be worshipped but Allah alone",
-    count: 10,
-  },
-
-  // Salawat on the Prophet ﷺ
-  {
-    id: "salawat-prophet",
-    category: "Salawat",
-    arabic: "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ",
-    transliteration: "Allahumma salli 'ala Muhammad",
-    translation: "O Allah, send blessings upon Muhammad",
-    count: 10,
-  },
-  {
-    id: "salawat-prophet-100",
-    category: "Salawat",
-    arabic: "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ",
-    transliteration: "Allahumma salli 'ala Muhammad",
-    translation: "O Allah, send blessings upon Muhammad",
-    count: 100,
-  },
-];
-
-// Group presets by category
-export function getAdhkarByCategory() {
-  const grouped = {};
-  ADHKAR_PRESETS.forEach((adhkar) => {
-    if (!grouped[adhkar.category]) {
-      grouped[adhkar.category] = [];
-    }
-    grouped[adhkar.category].push(adhkar);
-  });
-  return grouped;
+/** Load history array from localStorage (newest first). */
+export function loadHistory() {
+  try {
+    const raw = localStorage.getItem(LS_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
-// Get a single preset by id
-export function getAdhkarById(id) {
-  return ADHKAR_PRESETS.find((a) => a.id === id);
+/** Persist history array. */
+function saveHistory(records) {
+  try {
+    localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(records.slice(0, MAX_HISTORY)));
+  } catch {
+    // storage full — silently ignore
+  }
+}
+
+/**
+ * Append a completed session record.
+ * @param {Omit<HistoryRecord, 'id' | 'completedAt'>} data
+ */
+export function appendHistory(data) {
+  const record = {
+    id: String(Date.now()),
+    completedAt: Date.now(),
+    ...data,
+  };
+  const prev = loadHistory();
+  saveHistory([record, ...prev]);
+  return record;
+}
+
+/** Clear all history. */
+export function clearHistory() {
+  localStorage.removeItem(LS_HISTORY_KEY);
+}
+
+/** Delete a single record by id. */
+export function deleteHistoryRecord(id) {
+  const prev = loadHistory();
+  saveHistory(prev.filter((r) => r.id !== id));
+}
+
+/**
+ * Format a unix-ms timestamp as a human-readable relative or absolute string.
+ * e.g. "Today 14:32", "Yesterday 09:15", "12 Feb 2025"
+ */
+export function formatHistoryDate(ms) {
+  const d = new Date(ms);
+  const now = new Date();
+
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  if (sameDay(d, now)) return `Today ${timeStr}`;
+  if (sameDay(d, yesterday)) return `Yesterday ${timeStr}`;
+  return d.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
 }
