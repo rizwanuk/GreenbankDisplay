@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import QuranViewer from "./quran/QuranViewer";
 import AdhkarTracker from "./adhkar/AdhkarTracker";
 
+// These panels manage their own UI fully — no shared header needed
+const SELF_CONTAINED = new Set(["adhkar", "quran"]);
 
 export default function MobileTopActions({
   slideshowUrl = "/slideshow",
@@ -19,12 +21,12 @@ export default function MobileTopActions({
   const [msgAttempt,  setMsgAttempt]  = useState(0);
   const msgTimeoutRef = useRef(null);
 
-  // Measure the overlay header so we can give the body exact remaining height
+  // Measure the shared header height (only used for messages / more)
   const headerRef      = useRef(null);
   const [headerH, setHeaderH] = useState(0);
 
   useEffect(() => {
-    if (!openKey || !headerRef.current) return;
+    if (!openKey || SELF_CONTAINED.has(openKey) || !headerRef.current) return;
     const measure = () => {
       if (headerRef.current)
         setHeaderH(headerRef.current.getBoundingClientRect().height);
@@ -89,11 +91,11 @@ export default function MobileTopActions({
     flash("Retrying…");
   };
 
-  const isQuran = openKey === "quran";
+  const isSelfContained = SELF_CONTAINED.has(openKey);
 
   return (
     <>
-      {/* ── Action bar ──────────────────────────────────────────────────── */}
+      {/* ── Action bar ────────────────────────────────────────────────────── */}
       <div className={["px-4 pb-3", className].join(" ")}>
         <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg px-2 py-2">
           <div
@@ -123,7 +125,7 @@ export default function MobileTopActions({
         </div>
       </div>
 
-      {/* ── Full-screen overlay ─────────────────────────────────────────── */}
+      {/* ── Full-screen overlay ───────────────────────────────────────────── */}
       {openKey && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm"
@@ -131,111 +133,126 @@ export default function MobileTopActions({
           role="dialog"
           aria-modal="true"
         >
-          {/* ── Header (measured) ───────────────────────────────────────── */}
-          <div ref={headerRef} className="px-4 pt-4 pb-2">
-            <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
-              <div className="flex items-center justify-between px-3 py-3">
-                <div className="text-base font-bold truncate">{title}</div>
-                <button
-                  onClick={close}
-                  className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5 text-sm font-semibold hover:bg-black/35"
-                >
-                  Close
-                </button>
-              </div>
+          {/* ── Self-contained panels (Adhkar, Quran) ─────────────────────── */}
+          {/* These handle their own header/nav — we just give them full screen */}
+          {/* and float a Close button in the corner so the user can always exit */}
+          {isSelfContained ? (
+            <div className="absolute inset-0 overflow-hidden">
+              {openKey === "adhkar" && <AdhkarTracker />}
+              {openKey === "quran"  && <QuranViewer />}
+
+              {/* Floating close — sits in top-right, safe-area aware */}
+              <button
+                onClick={close}
+                style={{
+                  position: "absolute",
+                  top: "max(env(safe-area-inset-top, 12px), 12px)",
+                  right: 16,
+                  zIndex: 50,
+                }}
+                className="px-3 py-1.5 rounded-xl border border-white/20 bg-black/50 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/65 transition active:scale-95"
+              >
+                Close
+              </button>
             </div>
-          </div>
 
-          {/* ── Body — explicitly sized to remaining viewport height ─────── */}
-          {/* Using calc(100vh - headerH) removes all flex guesswork         */}
-          <div
-            style={{
-              position: "absolute",
-              top: headerH || 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              overflow: "hidden",
-            }}
-          >
-            {isQuran ? (
-              <div style={{ width: "100%", height: "100%" }}>
-                <QuranViewer />
-              </div>
-            ) : openKey === "adhkar" ? (
-              <div style={{ width: "100%", height: "100%" }}>
-                <AdhkarTracker />
-              </div>
-            ) : (
-              <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
-                <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-
-                  {/* Messages */}
-                  {openKey === "messages" && (
-                    <div className="p-4">
-                      <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
-                        <div className="flex items-start gap-3">
-                          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
-                            <IconChat />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="font-bold leading-tight">Messages</div>
-                            <div className="text-sm opacity-80 leading-snug">
-                              If the slideshow doesn't load, you can retry below.
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button onClick={retryMessages} className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
-                            Retry
-                          </button>
-                          <a href={slideshowUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
-                            Open in browser
-                          </a>
-                        </div>
-                      </div>
-
-                      {!msgLoaded && !msgTimedOut && (
-                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
-                          <div className="flex items-center gap-3">
-                            <Spinner />
-                            <div className="text-sm opacity-85">Loading slideshow…</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {msgTimedOut && !msgLoaded && (
-                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
-                          <div className="text-sm">
-                            <div className="font-semibold mb-1">Still loading…</div>
-                            <div className="opacity-85">May be a slow connection or browser blocking embedded content.</div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="rounded-2xl border border-white/15 bg-black/25 overflow-hidden">
-                        <div className="h-[calc(100vh-260px)]">
-                          <iframe
-                            key={msgAttempt}
-                            title="Messages Slideshow"
-                            src={slideshowUrl}
-                            className="w-full h-full"
-                            style={{ border: 0 }}
-                            allow="autoplay; fullscreen"
-                            onLoad={() => setMsgLoaded(true)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {openKey === "more" && (
-                    <ComingSoon icon={<IconMore className="opacity-90" />} title="More" body="More shortcuts will be added soon." />
-                  )}
+          ) : (
+            /* ── Shared-header panels (Messages, More) ─────────────────── */
+            <>
+              <div ref={headerRef} className="px-4 pt-4 pb-2">
+                <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
+                  <div className="flex items-center justify-between px-3 py-3">
+                    <div className="text-base font-bold truncate">{title}</div>
+                    <button
+                      onClick={close}
+                      className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5 text-sm font-semibold hover:bg-black/35"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  top: headerH || 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
+                  <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
+
+                    {/* Messages */}
+                    {openKey === "messages" && (
+                      <div className="p-4">
+                        <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
+                          <div className="flex items-start gap-3">
+                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
+                              <IconChat />
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-bold leading-tight">Messages</div>
+                              <div className="text-sm opacity-80 leading-snug">
+                                If the slideshow doesn't load, you can retry below.
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button onClick={retryMessages} className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
+                              Retry
+                            </button>
+                            <a href={slideshowUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold">
+                              Open in browser
+                            </a>
+                          </div>
+                        </div>
+
+                        {!msgLoaded && !msgTimedOut && (
+                          <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
+                            <div className="flex items-center gap-3">
+                              <Spinner />
+                              <div className="text-sm opacity-85">Loading slideshow…</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {msgTimedOut && !msgLoaded && (
+                          <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
+                            <div className="text-sm">
+                              <div className="font-semibold mb-1">Still loading…</div>
+                              <div className="opacity-85">May be a slow connection or browser blocking embedded content.</div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="rounded-2xl border border-white/15 bg-black/25 overflow-hidden">
+                          <div className="h-[calc(100vh-260px)]">
+                            <iframe
+                              key={msgAttempt}
+                              title="Messages Slideshow"
+                              src={slideshowUrl}
+                              className="w-full h-full"
+                              style={{ border: 0 }}
+                              allow="autoplay; fullscreen"
+                              onLoad={() => setMsgLoaded(true)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {openKey === "more" && (
+                      <ComingSoon icon={<IconMore className="opacity-90" />} title="More" body="More shortcuts will be added soon." />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Toast */}
           {toast && (
