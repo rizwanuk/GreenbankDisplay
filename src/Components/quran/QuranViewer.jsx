@@ -47,7 +47,22 @@ function JuzRoller({ value, onChange }) {
       <div ref={listRef} onScroll={onScroll} style={{ height: "100%", overflowY: "scroll", scrollSnapType: "y mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
         <div style={{ height: ITEM_H * 2 }} />
         {items.map((n) => (
-          <div key={n} onClick={() => onChange(n)} style={{ height: ITEM_H, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: n === value ? 18 : 15, fontWeight: n === value ? 700 : 500, color: n === value ? "#fff" : "rgba(255,255,255,0.4)", transition: "all 0.15s" }}>
+          <div
+            key={n}
+            onClick={() => onChange(n)}
+            style={{
+              height: ITEM_H,
+              scrollSnapAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: n === value ? 18 : 15,
+              fontWeight: n === value ? 700 : 500,
+              color: n === value ? "#fff" : "rgba(255,255,255,0.4)",
+              transition: "all 0.15s",
+            }}
+          >
             Juz {n}
           </div>
         ))}
@@ -91,40 +106,14 @@ export default function QuranViewer() {
   const [err,         setErr]         = useState("");
   const [rendering,   setRendering]   = useState(true);
 
-  const toolbarRef = useRef(null);
-  const sheetRef   = useRef(null);
-  const bottomRef  = useRef(null);
-  const [toolbarH, setToolbarH] = useState(0);
-  const [sheetH,   setSheetH]   = useState(0);
-  const [bottomH,  setBottomH]  = useState(0);
-
-  const measureAll = useCallback(() => {
-    if (toolbarRef.current) setToolbarH(toolbarRef.current.getBoundingClientRect().height);
-    if (sheetRef.current)   setSheetH(sheetRef.current.getBoundingClientRect().height);
-    else                    setSheetH(0);
-    if (bottomRef.current)  setBottomH(bottomRef.current.getBoundingClientRect().height);
-  }, []);
-
-  useEffect(() => {
-    measureAll();
-    const ro = new ResizeObserver(measureAll);
-    if (toolbarRef.current) ro.observe(toolbarRef.current);
-    if (bottomRef.current)  ro.observe(bottomRef.current);
-    return () => ro.disconnect();
-  }, [measureAll]);
-
-  useEffect(() => {
-    measureAll();
-    const ro = new ResizeObserver(measureAll);
-    if (sheetRef.current) ro.observe(sheetRef.current);
-    return () => ro.disconnect();
-  }, [sheet, measureAll]);
-
   useEffect(() => localStorage.setItem(LS_LAST_JUZ,  String(nav.juz)),  [nav.juz]);
   useEffect(() => localStorage.setItem(LS_LAST_PAGE, String(nav.page)), [nav.page]);
   useEffect(() => localStorage.setItem(LS_LAST_ZOOM, String(zoom)),     [zoom]);
 
-  const current = useMemo(() => juzList.find((j) => j.n === nav.juz) || juzList[0], [juzList, nav.juz]);
+  const current = useMemo(
+    () => juzList.find((j) => j.n === nav.juz) || juzList[0],
+    [juzList, nav.juz]
+  );
 
   const filteredSurahs = useMemo(() => {
     const q = surahSearch.trim().toLowerCase();
@@ -154,8 +143,12 @@ export default function QuranViewer() {
   const handleNumPages = useCallback((n) => {
     const total = Math.max(1, n || 1);
     setNumPages(total);
-    if (wantLastPageRef.current) { wantLastPageRef.current = false; setNav((prev) => ({ ...prev, page: total })); }
-    else { setNav((prev) => ({ ...prev, page: clamp(prev.page, 1, total) })); }
+    if (wantLastPageRef.current) {
+      wantLastPageRef.current = false;
+      setNav((prev) => ({ ...prev, page: total }));
+    } else {
+      setNav((prev) => ({ ...prev, page: clamp(prev.page, 1, total) }));
+    }
   }, []);
 
   const handleError    = useCallback((m) => { setErr(m || "Render failed."); setRendering(false); }, []);
@@ -163,14 +156,14 @@ export default function QuranViewer() {
 
   const goPrevPage = useCallback(() => {
     const { juz, page } = navRef.current;
-    if (page > 1) { setNav({ juz, page: page - 1 }); }
+    if (page > 1) setNav({ juz, page: page - 1 });
     else if (juz > 1) { wantLastPageRef.current = true; setNav({ juz: juz - 1, page: 1 }); }
   }, []);
 
   const goNextPage = useCallback(() => {
     const { juz, page } = navRef.current;
     const total = numPagesRef.current || 1;
-    if (page < total) { setNav({ juz, page: page + 1 }); }
+    if (page < total) setNav({ juz, page: page + 1 });
     else if (juz < 30) { wantLastPageRef.current = false; setNav({ juz: juz + 1, page: 1 }); }
   }, []);
 
@@ -216,14 +209,18 @@ export default function QuranViewer() {
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+
     const now = Date.now();
     if (now - lastAutoRef.current < 800) return;
+
     const th = 32;
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - th;
     const atTop    = el.scrollTop <= th;
     if (!atBottom && !atTop) return;
+
     const { juz, page } = navRef.current;
     const total = numPagesRef.current || 1;
+
     if (atBottom) {
       if (page < total) { lastAutoRef.current = now; setNav({ juz, page: page + 1 }); }
       else if (juz < 30) { lastAutoRef.current = now; wantLastPageRef.current = false; setNav({ juz: juz + 1, page: 1 }); }
@@ -238,172 +235,324 @@ export default function QuranViewer() {
   const onEnter     = (e, fn) => { if (e.key === "Enter") fn(); };
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        background: "transparent",
+      }}
+    >
+      {/* ✅ Safe-area spacer so the top toolbar is always tappable (not under notch/status bar) */}
+      <div style={{ height: "env(safe-area-inset-top, 0px)", flexShrink: 0 }} />
 
-      {/* Toolbar — two rows so nothing overlaps on small screens */}
-      <div ref={toolbarRef} className="mx-2 mt-1 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2 shrink-0">
+      {/* ✅ Sticky header block: toolbar + optional sheets + errors
+          This keeps controls accessible and prevents “hidden under notch” issues. */}
+      <div
+        className="shrink-0"
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 60,
+          paddingTop: 6,
+          background: "rgba(0,0,0,0.28)",
+          backdropFilter: "blur(10px)",
+        }}
+      >
+        {/* Toolbar — two rows so nothing overlaps on small screens */}
+        <div
+          className="mx-2 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2"
+        >
+          {/* Row 1: position info */}
+          <div className="flex items-baseline gap-2 mb-1.5">
+            <span className="text-[12px] font-bold text-white/90 leading-tight">Qur'an</span>
+            <span className="text-[11px] text-white/60 leading-tight">
+              Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;
+              <span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
+            </span>
+          </div>
 
-        {/* Row 1: position info */}
-        <div className="flex items-baseline gap-2 mb-1.5">
-          <span className="text-[12px] font-bold text-white/90 leading-tight">Qur'an</span>
-          <span className="text-[11px] text-white/60 leading-tight">
-            Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;<span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
-          </span>
-        </div>
+          {/* Row 2: nav + zoom buttons */}
+          <div className="flex items-center gap-1.5">
+            <ToolBtn
+              active={sheet === "juz"}
+              onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz" ? null : "juz"); }}
+            >
+              Juz
+            </ToolBtn>
+            <ToolBtn
+              active={sheet === "surah"}
+              onClick={() => { setSurahSearch(""); setSheet(sheet === "surah" ? null : "surah"); }}
+            >
+              Surah
+            </ToolBtn>
+            <ToolBtn
+              active={sheet === "page"}
+              onClick={() => { setJumpPage(String(nav.page)); setSheet(sheet === "page" ? null : "page"); }}
+            >
+              Page
+            </ToolBtn>
+            <ToolBtn
+              active={sheet === "bm" || sheet === "bm-save"}
+              onClick={() => setSheet((sheet === "bm" || sheet === "bm-save") ? null : "bm")}
+            >
+              🔖
+            </ToolBtn>
 
-        {/* Row 2: nav + zoom buttons */}
-        <div className="flex items-center gap-1.5">
-          <ToolBtn active={sheet === "juz"}   onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz"   ? null : "juz");   }}>Juz</ToolBtn>
-          <ToolBtn active={sheet === "surah"} onClick={() => { setSurahSearch(""); setSheet(sheet === "surah" ? null : "surah"); }}>Surah</ToolBtn>
-          <ToolBtn active={sheet === "page"}  onClick={() => { setJumpPage(String(nav.page)); setSheet(sheet === "page"  ? null : "page");  }}>Page</ToolBtn>
-          <ToolBtn active={sheet === "bm" || sheet === "bm-save"} onClick={() => setSheet((sheet === "bm" || sheet === "bm-save") ? null : "bm")}>🔖</ToolBtn>
-          {/* Zoom pushed to the right */}
-          <div className="ml-auto flex items-center gap-1.5">
-            <ToolBtn onClick={() => setZoom((z) => clamp(+(z - 0.1).toFixed(2), 0.5, 2.0))}>−</ToolBtn>
-            <span className="text-[10px] font-semibold text-white/70 w-8 text-center shrink-0">{Math.round(zoom * 100)}%</span>
-            <ToolBtn onClick={() => setZoom((z) => clamp(+(z + 0.1).toFixed(2), 0.5, 2.0))}>+</ToolBtn>
+            {/* Zoom pushed to the right */}
+            <div className="ml-auto flex items-center gap-1.5">
+              <ToolBtn onClick={() => setZoom((z) => clamp(+(z - 0.1).toFixed(2), 0.5, 2.0))}>−</ToolBtn>
+              <span className="text-[10px] font-semibold text-white/70 w-9 text-center shrink-0">
+                {Math.round(zoom * 100)}%
+              </span>
+              <ToolBtn onClick={() => setZoom((z) => clamp(+(z + 0.1).toFixed(2), 0.5, 2.0))}>+</ToolBtn>
+            </div>
           </div>
         </div>
 
-      </div>
-
-      {/* Sheets */}
-      {sheet && (
-        <div ref={sheetRef} className="mx-2 mt-1.5 rounded-2xl border border-white/15 bg-black/40 backdrop-blur-md overflow-hidden shrink-0">
-
-          {sheet === "juz" && (
-            <>
-              <div className="flex items-center justify-between px-3 pt-3 pb-1">
-                <span className="text-sm font-bold text-white/90">Select Juz</span>
-                <button onClick={() => setSheet(null)} className="text-xs text-white/60 hover:text-white/90 px-2 py-1 rounded-lg border border-white/10 bg-black/20">Done</button>
-              </div>
-              <JuzRoller value={rollerJuz} onChange={(j) => { setRollerJuz(j); applyJuzRoller(j); }} />
-            </>
-          )}
-
-          {sheet === "surah" && (
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-white/90">Jump to Surah</span>
-                <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">Close</button>
-              </div>
-              <input
-                value={surahSearch}
-                onChange={(e) => setSurahSearch(e.target.value)}
-                placeholder="Search by name or number…"
-                className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none mb-2 placeholder:text-white/30"
-              />
-              <div className="space-y-1 max-h-52 overflow-y-auto">
-                {filteredSurahs.length === 0 && (
-                  <div className="text-xs text-white/40 text-center py-3">No surahs found</div>
-                )}
-                {filteredSurahs.map((s) => (
-                  <button key={s.n} onClick={() => jumpToSurah(s)} className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 hover:bg-black/35 px-3 py-2 text-left transition">
-                    <span className="shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/70">{s.n}</span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-semibold text-white/90 leading-tight">{s.en}</span>
-                      <span className="block text-[10px] text-white/40 leading-tight">Juz {s.juz}</span>
-                    </span>
-                    <span className="shrink-0 text-sm text-white/60" dir="rtl">{s.ar}</span>
+        {/* Sheets */}
+        {sheet && (
+          <div className="mx-2 mt-1.5 rounded-2xl border border-white/15 bg-black/40 backdrop-blur-md overflow-hidden">
+            {sheet === "juz" && (
+              <>
+                <div className="flex items-center justify-between px-3 pt-3 pb-1">
+                  <span className="text-sm font-bold text-white/90">Select Juz</span>
+                  <button
+                    onClick={() => setSheet(null)}
+                    className="text-xs text-white/60 hover:text-white/90 px-2 py-1 rounded-lg border border-white/10 bg-black/20"
+                  >
+                    Done
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+                <JuzRoller value={rollerJuz} onChange={(j) => { setRollerJuz(j); applyJuzRoller(j); }} />
+              </>
+            )}
 
-          {sheet === "page" && (
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-white/90">Go to page</span>
-                <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">Close</button>
-              </div>
-              <div className="flex gap-2">
-                <input value={jumpPage} onChange={(e) => setJumpPage(e.target.value)} onKeyDown={(e) => onEnter(e, applyPageJump)} inputMode="numeric" placeholder={`1 – ${numPages ?? "?"}`} className="flex-1 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none" />
-                <button onClick={applyPageJump} className="rounded-xl border border-white/20 bg-white/15 hover:bg-white/20 px-4 py-2 text-sm font-bold text-white">Go</button>
-              </div>
-              <div className="mt-1 text-[10px] text-white/40">Juz-{nav.juz} has {numPages ?? "…"} pages</div>
-            </div>
-          )}
-
-          {sheet === "bm" && (
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-white/90">Bookmarks</span>
-                <div className="flex gap-1.5">
-                  <button onClick={openSaveBookmark} className="text-xs text-white/80 px-2 py-1 rounded-lg border border-white/15 bg-white/10 hover:bg-white/20">+ Save here</button>
-                  <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">Close</button>
+            {sheet === "surah" && (
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-white/90">Jump to Surah</span>
+                  <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">
+                    Close
+                  </button>
+                </div>
+                <input
+                  value={surahSearch}
+                  onChange={(e) => setSurahSearch(e.target.value)}
+                  placeholder="Search by name or number…"
+                  className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none mb-2 placeholder:text-white/30"
+                />
+                <div className="space-y-1 max-h-52 overflow-y-auto">
+                  {filteredSurahs.length === 0 && (
+                    <div className="text-xs text-white/40 text-center py-3">No surahs found</div>
+                  )}
+                  {filteredSurahs.map((s) => (
+                    <button
+                      key={s.n}
+                      onClick={() => jumpToSurah(s)}
+                      className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 hover:bg-black/35 px-3 py-2 text-left transition"
+                    >
+                      <span className="shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/70">
+                        {s.n}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-semibold text-white/90 leading-tight">{s.en}</span>
+                        <span className="block text-[10px] text-white/40 leading-tight">Juz {s.juz}</span>
+                      </span>
+                      <span className="shrink-0 text-sm text-white/60" dir="rtl">{s.ar}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {!bookmarks.length && <div className="text-xs text-white/40 py-3 text-center">No bookmarks yet — tap "+ Save here".</div>}
-                {bookmarks.map((b) => (
-                  <div key={b.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                    <button onClick={() => openBookmark(b)} className="flex-1 text-left min-w-0">
-                      <div className="text-xs font-semibold text-white/90 leading-tight truncate">
-                        {b.label || `Juz-${b.juz}, Page ${b.page}`}
-                      </div>
-                      <div className="text-[10px] text-white/40 mt-0.5">
-                        Juz-{b.juz} · Page {b.page} · {new Date(b.createdAt).toLocaleDateString()}
-                      </div>
+            )}
+
+            {sheet === "page" && (
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-white/90">Go to page</span>
+                  <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">
+                    Close
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={jumpPage}
+                    onChange={(e) => setJumpPage(e.target.value)}
+                    onKeyDown={(e) => onEnter(e, applyPageJump)}
+                    inputMode="numeric"
+                    placeholder={`1 – ${numPages ?? "?"}`}
+                    className="flex-1 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none"
+                  />
+                  <button
+                    onClick={applyPageJump}
+                    className="rounded-xl border border-white/20 bg-white/15 hover:bg-white/20 px-4 py-2 text-sm font-bold text-white"
+                  >
+                    Go
+                  </button>
+                </div>
+                <div className="mt-1 text-[10px] text-white/40">Juz-{nav.juz} has {numPages ?? "…"} pages</div>
+              </div>
+            )}
+
+            {sheet === "bm" && (
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-white/90">Bookmarks</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={openSaveBookmark}
+                      className="text-xs text-white/80 px-2 py-1 rounded-lg border border-white/15 bg-white/10 hover:bg-white/20"
+                    >
+                      + Save here
                     </button>
-                    <button onClick={() => removeBookmark(b.id)} className="shrink-0 text-white/30 hover:text-white/70 px-1 text-base leading-none">✕</button>
+                    <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">
+                      Close
+                    </button>
                   </div>
-                ))}
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {!bookmarks.length && (
+                    <div className="text-xs text-white/40 py-3 text-center">
+                      No bookmarks yet — tap "+ Save here".
+                    </div>
+                  )}
+                  {bookmarks.map((b) => (
+                    <div key={b.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                      <button onClick={() => openBookmark(b)} className="flex-1 text-left min-w-0">
+                        <div className="text-xs font-semibold text-white/90 leading-tight truncate">
+                          {b.label || `Juz-${b.juz}, Page ${b.page}`}
+                        </div>
+                        <div className="text-[10px] text-white/40 mt-0.5">
+                          Juz-{b.juz} · Page {b.page} · {new Date(b.createdAt).toLocaleDateString()}
+                        </div>
+                      </button>
+                      <button onClick={() => removeBookmark(b.id)} className="shrink-0 text-white/30 hover:text-white/70 px-1 text-base leading-none">
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {bookmarks.length > 0 && (
+                  <button onClick={clearAll} className="mt-2 text-[10px] text-white/30 hover:text-white/60">
+                    Clear all
+                  </button>
+                )}
               </div>
-              {bookmarks.length > 0 && <button onClick={clearAll} className="mt-2 text-[10px] text-white/30 hover:text-white/60">Clear all</button>}
-            </div>
-          )}
+            )}
 
-          {sheet === "bm-save" && (
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold text-white/90">Name this bookmark</span>
-                <button onClick={() => setSheet("bm")} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">← Back</button>
+            {sheet === "bm-save" && (
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-bold text-white/90">Name this bookmark</span>
+                  <button onClick={() => setSheet("bm")} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">
+                    ← Back
+                  </button>
+                </div>
+                <div className="text-[10px] text-white/40 mb-2">Saving: Juz-{nav.juz} · Page {nav.page}</div>
+                <input
+                  value={bmLabel}
+                  onChange={(e) => setBmLabel(e.target.value)}
+                  onKeyDown={(e) => onEnter(e, confirmSaveBookmark)}
+                  placeholder="e.g. Al-Kahf, morning reading…"
+                  className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none mb-3 placeholder:text-white/30"
+                  autoFocus
+                />
+                <button
+                  onClick={confirmSaveBookmark}
+                  className="w-full rounded-xl border border-white/20 bg-white/15 hover:bg-white/20 px-3 py-2 text-sm font-bold text-white"
+                >
+                  Save Bookmark
+                </button>
               </div>
-              <div className="text-[10px] text-white/40 mb-2">Saving: Juz-{nav.juz} · Page {nav.page}</div>
-              <input
-                value={bmLabel}
-                onChange={(e) => setBmLabel(e.target.value)}
-                onKeyDown={(e) => onEnter(e, confirmSaveBookmark)}
-                placeholder="e.g. Al-Kahf, morning reading…"
-                className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none mb-3 placeholder:text-white/30"
-                autoFocus
-              />
-              <button onClick={confirmSaveBookmark} className="w-full rounded-xl border border-white/20 bg-white/15 hover:bg-white/20 px-3 py-2 text-sm font-bold text-white">
-                Save Bookmark
-              </button>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-        </div>
-      )}
-
-      {/* Error */}
-      {err && (
-        <div className="mx-2 mt-1.5 rounded-2xl border border-red-400/30 bg-red-900/20 px-3 py-2 text-xs text-red-300 shrink-0">
-          <span className="font-semibold">Error: </span>{err}
-        </div>
-      )}
+        {/* Error */}
+        {err && (
+          <div className="mx-2 mt-1.5 rounded-2xl border border-red-400/30 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+            <span className="font-semibold">Error: </span>{err}
+          </div>
+        )}
+      </div>
 
       {/* PDF card */}
-      <div className="mx-2 mt-1.5 mb-2 rounded-2xl border border-white/10 bg-white overflow-hidden" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-
-        <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", position: "relative", WebkitOverflowScrolling: "touch" }}>
+      <div
+        className="mx-2 mt-1.5 mb-2 rounded-2xl border border-white/10 bg-white overflow-hidden"
+        style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+      >
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            position: "relative",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
           {rendering && (
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.8)", zIndex: 10, pointerEvents: "none" }}>
               <div className="h-8 w-8 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
             </div>
           )}
-          <PdfJsPage url={current.path} pageNumber={nav.page} zoom={zoom} onNumPages={handleNumPages} onError={handleError} onRendered={handleRendered} />
+          <PdfJsPage
+            url={current.path}
+            pageNumber={nav.page}
+            zoom={zoom}
+            onNumPages={handleNumPages}
+            onError={handleError}
+            onRendered={handleRendered}
+          />
         </div>
 
-        <div ref={bottomRef} style={{ borderTop: "1px solid #e5e7eb", background: "#f9fafb", padding: "6px 8px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={goPrevPage} disabled={atVeryStart} className={["rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95", atVeryStart ? "opacity-30 cursor-not-allowed" : ""].join(" ")}>◀ Prev</button>
-          <button onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz" ? null : "juz"); }} style={{ flex: 1, textAlign: "center", padding: "4px 0", borderRadius: 12 }} className="hover:bg-gray-100 transition">
+        {/* ✅ Bottom controls: safe-area aware so nothing overlaps / becomes untappable */}
+        <div
+          style={{
+            borderTop: "1px solid #e5e7eb",
+            background: "#f9fafb",
+            padding: "6px 8px",
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={goPrevPage}
+            disabled={atVeryStart}
+            className={[
+              "rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95",
+              atVeryStart ? "opacity-30 cursor-not-allowed" : "",
+            ].join(" ")}
+          >
+            ◀ Prev
+          </button>
+
+          <button
+            onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz" ? null : "juz"); }}
+            style={{ flex: 1, textAlign: "center", padding: "4px 0", borderRadius: 12 }}
+            className="hover:bg-gray-100 transition"
+          >
             <div className="text-[11px] font-bold text-gray-700 leading-tight">Juz-{nav.juz}</div>
             <div className="text-[10px] text-gray-400 leading-tight">{nav.page} / {numPages ?? "…"}</div>
           </button>
-          <button onClick={goNextPage} disabled={atVeryEnd} className={["rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95", atVeryEnd ? "opacity-30 cursor-not-allowed" : ""].join(" ")}>Next ▶</button>
+
+          <button
+            onClick={goNextPage}
+            disabled={atVeryEnd}
+            className={[
+              "rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95",
+              atVeryEnd ? "opacity-30 cursor-not-allowed" : "",
+            ].join(" ")}
+          >
+            Next ▶
+          </button>
         </div>
       </div>
     </div>
@@ -412,7 +561,13 @@ export default function QuranViewer() {
 
 function ToolBtn({ onClick, active = false, children }) {
   return (
-    <button onClick={onClick} className={["rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold transition active:scale-95 shrink-0", active ? "border-white/30 bg-white/20 text-white" : "border-white/15 bg-black/25 hover:bg-black/35 text-white/80"].join(" ")}>
+    <button
+      onClick={onClick}
+      className={[
+        "rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold transition active:scale-95 shrink-0",
+        active ? "border-white/30 bg-white/20 text-white" : "border-white/15 bg-black/25 hover:bg-black/35 text-white/80",
+      ].join(" ")}
+    >
       {children}
     </button>
   );

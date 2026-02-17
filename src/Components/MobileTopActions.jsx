@@ -103,13 +103,8 @@ export default function MobileTopActions({
 
   return (
     <>
-      {/* ── Action bar (safe-area aware) ─────────────────────────────────── */}
-      <div
-        className={["px-4 pb-3", className].join(" ")}
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        }}
-      >
+      {/* ── Action bar (NOT safe-area padded here — stops covering Hijri date) ─ */}
+      <div className={["px-4 pb-3", className].join(" ")}>
         <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg px-2 py-2">
           <div
             className="grid gap-2"
@@ -148,162 +143,171 @@ export default function MobileTopActions({
           role="dialog"
           aria-modal="true"
         >
-          {/* ── Self-contained panels (Adhkar, Quran) ───────────────────── */}
-          {isSelfContained ? (
-            <div className="absolute inset-0 overflow-hidden">
-              {openKey === "adhkar" && <AdhkarTracker />}
-              {openKey === "quran" && <QuranViewer />}
+          {/* ✅ Give the overlay its own safe-area top space so contents aren’t under iOS status bar */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              paddingTop: "env(safe-area-inset-top, 0px)",
+            }}
+          >
+            {/* ── Self-contained panels (Adhkar, Quran) ───────────────────── */}
+            {isSelfContained ? (
+              <div className="absolute inset-0 overflow-hidden">
+                {openKey === "adhkar" && <AdhkarTracker />}
+                {openKey === "quran" && <QuranViewer />}
 
-              {/* Floating close (BOTTOM-RIGHT, safe-area aware) */}
-              <button
-                onClick={close}
-                style={{
-                  position: "absolute",
-                  right: 16,
-                  bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
-                  zIndex: 50,
-                }}
-                className="px-4 py-2 rounded-2xl border border-white/20 bg-black/60 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/70 transition active:scale-95"
-              >
-                Close
-              </button>
-            </div>
-          ) : (
-            /* ── Shared-header panels (Messages, More) ─────────────────── */
-            <>
-              <div
-                ref={headerRef}
-                className="px-4 pb-2"
-                style={{
-                  paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
-                }}
-              >
-                <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
-                  <div className="flex items-center justify-between px-3 py-3">
-                    <div className="text-base font-bold truncate">{title}</div>
-                    <button
-                      onClick={close}
-                      className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5 text-sm font-semibold hover:bg-black/35"
-                    >
-                      Close
-                    </button>
+                {/* ✅ Close moved to TOP-RIGHT (safe-area aware), so it never overlaps bottom controls */}
+                <button
+                  onClick={close}
+                  style={{
+                    position: "absolute",
+                    top: "max(env(safe-area-inset-top, 12px), 12px)",
+                    right: 14,
+                    zIndex: 80,
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-white/20 bg-black/60 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/70 transition active:scale-95"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              /* ── Shared-header panels (Messages, More) ─────────────────── */
+              <>
+                <div
+                  ref={headerRef}
+                  className="px-4 pb-2"
+                  style={{
+                    paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                  }}
+                >
+                  <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg">
+                    <div className="flex items-center justify-between px-3 py-3">
+                      <div className="text-base font-bold truncate">{title}</div>
+                      <button
+                        onClick={close}
+                        className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5 text-sm font-semibold hover:bg-black/35"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div
-                style={{
-                  position: "absolute",
-                  top: headerH || 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  overflow: "hidden",
-                }}
-              >
-                <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
-                  <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-                    {/* Messages */}
-                    {openKey === "messages" && (
-                      <div className="p-4">
-                        <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
-                          <div className="flex items-start gap-3">
-                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
-                              <IconChat />
-                            </span>
-                            <div className="min-w-0">
-                              <div className="font-bold leading-tight">
-                                Messages
-                              </div>
-                              <div className="text-sm opacity-80 leading-snug">
-                                If the slideshow doesn't load, you can retry
-                                below.
+                <div
+                  style={{
+                    position: "absolute",
+                    top: headerH || 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
+                    <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
+                      {/* Messages */}
+                      {openKey === "messages" && (
+                        <div className="p-4">
+                          <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
+                            <div className="flex items-start gap-3">
+                              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
+                                <IconChat />
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-bold leading-tight">
+                                  Messages
+                                </div>
+                                <div className="text-sm opacity-80 leading-snug">
+                                  If the slideshow doesn't load, you can retry
+                                  below.
+                                </div>
                               </div>
                             </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                onClick={retryMessages}
+                                className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                              >
+                                Retry
+                              </button>
+                              <a
+                                href={slideshowUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                              >
+                                Open in browser
+                              </a>
+                            </div>
                           </div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              onClick={retryMessages}
-                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                            >
-                              Retry
-                            </button>
-                            <a
-                              href={slideshowUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                            >
-                              Open in browser
-                            </a>
+
+                          {!msgLoaded && !msgTimedOut && (
+                            <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
+                              <div className="flex items-center gap-3">
+                                <Spinner />
+                                <div className="text-sm opacity-85">
+                                  Loading slideshow…
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {msgTimedOut && !msgLoaded && (
+                            <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
+                              <div className="text-sm">
+                                <div className="font-semibold mb-1">
+                                  Still loading…
+                                </div>
+                                <div className="opacity-85">
+                                  May be a slow connection or browser blocking
+                                  embedded content.
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="rounded-2xl border border-white/15 bg-black/25 overflow-hidden">
+                            <div className="h-[calc(100vh-260px)]">
+                              <iframe
+                                key={msgAttempt}
+                                title="Messages Slideshow"
+                                src={slideshowUrl}
+                                className="w-full h-full"
+                                style={{ border: 0 }}
+                                allow="autoplay; fullscreen"
+                                onLoad={() => setMsgLoaded(true)}
+                              />
+                            </div>
                           </div>
                         </div>
+                      )}
 
-                        {!msgLoaded && !msgTimedOut && (
-                          <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
-                            <div className="flex items-center gap-3">
-                              <Spinner />
-                              <div className="text-sm opacity-85">
-                                Loading slideshow…
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {msgTimedOut && !msgLoaded && (
-                          <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-4 mb-3">
-                            <div className="text-sm">
-                              <div className="font-semibold mb-1">
-                                Still loading…
-                              </div>
-                              <div className="opacity-85">
-                                May be a slow connection or browser blocking
-                                embedded content.
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="rounded-2xl border border-white/15 bg-black/25 overflow-hidden">
-                          <div className="h-[calc(100vh-260px)]">
-                            <iframe
-                              key={msgAttempt}
-                              title="Messages Slideshow"
-                              src={slideshowUrl}
-                              className="w-full h-full"
-                              style={{ border: 0 }}
-                              allow="autoplay; fullscreen"
-                              onLoad={() => setMsgLoaded(true)}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {openKey === "more" && (
-                      <ComingSoon
-                        icon={<IconMore className="opacity-90" />}
-                        title="More"
-                        body="More shortcuts will be added soon."
-                      />
-                    )}
+                      {openKey === "more" && (
+                        <ComingSoon
+                          icon={<IconMore className="opacity-90" />}
+                          title="More"
+                          body="More shortcuts will be added soon."
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
 
-          {/* Toast */}
-          {toast && (
-            <div
-              className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center"
-              style={{ zIndex: zIndex + 1 }}
-            >
-              <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">
-                {toast}
+            {/* Toast */}
+            {toast && (
+              <div
+                className="pointer-events-none fixed left-0 right-0 bottom-5 flex justify-center"
+                style={{ zIndex: zIndex + 1 }}
+              >
+                <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/15 text-sm">
+                  {toast}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </>
