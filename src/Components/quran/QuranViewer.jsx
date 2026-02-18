@@ -41,24 +41,9 @@ function JuzRoller({ value, onChange }) {
 
   return (
     <div style={{ position: "relative", height: 200, overflow: "hidden" }}>
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: "50%",
-          transform: "translateY(-50%)",
-          height: ITEM_H,
-          borderTop: "1px solid rgba(255,255,255,0.2)",
-          borderBottom: "1px solid rgba(255,255,255,0.2)",
-          background: "rgba(255,255,255,0.08)",
-          pointerEvents: "none",
-          zIndex: 2,
-        }}
-      />
+      <div style={{ position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)", height: ITEM_H, borderTop: "1px solid rgba(255,255,255,0.2)", borderBottom: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", pointerEvents: "none", zIndex: 2 }} />
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 70, background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)", pointerEvents: "none", zIndex: 3 }} />
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70, background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)", pointerEvents: "none", zIndex: 3 }} />
-
       <div
         ref={listRef}
         onScroll={onScroll}
@@ -101,7 +86,7 @@ function JuzRoller({ value, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main QuranViewer
 // ─────────────────────────────────────────────────────────────────────────────
-export default function QuranViewer() {
+export default function QuranViewer({ onClose }) {
   const juzList  = useMemo(() => buildJuzList(), []);
   const { bookmarks, addBookmark, removeBookmark, clearAll } = useQuranBookmarks();
 
@@ -210,23 +195,15 @@ export default function QuranViewer() {
 
   const goPrevPage = useCallback(() => {
     const { juz, page } = navRef.current;
-    if (page > 1) {
-      setNav({ juz, page: page - 1 });
-    } else if (juz > 1) {
-      wantLastPageRef.current = true;
-      setNav({ juz: juz - 1, page: 1 });
-    }
+    if (page > 1) { setNav({ juz, page: page - 1 }); }
+    else if (juz > 1) { wantLastPageRef.current = true; setNav({ juz: juz - 1, page: 1 }); }
   }, []);
 
   const goNextPage = useCallback(() => {
     const { juz, page } = navRef.current;
     const total = numPagesRef.current || 1;
-    if (page < total) {
-      setNav({ juz, page: page + 1 });
-    } else if (juz < 30) {
-      wantLastPageRef.current = false;
-      setNav({ juz: juz + 1, page: 1 });
-    }
+    if (page < total) { setNav({ juz, page: page + 1 }); }
+    else if (juz < 30) { wantLastPageRef.current = false; setNav({ juz: juz + 1, page: 1 }); }
   }, []);
 
   const applyJuzRoller = useCallback((j) => {
@@ -248,7 +225,6 @@ export default function QuranViewer() {
     setSheet(null);
   }, []);
 
-  // Auto-suggest label based on current position
   const openSaveBookmark = useCallback(() => {
     const { juz, page } = navRef.current;
     const match = [...surahsInJuz(juz)].reverse().find((s) => s.page <= page);
@@ -275,32 +251,47 @@ export default function QuranViewer() {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-      {/* Toolbar — two rows so nothing overlaps on small screens */}
-      <div ref={toolbarRef} className="mx-2 mt-1 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2 shrink-0">
+      {/* Toolbar */}
+      <div
+        ref={toolbarRef}
+        className="mx-2 mt-1 rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-3 py-2 shrink-0"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)" }}
+      >
+        {/* Row 1: title/position + Close */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-[12px] font-bold text-white/90 leading-tight">Qur'an</span>
+            <span className="text-[11px] text-white/60 leading-tight truncate">
+              Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;
+              <span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
+            </span>
+          </div>
 
-        {/* Row 1: position info */}
-        <div className="flex items-baseline gap-2 mb-1.5">
-          <span className="text-[12px] font-bold text-white/90 leading-tight">Qur'an</span>
-          <span className="text-[11px] text-white/60 leading-tight">
-            Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;<span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {typeof onClose === "function" && (
+              <button
+                onClick={onClose}
+                className="px-3 py-1.5 rounded-xl border border-white/20 bg-black/40 backdrop-blur-sm text-[11px] font-semibold text-white hover:bg-black/55 transition active:scale-95"
+              >
+                Close
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Row 2: nav + zoom buttons */}
+        {/* Row 2: tools + zoom */}
         <div className="flex items-center gap-1.5">
           <ToolBtn active={sheet === "juz"}   onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz"   ? null : "juz");   }}>Juz</ToolBtn>
           <ToolBtn active={sheet === "surah"} onClick={() => { setSurahSearch(""); setSheet(sheet === "surah" ? null : "surah"); }}>Surah</ToolBtn>
           <ToolBtn active={sheet === "page"}  onClick={() => { setJumpPage(String(nav.page)); setSheet(sheet === "page"  ? null : "page");  }}>Page</ToolBtn>
           <ToolBtn active={sheet === "bm" || sheet === "bm-save"} onClick={() => setSheet((sheet === "bm" || sheet === "bm-save") ? null : "bm")}>🔖</ToolBtn>
 
-          {/* Zoom pushed to the right */}
           <div className="ml-auto flex items-center gap-1.5">
             <ToolBtn onClick={() => setZoom((z) => clamp(+(z - 0.1).toFixed(2), 0.5, 2.0))}>−</ToolBtn>
             <span className="text-[10px] font-semibold text-white/70 w-8 text-center shrink-0">{Math.round(zoom * 100)}%</span>
             <ToolBtn onClick={() => setZoom((z) => clamp(+(z + 0.1).toFixed(2), 0.5, 2.0))}>+</ToolBtn>
           </div>
         </div>
-
       </div>
 
       {/* Sheets */}
@@ -334,11 +325,7 @@ export default function QuranViewer() {
                   <div className="text-xs text-white/40 text-center py-3">No surahs found</div>
                 )}
                 {filteredSurahs.map((s) => (
-                  <button
-                    key={s.n}
-                    onClick={() => jumpToSurah(s)}
-                    className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 hover:bg-black/35 px-3 py-2 text-left transition"
-                  >
+                  <button key={s.n} onClick={() => jumpToSurah(s)} className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 hover:bg-black/35 px-3 py-2 text-left transition">
                     <span className="shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/70">{s.n}</span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-xs font-semibold text-white/90 leading-tight">{s.en}</span>
@@ -461,12 +448,36 @@ export default function QuranViewer() {
         </div>
 
         <div ref={bottomRef} style={{ borderTop: "1px solid #e5e7eb", background: "#f9fafb", padding: "6px 8px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={goPrevPage} disabled={atVeryStart} className={["rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95", atVeryStart ? "opacity-30 cursor-not-allowed" : ""].join(" ")}>◀ Prev</button>
-          <button onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz" ? null : "juz"); }} style={{ flex: 1, textAlign: "center", padding: "4px 0", borderRadius: 12 }} className="hover:bg-gray-100 transition">
+          <button
+            onClick={goPrevPage}
+            disabled={atVeryStart}
+            className={[
+              "rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95",
+              atVeryStart ? "opacity-30 cursor-not-allowed" : "",
+            ].join(" ")}
+          >
+            ◀ Prev
+          </button>
+
+          <button
+            onClick={() => { setRollerJuz(nav.juz); setSheet(sheet === "juz" ? null : "juz"); }}
+            style={{ flex: 1, textAlign: "center", padding: "4px 0", borderRadius: 12 }}
+            className="hover:bg-gray-100 transition"
+          >
             <div className="text-[11px] font-bold text-gray-700 leading-tight">Juz-{nav.juz}</div>
             <div className="text-[10px] text-gray-400 leading-tight">{nav.page} / {numPages ?? "…"}</div>
           </button>
-          <button onClick={goNextPage} disabled={atVeryEnd} className={["rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95", atVeryEnd ? "opacity-30 cursor-not-allowed" : ""].join(" ")}>Next ▶</button>
+
+          <button
+            onClick={goNextPage}
+            disabled={atVeryEnd}
+            className={[
+              "rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-100 text-gray-700 shadow-sm transition active:scale-95",
+              atVeryEnd ? "opacity-30 cursor-not-allowed" : "",
+            ].join(" ")}
+          >
+            Next ▶
+          </button>
         </div>
       </div>
     </div>

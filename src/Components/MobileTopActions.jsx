@@ -22,8 +22,7 @@ export default function MobileTopActions({
   useEffect(() => {
     if (!openKey || SELF_CONTAINED.has(openKey) || !headerRef.current) return;
     const measure = () => {
-      if (headerRef.current)
-        setHeaderH(headerRef.current.getBoundingClientRect().height);
+      if (headerRef.current) setHeaderH(headerRef.current.getBoundingClientRect().height);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -46,9 +45,7 @@ export default function MobileTopActions({
     if (!openKey) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [openKey]);
 
   const flash = (msg) => {
@@ -66,18 +63,10 @@ export default function MobileTopActions({
 
   const isSelfContained = SELF_CONTAINED.has(openKey);
 
-  // Temporary safe fallback destination (as requested)
-  const websiteUrl = "https://greenbankbristol.org";
-
   return (
     <>
-      {/* ── Action bar (safe-area aware) ─────────────────────────────────── */}
-      <div
-        className={["px-4 pb-3", className].join(" ")}
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        }}
-      >
+      {/* ── Action bar (NO extra safe-area padding here) ────────────────── */}
+      <div className={["px-4 pb-3", className].join(" ")}>
         <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md shadow-lg px-2 py-2">
           <div
             className="grid gap-2"
@@ -120,21 +109,25 @@ export default function MobileTopActions({
           {isSelfContained ? (
             <div className="absolute inset-0 overflow-hidden">
               {openKey === "adhkar" && <AdhkarTracker />}
-              {openKey === "quran" && <QuranViewer />}
 
-              {/* Floating close (BOTTOM-RIGHT, safe-area aware) */}
-              <button
-                onClick={close}
-                style={{
-                  position: "absolute",
-                  right: 16,
-                  bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
-                  zIndex: 50,
-                }}
-                className="px-4 py-2 rounded-2xl border border-white/20 bg-black/60 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/70 transition active:scale-95"
-              >
-                Close
-              </button>
+              {/* Qur'an: Close is INSIDE QuranViewer toolbar now */}
+              {openKey === "quran" && <QuranViewer onClose={close} />}
+
+              {/* Only show floating Close for Adhkar (Quran has its own now) */}
+              {openKey === "adhkar" && (
+                <button
+                  onClick={close}
+                  style={{
+                    position: "absolute",
+                    right: 16,
+                    bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
+                    zIndex: 50,
+                  }}
+                  className="px-4 py-2 rounded-2xl border border-white/20 bg-black/60 backdrop-blur-sm text-sm font-semibold text-white hover:bg-black/70 transition active:scale-95"
+                >
+                  Close
+                </button>
+              )}
             </div>
           ) : (
             /* ── Shared-header panels (Messages, More) ─────────────────── */
@@ -171,50 +164,51 @@ export default function MobileTopActions({
               >
                 <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
                   <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-                    {/* Messages */}
+
+                    {/* Messages: temporary workaround */}
                     {openKey === "messages" && (
                       <div className="p-4">
-                        <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-4">
+                        <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
                           <div className="flex items-start gap-3">
-                            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
+                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
                               <IconChat />
                             </span>
                             <div className="min-w-0">
-                              <div className="text-lg font-bold leading-tight">
-                                Messages
-                              </div>
-                              <div className="mt-1 text-sm opacity-85 leading-snug">
-                                Temporary workaround: open the slideshow in a new tab (recommended), or use the website link.
+                              <div className="font-bold leading-tight">Messages</div>
+                              <div className="text-sm opacity-80 leading-snug">
+                                Temporary workaround: open Greenbank’s website (the embedded slideshow is triggering a browser error on some phones).
                               </div>
                             </div>
                           </div>
 
-                          <div className="mt-4 grid gap-2">
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <a
+                              href="https://greenbankbristol.org"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                              onClick={() => flash("Opening greenbankbristol.org…")}
+                            >
+                              Open GreenbankBristol.org
+                            </a>
+
                             <a
                               href={slideshowUrl}
                               target="_blank"
                               rel="noreferrer"
+                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
                               onClick={() => flash("Opening slideshow…")}
-                              className="w-full px-4 py-3 rounded-2xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold text-white text-center"
                             >
-                              Open Slideshow
+                              Open slideshow (direct)
                             </a>
-
-                            <a
-                              href={websiteUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => flash("Opening website…")}
-                              className="w-full px-4 py-3 rounded-2xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold text-white text-center"
-                            >
-                              Open greenbankbristol.org
-                            </a>
-                          </div>
-
-                          <div className="mt-3 text-[11px] text-white/50">
-                            Once the underlying embed error is fixed, we can re-enable the inline slideshow view here.
                           </div>
                         </div>
+
+                        <ComingSoon
+                          icon={<IconChat className="opacity-90" />}
+                          title="Embed disabled"
+                          body="We’ll re-enable the embedded slideshow once the mobile browser error is fully resolved."
+                        />
                       </div>
                     )}
 
@@ -268,14 +262,7 @@ function ComingSoon({ icon, title, body }) {
 
 function IconBase({ children, className = "" }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      className={className}
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" className={className} aria-hidden="true">
       {children}
     </svg>
   );
@@ -284,11 +271,7 @@ function IconBase({ children, className = "" }) {
 function IconChat({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
+      <path d="M7 18l-3 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-2 2Z" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
   );
 }
@@ -296,16 +279,8 @@ function IconChat({ className = "" }) {
 function IconTasbih({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
+      <path d="M12 3c2.2 0 4 1.8 4 4 0 1.1-.4 2-1.1 2.8l1.3 1.3c.6.6.6 1.6 0 2.2l-.7.7c-.6.6-1.6.6-2.2 0l-1.3-1.3c-.8.7-1.7 1.1-2.8 1.1-2.2 0-4-1.8-4-4s1.8-4 4-4Z" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M8.5 15.5l-1.7 1.7a3 3 0 1 0 4.2 4.2l1.7-1.7" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
   );
 }
@@ -313,11 +288,7 @@ function IconTasbih({ className = "" }) {
 function IconBook({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
+      <path d="M6 4.5h10a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8 7h8" stroke="currentColor" strokeWidth="1.6" />
       <path d="M8 10h8" stroke="currentColor" strokeWidth="1.6" />
     </IconBase>
@@ -327,12 +298,7 @@ function IconBook({ className = "" }) {
 function IconMore({ className = "" }) {
   return (
     <IconBase className={className}>
-      <path
-        d="M6 12h.01M12 12h.01M18 12h.01"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      <path d="M6 12h.01M12 12h.01M18 12h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </IconBase>
   );
 }
