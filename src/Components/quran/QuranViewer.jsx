@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import PdfJsPage from "./PdfJsPage";
 import { buildJuzList } from "../../utils/quranFiles";
 import useQuranBookmarks from "../../hooks/useQuranBookmarks";
-import { SURAHS, surahsInJuz } from "../../utils/surahData";
+import { SURAHS, surahsInJuz, JUZ_START_PAGE } from "../../utils/surahData";
 
 const LS_LAST_JUZ  = "gbm_quran_last_juz";
 const LS_LAST_PAGE = "gbm_quran_last_page";
@@ -161,6 +161,12 @@ export default function QuranViewer({ onClose }) {
     return SURAHS.filter((s) => s.en.toLowerCase().includes(q) || s.ar.includes(q) || String(s.n).startsWith(q));
   }, [surahSearch]);
 
+  // Absolute Quran page number for display only — nav.page stays relative to juz PDF
+  const absPage = useMemo(
+    () => (JUZ_START_PAGE[nav.juz] ?? 1) + nav.page - 1,
+    [nav.juz, nav.page]
+  );
+
   const scrollRef = useRef(null);
 
   const prevJuzRef = useRef(nav.juz);
@@ -263,7 +269,7 @@ export default function QuranViewer({ onClose }) {
             <span className="text-[12px] font-bold text-white/90 leading-tight">Qur'an</span>
             <span className="text-[11px] text-white/60 leading-tight truncate">
               Juz-{nav.juz}&nbsp;·&nbsp;Page&nbsp;
-              <span className="font-semibold text-white/90">{nav.page}</span>/{numPages ?? "…"}
+              <span className="font-semibold text-white/90">{absPage}</span>
             </span>
           </div>
 
@@ -394,7 +400,7 @@ export default function QuranViewer({ onClose }) {
                 <span className="text-sm font-bold text-white/90">Name this bookmark</span>
                 <button onClick={() => setSheet("bm")} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">← Back</button>
               </div>
-              <div className="text-[10px] text-white/40 mb-2">Saving: Juz-{nav.juz} · Page {nav.page}</div>
+              <div className="text-[10px] text-white/40 mb-2">Saving: Juz-{nav.juz} · Page {absPage}</div>
               <input
                 value={bmLabel}
                 onChange={(e) => setBmLabel(e.target.value)}
@@ -465,7 +471,7 @@ export default function QuranViewer({ onClose }) {
             className="hover:bg-gray-100 transition"
           >
             <div className="text-[11px] font-bold text-gray-700 leading-tight">Juz-{nav.juz}</div>
-            <div className="text-[10px] text-gray-400 leading-tight">{nav.page} / {numPages ?? "…"}</div>
+            <div className="text-[10px] text-gray-400 leading-tight">{absPage} / 850</div>
           </button>
 
           <button
