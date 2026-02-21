@@ -1,12 +1,12 @@
 {
-  "lastUpdated": "2026-02-21T16:00:47.090Z",
-  "hash": "8d4a9433b3430f7bc0eff2a0847ce81b110ac6069f4efb4e160509ab89a64ed5",
+  "lastUpdated": "2026-02-21T16:45:24.666Z",
+  "hash": "4c6b4167c9418cad1af2cd63de2f266883d5a00d77fc596b8271a5f4cee69df6",
   "sources": {
     "settings": "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/settings",
     "prayerTimes": "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/PrayerTimes"
   },
   "counts": {
-    "settingsRows": 321,
+    "settingsRows": 322,
     "prayerTimesRows": 366
   }
 }
