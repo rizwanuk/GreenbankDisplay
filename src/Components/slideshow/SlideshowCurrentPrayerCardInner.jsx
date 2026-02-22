@@ -43,6 +43,12 @@ export default function SlideshowCurrentPrayerCardInner({
     fontEng: "font-rubik",
     fontAra: "font-arabic",
     textColor: "text-white",
+
+    // ✅ FIX: allow message banner to wrap instead of truncate
+    messageWrap: true,
+
+    // Optional: limit to 2 clean lines (remove if you want unlimited lines)
+    messageMaxLines: 2,
   };
 
   return (
