@@ -38,7 +38,8 @@ export default function MobileCurrentCard({
 
   // Fake-time support
   const fakeEnabled =
-    String(settingsMap["toggles.fakeTimeEnabled"] ?? "false").toLowerCase() === "true";
+    String(settingsMap["toggles.fakeTimeEnabled"] ?? "false").toLowerCase() ===
+    "true";
   const fakeTimeStr = settingsMap["toggles.fakeTime"];
   let effectiveNow = now;
 
@@ -148,6 +149,9 @@ export default function MobileCurrentCard({
       ? theme.makroohColor || baseBg
       : baseBg;
 
+  // ✅ Wrap control (slideshow sets theme.messageWrap=true)
+  const wrapHeader = Boolean(theme?.messageWrap);
+
   const CardShell = ({ children }) => (
     <div className={`flex rounded-2xl border ${borderClass} ${stateBg} ${textClass}`}>
       <div className={`w-8 sm:w-10 ${accentColor} rounded-l-2xl flex items-center justify-center`}>
@@ -160,19 +164,31 @@ export default function MobileCurrentCard({
   );
 
   const Header = (
-    <div className="flex items-center justify-center gap-2 mb-2 w-full">
+    <div
+      className={[
+        "flex items-center justify-center gap-2 mb-2 w-full",
+        wrapHeader ? "flex-wrap" : "",
+      ].join(" ")}
+    >
       <span
         className={[
-          "font-semibold whitespace-nowrap",
+          "font-semibold",
+          wrapHeader
+            ? "whitespace-normal break-words text-center"
+            : "whitespace-nowrap",
           theme.nameSize || "text-[clamp(1.1rem,5vw,1.6rem)]",
         ].join(" ")}
       >
         {label}
       </span>
+
       {arabic && (
         <span
           className={[
-            "font-arabic whitespace-nowrap",
+            "font-arabic",
+            wrapHeader
+              ? "whitespace-normal break-words text-center"
+              : "whitespace-nowrap",
             theme.nameSizeArabic || "text-[clamp(1rem,4.5vw,1.25rem)]",
           ].join(" ")}
           lang="ar"
