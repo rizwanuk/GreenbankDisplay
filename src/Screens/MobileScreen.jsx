@@ -446,7 +446,7 @@ export default function MobileScreen() {
           </div>
 
           {/* ✅ Top action bar (More removed) */}
-          <MobileTopActions slideshowUrl="/slideshow" zIndex={80} show={{ more: false }} />
+          <MobileTopActions slideshowUrl="/messages" zIndex={80} show={{ more: false }} />
         </div>
 
         <main className="px-4 py-4 space-y-3">

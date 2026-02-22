@@ -7,7 +7,7 @@ import AdhkarTracker from "./adhkar/AdhkarTracker";
 const SELF_CONTAINED = new Set(["adhkar", "quran"]);
 
 export default function MobileTopActions({
-  slideshowUrl = "/slideshow",
+  slideshowUrl = "/messages",
   zIndex = 80,
   className = "",
   show,
@@ -18,6 +18,12 @@ export default function MobileTopActions({
   // Measure the shared header height (only used for messages / more)
   const headerRef = useRef(null);
   const [headerH, setHeaderH] = useState(0);
+
+  // Messages iframe safety (embed can fail on some mobile browsers)
+  const [msgLoaded, setMsgLoaded] = useState(false);
+  const [msgTimedOut, setMsgTimedOut] = useState(false);
+  const [msgAttempt, setMsgAttempt] = useState(0);
+  const msgTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!openKey || SELF_CONTAINED.has(openKey) || !headerRef.current) return;
@@ -45,8 +51,27 @@ export default function MobileTopActions({
     if (!openKey) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [openKey]);
+
+  // Reset messages iframe states whenever Messages is opened (or retried)
+  useEffect(() => {
+    if (openKey !== "messages") return;
+
+    setMsgLoaded(false);
+    setMsgTimedOut(false);
+
+    if (msgTimeoutRef.current) window.clearTimeout(msgTimeoutRef.current);
+    msgTimeoutRef.current = window.setTimeout(() => {
+      setMsgTimedOut(true);
+    }, 8000);
+
+    return () => {
+      if (msgTimeoutRef.current) window.clearTimeout(msgTimeoutRef.current);
+    };
+  }, [openKey, msgAttempt]);
 
   const flash = (msg) => {
     setToast(msg);
@@ -62,6 +87,10 @@ export default function MobileTopActions({
   const close = () => setOpenKey(null);
 
   const isSelfContained = SELF_CONTAINED.has(openKey);
+
+  // If later you add a true “slides-only” mode, keep this param.
+  // For now it will just be ignored by the slideshow screen (safe).
+  const messagesSrc = `${slideshowUrl}?embed=1&slides=1&try=${msgAttempt}`;
 
   return (
     <>
@@ -164,51 +193,88 @@ export default function MobileTopActions({
               >
                 <div className="h-full px-4 pb-4 pt-1 overflow-hidden">
                   <div className="h-full rounded-2xl border border-white/15 bg-black/25 backdrop-blur-md shadow-lg overflow-hidden">
-
-                    {/* Messages: temporary workaround */}
+                    {/* Messages: embed slideshow */}
                     {openKey === "messages" && (
-                      <div className="p-4">
-                        <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 mb-3">
-                          <div className="flex items-start gap-3">
-                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/25 border border-white/10">
-                              <IconChat />
-                            </span>
-                            <div className="min-w-0">
-                              <div className="font-bold leading-tight">Messages</div>
-                              <div className="text-sm opacity-80 leading-snug">
-                                Temporary workaround: open Greenbank’s website (the embedded slideshow is triggering a browser error on some phones).
-                              </div>
-                            </div>
-                          </div>
+                      <div className="h-full flex flex-col">
+                        {/* Top controls */}
+                        <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
+                          <button
+                            onClick={() => setMsgAttempt((n) => n + 1)}
+                            className="px-3 py-1.5 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                          >
+                            Reload embed
+                          </button>
 
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <a
-                              href="https://greenbankbristol.org"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                              onClick={() => flash("Opening greenbankbristol.org…")}
-                            >
-                              Open GreenbankBristol.org
-                            </a>
+                          <a
+                            href={slideshowUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                            onClick={() => flash("Opening slideshow…")}
+                          >
+                            Open slideshow (direct)
+                          </a>
 
-                            <a
-                              href={slideshowUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
-                              onClick={() => flash("Opening slideshow…")}
-                            >
-                              Open slideshow (direct)
-                            </a>
+                          <div className="ml-auto text-xs opacity-70">
+                            {msgLoaded ? "Loaded" : msgTimedOut ? "Embed blocked" : "Loading…"}
                           </div>
                         </div>
 
-                        <ComingSoon
-                          icon={<IconChat className="opacity-90" />}
-                          title="Embed disabled"
-                          body="We’ll re-enable the embedded slideshow once the mobile browser error is fully resolved."
-                        />
+                        {/* Embed area */}
+                        <div className="relative flex-1">
+                          {!msgLoaded && !msgTimedOut && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="px-4 py-3 rounded-2xl border border-white/15 bg-white/10 text-sm font-semibold">
+                                Loading slideshow…
+                              </div>
+                            </div>
+                          )}
+
+                          {msgTimedOut && !msgLoaded && (
+                            <div className="absolute inset-0 flex items-center justify-center p-4">
+                              <div className="max-w-md w-full rounded-2xl border border-white/15 bg-white/10 p-4 text-center">
+                                <div className="text-lg font-bold">Embed blocked</div>
+                                <div className="mt-1 text-sm opacity-85">
+                                  Your browser didn’t allow the slideshow to load inside the app.
+                                </div>
+                                <div className="mt-3 flex gap-2 justify-center">
+                                  <button
+                                    onClick={() => setMsgAttempt((n) => n + 1)}
+                                    className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                                  >
+                                    Try again
+                                  </button>
+                                  <a
+                                    href={slideshowUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-3 py-2 rounded-xl border border-white/15 bg-black/25 hover:bg-black/35 text-sm font-semibold"
+                                  >
+                                    Open slideshow (direct)
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <iframe
+                            key={msgAttempt}
+                            title="Greenbank Slideshow"
+                            src={messagesSrc}
+                            className="absolute inset-0 w-full h-full"
+                            style={{ border: 0 }}
+                            loading="eager"
+                            referrerPolicy="no-referrer"
+                            allow="autoplay; fullscreen; clipboard-read; clipboard-write"
+                            allowFullScreen
+                            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
+                            onLoad={() => {
+                              setMsgLoaded(true);
+                              setMsgTimedOut(false);
+                              if (msgTimeoutRef.current) window.clearTimeout(msgTimeoutRef.current);
+                            }}
+                          />
+                        </div>
                       </div>
                     )}
 

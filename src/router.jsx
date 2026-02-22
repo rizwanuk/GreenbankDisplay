@@ -4,6 +4,7 @@ import { createBrowserRouter } from "react-router-dom";
 import App from "./App";
 import AdminScreen from "./Screens/AdminScreen";
 import SlideshowScreen from "./Screens/SlideshowScreen";
+import MessagesSlidesScreen from "./Screens/MessagesSlidesScreen";
 import MobileScreen from "./Screens/MobileScreen";
 import EmbedScreen from "./EmbedScreen";
 import Embed2Screen from "./Embed2Screen";
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
   { path: "/", element: <App />, errorElement: <ErrorPage /> },
   { path: "/admin", element: <AdminScreen />, errorElement: <ErrorPage /> },
   { path: "/slideshow", element: <SlideshowScreen />, errorElement: <ErrorPage /> },
+  { path: "/messages", element: <MessagesSlidesScreen />, errorElement: <ErrorPage /> },
 
   // These are SPA routes (NOT the embed.html entry)
   { path: "/embed", element: <EmbedScreen />, errorElement: <ErrorPage /> },
