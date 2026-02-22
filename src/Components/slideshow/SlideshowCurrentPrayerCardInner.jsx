@@ -1,5 +1,5 @@
 import React from "react";
-import CurrentPrayerCard from "../CurrentPrayerCard";
+import MobileCurrentCard from "../MobileCurrentCard"; // <- adjust path if needed
 
 export default function SlideshowCurrentPrayerCardInner({
   now,
@@ -33,7 +33,7 @@ export default function SlideshowCurrentPrayerCardInner({
 
   const fontSizeClass = "text-[clamp(1rem,2vw,2rem)]";
 
-  // 🔽 Theme overrides for smaller layout — set name:'slideshow' so the pill shows
+  // 🔽 Theme overrides for slideshow sizing
   const slideshowTheme = {
     name: "slideshow",
     ...theme,
@@ -47,7 +47,7 @@ export default function SlideshowCurrentPrayerCardInner({
 
   return (
     <div className={`w-full text-center ${fontSizeClass}`}>
-      <CurrentPrayerCard
+      <MobileCurrentCard
         // no need to pass `now` — the card ticks internally
         todayRow={todayRow}
         yesterdayRow={yesterdayRow}

@@ -5,7 +5,7 @@ import { getCurrentPrayerState } from "../utils/getCurrentPrayerState";
 import applyJummahOverride from "../helpers/applyJummahOverride";
 
 export default function MobileCurrentCard({
-  theme = {},               // ✅ THEME: bgColor, textColor, border/borderColor, nameSize, nameSizeArabic, timeRowSize, jamaahColor, makroohColor
+  theme = {},
   todayRow,
   yesterdayRow,
   settingsMap,
@@ -14,18 +14,20 @@ export default function MobileCurrentCard({
   is24Hour = false,
 }) {
   const [now, setNow] = useState(moment());
+
   useEffect(() => {
     const t = setInterval(() => setNow(moment()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Helpers to build themed shells
   const borderClass = theme.border || theme.borderColor || "border-white/10";
   const textClass = theme.textColor || "text-white";
   const baseBg = theme.bgColor || "bg-white/10";
 
   const ThemedEmpty = ({ children }) => (
-    <div className={`rounded-2xl ${baseBg} ${textClass} border ${borderClass} px-3 py-3 text-center`}>
+    <div
+      className={`rounded-2xl ${baseBg} ${textClass} border ${borderClass} px-3 py-3 text-center`}
+    >
       {children}
     </div>
   );
@@ -39,6 +41,7 @@ export default function MobileCurrentCard({
     String(settingsMap["toggles.fakeTimeEnabled"] ?? "false").toLowerCase() === "true";
   const fakeTimeStr = settingsMap["toggles.fakeTime"];
   let effectiveNow = now;
+
   if (fakeEnabled && fakeTimeStr) {
     const frozen = moment(
       `${now.format("YYYY-MM-DD")} ${fakeTimeStr}`,
@@ -48,7 +51,7 @@ export default function MobileCurrentCard({
     if (frozen.isValid()) effectiveNow = frozen;
   }
 
-  // Prayer state
+  // Prayer state (DO NOT CHANGE existing logic)
   const current = getCurrentPrayerState({
     now: effectiveNow,
     todayRow,
@@ -69,56 +72,86 @@ export default function MobileCurrentCard({
     start: current.start,
     jamaah: current.jamaah,
   };
+
   const fixed = applyJummahOverride(normalized, settingsMap);
 
   // Label + Arabic with Friday Jum‘ah override
   let labelKey = (fixed.lookupKey || current.key || "").toLowerCase();
   let label = current.label || labels[labelKey] || current.key || "";
 
-  const isFriday = effectiveNow.isoWeekday() === 5; // 1=Mon … 5=Fri
+  const isFriday = effectiveNow.isoWeekday() === 5;
   if (labelKey === "dhuhr" && isFriday) {
     labelKey = "jummah";
     label = labels.jummah || "Jum‘ah";
   }
 
-  // Avoid duplicate Arabic if already part of the English label
+  // Avoid duplicate Arabic if already in label
   const containsArabic = /[\u0600-\u06FF]/.test(label);
   const arabic =
     containsArabic
       ? null
-      : (current.arabic ??
-          arabicLabels[labelKey] ??
-          (labelKey === "jummah" ? arabicLabels.dhuhr : null) ??
-          null);
+      : current.arabic ??
+        arabicLabels[labelKey] ??
+        (labelKey === "jummah" ? arabicLabels.dhuhr : null) ??
+        null;
 
   const isMakrooh = Boolean(current.isMakrooh);
-  const inJamaah = Boolean(current.inJamaah);
 
   const start = current.start;
   const jamaah = fixed.jamaah || current.jamaah;
 
   const hasStart = moment.isMoment(start) && start.isValid();
   const hasJamaah = moment.isMoment(jamaah) && jamaah.isValid();
-  const hasAnyTimes = hasStart || hasJamaah;
 
-  const fmt = (m) => (is24Hour ? m.format("HH:mm") : m.format("h:mm a"));
+  // ✅ Dim logic (as previously agreed)
+  const hasStarted = hasStart && effectiveNow.isSameOrAfter(start);
+  const jamaahPassed = hasJamaah && effectiveNow.isSameOrAfter(jamaah);
 
-  // Accent bar colour (green default, red when makrooh)
+  // ✅ Restore "Jama‘ah in progress" behaviour (5 mins default / uses sheet setting if present)
+  const jamaahHoldMinsRaw = settingsMap["timings.jamaahHighlightDuration"] ?? 5;
+  const jamaahHoldMins = Math.max(0, Number(jamaahHoldMinsRaw) || 5);
+
+  const inJamaahWindow =
+    hasJamaah &&
+    effectiveNow.isSameOrAfter(jamaah) &&
+    effectiveNow.isBefore(moment(jamaah).add(jamaahHoldMins, "minutes"));
+
+  // Respect existing current.inJamaah if your helper already sets it
+  const inJamaah = Boolean(current.inJamaah) || inJamaahWindow;
+
+  // Time formatting with smaller am/pm (12h only)
+  const renderTime = (m) => {
+    if (!m || !moment.isMoment(m) || !m.isValid()) return null;
+
+    if (is24Hour) {
+      return <span className="tabular-nums">{m.format("HH:mm")}</span>;
+    }
+
+    const s = m.format("h:mm a");
+    const [t, ap] = s.split(" ");
+
+    return (
+      <span className="inline-flex items-baseline whitespace-nowrap">
+        <span className="tabular-nums">{t}</span>
+        <span>{"\u00A0"}</span>
+        <span className="text-[0.85em] opacity-85">{ap}</span>
+      </span>
+    );
+  };
+
   const accentColor = isMakrooh ? "bg-red-600" : "bg-green-600";
 
-  // Choose card background by state (prefer theme overrides, then base)
+  // ✅ Background by state (restoring jamaah background)
   const stateBg = inJamaah
-    ? (theme.jamaahColor || baseBg)
-    : (isMakrooh ? (theme.makroohColor || baseBg) : baseBg);
+    ? theme.jamaahColor || baseBg
+    : isMakrooh
+      ? theme.makroohColor || baseBg
+      : baseBg;
 
   const CardShell = ({ children }) => (
     <div className={`flex rounded-2xl border ${borderClass} ${stateBg} ${textClass}`}>
-      {/* Left accent with vertical "Now" */}
       <div className={`w-8 sm:w-10 ${accentColor} rounded-l-2xl flex items-center justify-center`}>
-        <span
-          className="uppercase tracking-wider text-[10px] sm:text-xs text-white/90 -rotate-90 select-none"
-          aria-hidden="true"
-        >
+        <span className="uppercase tracking-wider text-[10px] sm:text-xs text-white/90 -rotate-90 select-none">
           Now
         </span>
       </div>
@@ -126,8 +159,7 @@ export default function MobileCurrentCard({
     </div>
   );
 
-  // Header for PRAYER states: compact single line (Eng + Arabic)
-  const CompactHeader = (
+  const Header = (
     <div className="flex items-center justify-center gap-2 mb-2 w-full">
       <span
         className={[
@@ -137,7 +169,7 @@ export default function MobileCurrentCard({
       >
         {label}
       </span>
-      {arabic ? (
+      {arabic && (
         <span
           className={[
             "font-arabic whitespace-nowrap",
@@ -148,72 +180,59 @@ export default function MobileCurrentCard({
         >
           {arabic}
         </span>
-      ) : null}
+      )}
     </div>
   );
-
-  // Header for MESSAGE states (Makrooh/Nafl): may wrap to 2 lines
-  const MessageHeader = (
-    <div className="flex flex-col items-center justify-center gap-1 mb-1 w-full">
-      <div
-        className={[
-          "font-semibold leading-snug break-words text-center",
-          theme.nameSize || "text-[clamp(1rem,4.5vw,1.5rem)]",
-        ].join(" ")}
-      >
-        {label}
-      </div>
-      {arabic ? (
-        <div
-          className={[
-            "font-arabic leading-snug",
-            theme.nameSizeArabic || "text-[clamp(1rem,4vw,1.25rem)]",
-          ].join(" ")}
-          lang="ar"
-          dir="rtl"
-        >
-          {arabic}
-        </div>
-      ) : null}
-    </div>
-  );
-
-  if (inJamaah) {
-    return (
-      <CardShell>
-        {hasAnyTimes ? CompactHeader : MessageHeader}
-        <div className={["font-semibold", theme.timeRowSize || "text-lg"].join(" ")}>
-          Jama‘ah in progress
-        </div>
-      </CardShell>
-    );
-  }
 
   return (
     <CardShell>
-      {hasAnyTimes ? CompactHeader : MessageHeader}
+      {Header}
 
-      {/* Only show times when at least one valid time exists */}
-      {hasAnyTimes && (
-        <div
-          className={[
-            "opacity-90",
-            theme.timeRowSize || "text-[13px] sm:text-sm",
-          ].join(" ")}
-          style={{ fontVariantNumeric: "tabular-nums" }}
-        >
-          {hasStart && (
-            <span>
-              Begins: <span className="tabular-nums">{fmt(start)}</span>
-            </span>
-          )}
-          {hasStart && hasJamaah && <span className="mx-2">|</span>}
-          {hasJamaah && (
-            <span>
-              Jama‘ah: <span className="tabular-nums">{fmt(jamaah)}</span>
-            </span>
-          )}
+      {/* ✅ Restored: show Jama‘ah in progress during window */}
+      {inJamaah ? (
+        <div className={["font-semibold", theme.timeRowSize || "text-lg"].join(" ")}>
+          Jama‘ah in progress
         </div>
+      ) : (
+        (hasStart || hasJamaah) && (
+          <div className="w-full flex justify-center">
+            <div
+              className={[
+                "opacity-95 inline-flex items-center justify-center gap-2 sm:gap-3 whitespace-nowrap flex-nowrap",
+                theme.timeRowSize || "text-[clamp(12px,3.3vw,14px)]",
+              ].join(" ")}
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {hasStart && (
+                <span
+                  className={[
+                    "inline-flex items-baseline whitespace-nowrap transition-opacity duration-300",
+                    hasStarted ? "opacity-40" : "opacity-100",
+                  ].join(" ")}
+                >
+                  <span>Begins:</span>
+                  <span>{"\u00A0"}</span>
+                  {renderTime(start)}
+                </span>
+              )}
+
+              {hasStart && hasJamaah && <span className="opacity-70">|</span>}
+
+              {hasJamaah && (
+                <span
+                  className={[
+                    "inline-flex items-baseline whitespace-nowrap transition-opacity duration-300",
+                    jamaahPassed ? "opacity-40" : "opacity-100",
+                  ].join(" ")}
+                >
+                  <span>Jama‘ah:</span>
+                  <span>{"\u00A0"}</span>
+                  {renderTime(jamaah)}
+                </span>
+              )}
+            </div>
+          </div>
+        )
       )}
     </CardShell>
   );

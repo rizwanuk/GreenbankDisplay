@@ -14,6 +14,7 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
   labels,
   arabicLabels = {},
   theme = {},
+  is24Hour,
 }) {
   if (!todayRow || !tomorrowRow || !yesterdayRow) return null;
 
@@ -32,7 +33,6 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
       let jamaah = p.jamaah;
       let lookupKey = p.name?.toLowerCase();
 
-      // Friday override: Dhuhr/Zuhr → Jummah
       const isFridayForPrayer = p.start.format("dddd") === "Friday";
       if (isFridayForPrayer && (lookupKey === "dhuhr" || lookupKey === "zuhr")) {
         name = "Jummah";
@@ -46,7 +46,6 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
     .sort((a, b) => a.start.valueOf() - b.start.valueOf())
     .slice(0, 6);
 
-  // Apply shared Fajr/Shouruq behaviour
   upcoming = applyFajrShouruqRule({
     now,
     upcoming,
@@ -54,26 +53,31 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
     max: 6,
   });
 
-  const is24 = settingsMap["clock24Hours"] === "TRUE";
+  const is24 =
+    typeof is24Hour === "boolean"
+      ? is24Hour
+      : String(settingsMap["toggles.clock24h"] ?? "true").toLowerCase() === "true";
+
   const getLabel = (key) => labels[key.toLowerCase()] || key;
+
   const formatTime = (t) =>
     moment.isMoment(t)
       ? is24
         ? t.format("HH:mm")
         : formatWithSmallAmPm(t, is24)
-      : "--:--";
+      : "—";
 
   const headerClass = theme.headerSize || "text-xl sm:text-2xl md:text-3xl";
   const rowClass = theme.rowSize || "text-3xl sm:text-5xl md:text-6xl";
   const engFont = theme.fontEng || "font-rubik";
   const textColor = theme.textColor || "text-green-300";
 
-  const todayDateStr = now.clone().startOf("day").format("YYYY-MM-DD");
+  const todayStart = now.clone().startOf("day");
 
   return (
-    <div
-      className={`w-full rounded-2xl bg-gray-800 shadow-xl px-4 py-4 backdrop-blur ${textColor} ${engFont}`}
-    >
+    <div className={`w-full rounded-2xl bg-gray-800 shadow-xl px-4 py-4 backdrop-blur ${textColor} ${engFont}`}>
+      
+      {/* Header */}
       <div className={`grid grid-cols-3 font-semibold text-white/80 px-2 pb-2 ${headerClass}`}>
         <div>Prayer</div>
         <div className="text-center">Start</div>
@@ -82,25 +86,38 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
 
       {upcoming.map((p, idx) => {
         const prev = idx > 0 ? upcoming[idx - 1] : null;
-        const showDivider =
-          prev && prev.date === todayDateStr && p.date !== todayDateStr;
+
+        const prevIsToday =
+          prev?.start && moment.isMoment(prev.start) && prev.start.isSame(todayStart, "day");
+
+        const currIsToday =
+          p?.start && moment.isMoment(p.start) && p.start.isSame(todayStart, "day");
+
+        const showDivider = prev && prevIsToday && !currIsToday;
 
         return (
-          <React.Fragment key={`${p.name}-${p.date}-${idx}`}>
+          <React.Fragment key={`${p.name}-${p.start?.format("YYYY-MM-DD-HH:mm") || idx}`}>
+            
+            {/* 🔹 Tomorrow Row with subtle tint */}
             {showDivider && (
-              <div className="text-center text-white/60 font-semibold pt-4 pb-1 text-lg sm:text-xl col-span-3">
-                ── Tomorrow ──
+              <div className="border-t border-white/20 border-b border-white/20 py-4 text-center bg-green-500/5 backdrop-blur-sm">
+                <div className="text-green-300 font-bold tracking-widest text-2xl sm:text-3xl">
+                  TOMORROW
+                </div>
               </div>
             )}
-            <div
-              className={`grid grid-cols-3 items-center border-t border-white/10 px-2 py-3 ${rowClass}`}
-            >
+
+            {/* Prayer Row */}
+            <div className={`grid grid-cols-3 items-center border-t border-white/10 px-2 py-3 ${rowClass}`}>
               <div className="font-bold text-[clamp(2rem,3.5vw,2.5rem)] whitespace-nowrap overflow-hidden text-ellipsis max-w-[7rem] sm:max-w-none">
                 {getLabel(p.name)}
               </div>
+
               <div className="text-center">{formatTime(p.start)}</div>
+
               <div className="text-right">{formatTime(p.jamaah)}</div>
             </div>
+
           </React.Fragment>
         );
       })}
