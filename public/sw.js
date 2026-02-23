@@ -5,7 +5,7 @@
  * (push removed; supports manual update via SKIP_WAITING)
  */
 
-const CACHE = "gbm-main-v5"; // bump to force a fresh cache
+const CACHE = "gbm-main-v6"; // bump to force a fresh cache
 
 // App shell / static assets to seed cache (adjust to your build output if needed)
 const PRECACHE = [
