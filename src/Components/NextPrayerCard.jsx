@@ -94,14 +94,6 @@ function NextPrayerCard({
     const sunrise = sunriseStr ? toMomentOn(sunriseStr, today) : null;
 
     if (sunrise && sunrise.isValid()) {
-      items.push({
-        key: "sunrise",
-        name: "Sunrise",
-        lookupKey: "sunrise",
-        start: sunrise,
-        jamaah: sunrise,
-      });
-
       // Optional Ishraq as a pseudo "next" item
       if (ishraqDuration > 0) {
         const ishraqStart = sunrise.clone().add(ishraqOffset, "minutes");
@@ -110,6 +102,8 @@ function NextPrayerCard({
           key: "ishraq",
           name: "Ishraq",
           lookupKey: "ishraq",
+          label: labels?.ishraq || "Ishraq",
+          arabic: arabicLabels?.ishraq || "",
           start: ishraqStart,
           jamaah: ishraqStart,
           end: ishraqEnd,
