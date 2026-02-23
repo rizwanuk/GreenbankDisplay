@@ -72,7 +72,7 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
   const engFont = theme.fontEng || "font-rubik";
   const textColor = theme.textColor || "text-green-300";
 
-  const todayStart = now.clone().startOf("day");
+  const todayDateStr = now.format("YYYY-MM-DD");
 
   return (
     <div className={`w-full rounded-2xl bg-gray-800 shadow-xl px-4 py-4 backdrop-blur ${textColor} ${engFont}`}>
@@ -87,22 +87,19 @@ export default function UpcomingPrayerRowsSlideshowWrapper({
       {upcoming.map((p, idx) => {
         const prev = idx > 0 ? upcoming[idx - 1] : null;
 
-        const prevIsToday =
-          prev?.start && moment.isMoment(prev.start) && prev.start.isSame(todayStart, "day");
+        const prevIsToday = prev?.start?.format("YYYY-MM-DD") === todayDateStr;
+        const currIsToday = p?.start?.format("YYYY-MM-DD") === todayDateStr;
 
-        const currIsToday =
-          p?.start && moment.isMoment(p.start) && p.start.isSame(todayStart, "day");
-
-        const showDivider = prev && prevIsToday && !currIsToday;
+        const showDivider = (prev && prevIsToday && !currIsToday) || (idx === 0 && !currIsToday);
 
         return (
           <React.Fragment key={`${p.name}-${p.start?.format("YYYY-MM-DD-HH:mm") || idx}`}>
             
-            {/* 🔹 Tomorrow Row with subtle tint */}
+            {/* Tomorrow pill — matches main timetable style */}
             {showDivider && (
-              <div className="border-t border-white/20 border-b border-white/20 py-4 text-center bg-green-500/5 backdrop-blur-sm">
-                <div className="text-green-300 font-bold tracking-widest text-2xl sm:text-3xl">
-                  TOMORROW
+              <div className="relative pt-4 pb-1">
+                <div className="inline-block px-3 py-1 rounded-lg bg-sky-600 text-white font-bold tracking-wider shadow-lg text-lg sm:text-xl md:text-2xl">
+                  Tomorrow
                 </div>
               </div>
             )}
