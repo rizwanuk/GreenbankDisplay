@@ -240,7 +240,8 @@ export default function QuranViewer({ onClose }) {
 
   const confirmSaveBookmark = useCallback(() => {
     const { juz, page } = navRef.current;
-    addBookmark({ juz, page, label: bmLabel.trim() || `Juz ${juz}, Page ${page}` });
+    const abs = (JUZ_START_PAGE[juz] ?? 1) + page - 1;
+    addBookmark({ juz, page, absPage: abs, label: bmLabel.trim() || `Juz ${juz}, Page ${abs}` });
     setSheet("bm");
   }, [addBookmark, bmLabel]);
 
@@ -380,10 +381,10 @@ export default function QuranViewer({ onClose }) {
                   <div key={b.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
                     <button onClick={() => openBookmark(b)} className="flex-1 text-left min-w-0">
                       <div className="text-xs font-semibold text-white/90 leading-tight truncate">
-                        {b.label || `Juz-${b.juz}, Page ${b.page}`}
+                        {b.label || `Juz-${b.juz}, Page ${b.absPage ?? b.page}`}
                       </div>
                       <div className="text-[10px] text-white/40 mt-0.5">
-                        Juz-{b.juz} · Page {b.page} · {new Date(b.createdAt).toLocaleDateString()}
+                        Juz-{b.juz} · Page {b.absPage ?? b.page} · {new Date(b.createdAt).toLocaleDateString()}
                       </div>
                     </button>
                     <button onClick={() => removeBookmark(b.id)} className="shrink-0 text-white/30 hover:text-white/70 px-1 text-base leading-none">✕</button>
@@ -400,7 +401,7 @@ export default function QuranViewer({ onClose }) {
                 <span className="text-sm font-bold text-white/90">Name this bookmark</span>
                 <button onClick={() => setSheet("bm")} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">← Back</button>
               </div>
-              <div className="text-[10px] text-white/40 mb-2">Saving: Juz-{nav.juz} · Page {absPage}</div>
+              <div className="text-[10px] text-white/40 mb-2">Saving: Juz-{nav.juz} · Quran page {absPage}</div>
               <input
                 value={bmLabel}
                 onChange={(e) => setBmLabel(e.target.value)}
