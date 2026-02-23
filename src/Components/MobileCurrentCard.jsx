@@ -167,13 +167,13 @@ export default function MobileCurrentCard({
     <div
       className={[
         "flex items-center justify-center gap-2 mb-2 w-full",
-        wrapHeader ? "flex-wrap" : "",
+        wrapHeader || isMakrooh ? "flex-wrap" : "",
       ].join(" ")}
     >
       <span
         className={[
           "font-semibold",
-          wrapHeader
+          wrapHeader || isMakrooh
             ? "whitespace-normal break-words text-center"
             : "whitespace-nowrap",
           theme.nameSize || "text-[clamp(1.1rem,5vw,1.6rem)]",
