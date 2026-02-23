@@ -30,9 +30,10 @@ export default function useQuranBookmarks() {
     return [...items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [items]);
 
-  const addBookmark = useCallback(({ juz, page, surah, label }) => {
+  const addBookmark = useCallback(({ juz, page, absPage, surah, label }) => {
     const j = Number(juz);
     const p = Number(page);
+    const ap = Number(absPage);
 
     if (!Number.isFinite(j) || j < 1 || j > 30) return;
     if (!Number.isFinite(p) || p < 1) return;
@@ -43,6 +44,7 @@ export default function useQuranBookmarks() {
         createdAt: Date.now(),
         juz: j,
         page: p,
+        absPage: Number.isFinite(ap) ? ap : undefined,
         surah: Number.isFinite(Number(surah)) ? Number(surah) : undefined,
         label: (label || "").trim() || undefined,
       },
