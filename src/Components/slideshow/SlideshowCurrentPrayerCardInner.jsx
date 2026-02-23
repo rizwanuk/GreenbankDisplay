@@ -37,7 +37,7 @@ export default function SlideshowCurrentPrayerCardInner({
   const slideshowTheme = {
     name: "slideshow",
     ...theme,
-    nameSize: "text-4xl sm:text-5xl md:text-6xl",
+    nameSize: "text-[clamp(1.4rem,5vw,3.75rem)] break-words whitespace-normal text-center",
     nameSizeArabic: "text-3xl sm:text-4xl md:text-5xl",
     timeRowSize: "text-3xl sm:text-4xl",
     fontEng: "font-rubik",
