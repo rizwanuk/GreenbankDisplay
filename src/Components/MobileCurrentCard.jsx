@@ -146,7 +146,7 @@ export default function MobileCurrentCard({
   const stateBg = inJamaah
     ? theme.jamaahColor || baseBg
     : isMakrooh
-      ? theme.makroohColor || baseBg
+      ? theme.makroohColor || "bg-red-700"
       : baseBg;
 
   // ✅ Wrap control (slideshow sets theme.messageWrap=true)
