@@ -88,7 +88,7 @@ function JuzRoller({ value, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function QuranViewer({ onClose }) {
   const juzList  = useMemo(() => buildJuzList(), []);
-  const { bookmarks, addBookmark, removeBookmark, clearAll } = useQuranBookmarks();
+  const { bookmarks, recentlyDeleted, addBookmark, removeBookmark, restoreBookmark, purgeDeletedBookmark, clearAll, clearAllDeleted } = useQuranBookmarks();
 
   const [nav, setNav] = useState(() => {
     const juz  = clamp(Number(localStorage.getItem(LS_LAST_JUZ)  || 1), 1, 30);
@@ -368,17 +368,37 @@ export default function QuranViewer({ onClose }) {
 
           {sheet === "bm" && (
             <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-white/90">Bookmarks</span>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-white/90">🔖 Bookmarks</span>
                 <div className="flex gap-1.5">
-                  <button onClick={openSaveBookmark} className="text-xs text-white/80 px-2 py-1 rounded-lg border border-white/15 bg-white/10 hover:bg-white/20">+ Save here</button>
-                  <button onClick={() => setSheet(null)} className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20">Close</button>
+                  <button
+                    onClick={openSaveBookmark}
+                    className="text-xs text-white px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-600/30 hover:bg-emerald-600/50 font-semibold transition"
+                  >
+                    + Save here
+                  </button>
+                  <button
+                    onClick={() => setSheet(null)}
+                    className="text-xs text-white/60 px-2 py-1 rounded-lg border border-white/10 bg-black/20 hover:bg-black/35"
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {!bookmarks.length && <div className="text-xs text-white/40 py-3 text-center">No bookmarks yet — tap "+ Save here".</div>}
+
+              {/* Active bookmarks */}
+              <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                {!bookmarks.length && (
+                  <div className="text-xs text-white/40 py-4 text-center">
+                    No bookmarks yet — tap “+ Save here”.
+                  </div>
+                )}
                 {bookmarks.map((b) => (
-                  <div key={b.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                  <div
+                    key={b.id}
+                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-2 transition"
+                  >
                     <button onClick={() => openBookmark(b)} className="flex-1 text-left min-w-0">
                       <div className="text-xs font-semibold text-white/90 leading-tight truncate">
                         {b.label || `Juz-${b.juz}, Page ${b.absPage ?? b.page}`}
@@ -387,11 +407,71 @@ export default function QuranViewer({ onClose }) {
                         Juz-{b.juz} · Page {b.absPage ?? b.page} · {new Date(b.createdAt).toLocaleDateString()}
                       </div>
                     </button>
-                    <button onClick={() => removeBookmark(b.id)} className="shrink-0 text-white/30 hover:text-white/70 px-1 text-base leading-none">✕</button>
+                    <button
+                      onClick={() => removeBookmark(b.id)}
+                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 transition text-sm"
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
               </div>
-              {bookmarks.length > 0 && <button onClick={clearAll} className="mt-2 text-[10px] text-white/30 hover:text-white/60">Clear all</button>}
+
+              {bookmarks.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="mt-2 text-[10px] text-white/25 hover:text-white/50 transition"
+                >
+                  Clear all
+                </button>
+              )}
+
+              {/* Recently deleted */}
+              {recentlyDeleted.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/10">
+                  <div className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">
+                    Recently deleted (30 days)
+                  </div>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {recentlyDeleted.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center gap-2 rounded-xl border border-white/5 bg-black/20 px-3 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-white/50 leading-tight truncate">
+                            {b.label || `Juz-${b.juz}, Page ${b.absPage ?? b.page}`}
+                          </div>
+                          <div className="text-[10px] text-white/25 mt-0.5">
+                            Deleted {new Date(b.deletedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={() => restoreBookmark(b.id)}
+                            className="text-[10px] text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold transition"
+                          >
+                            Restore
+                          </button>
+                          <button
+                            onClick={() => purgeDeletedBookmark(b.id)}
+                            className="text-[10px] text-white/25 hover:text-red-400 px-1.5 py-1 rounded-lg hover:bg-red-500/10 transition"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={clearAllDeleted}
+                    className="mt-1.5 text-[10px] text-white/20 hover:text-white/40 transition"
+                  >
+                    Clear deleted
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -410,7 +490,7 @@ export default function QuranViewer({ onClose }) {
                 className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white outline-none mb-3 placeholder:text-white/30"
                 autoFocus
               />
-              <button onClick={confirmSaveBookmark} className="w-full rounded-xl border border-white/20 bg-white/15 hover:bg-white/20 px-3 py-2 text-sm font-bold text-white">
+              <button onClick={confirmSaveBookmark} className="w-full rounded-xl border border-emerald-500/30 bg-emerald-600/30 hover:bg-emerald-600/50 px-3 py-2 text-sm font-bold text-white transition">
                 Save Bookmark
               </button>
             </div>
