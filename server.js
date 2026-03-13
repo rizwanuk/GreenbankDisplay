@@ -13,6 +13,8 @@ const apiRoutes = [
   { path: "/api/settings", file: "./api/settings.js" },
   { path: "/api/prayertimes", file: "./api/prayertimes.js" },
   { path: "/api/prayertimes-version", file: "./api/prayertimes-version.js" },
+  { path: "/api/device-config", file: "./api/device-config.js" },
+  { path: "/api/admin/device-config", file: "./api/admin/device-config.js" },
   { path: "/api/admin/whoami", file: "./api/admin/whoami.js" },
   { path: "/api/admin/prayertimes", file: "./api/admin/prayertimes.js" },
   { path: "/api/admin/settings", file: "./api/admin/settings.js" },

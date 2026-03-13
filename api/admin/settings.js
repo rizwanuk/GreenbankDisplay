@@ -40,10 +40,7 @@ export default async function handler(req, res) {
     const [dbRows] = await pool.query(
       "SELECT `group`, `key`, `value` FROM settings ORDER BY `group`, `key`"
     );
-    const rows = [
-      ["Group", "Key", "Value"],
-      ...dbRows.map((r) => [r.group, r.key, r.value ?? ""]),
-    ];
+    const rows = dbRows.map((r) => ({ Group: r.group, Key: r.key, Value: r.value ?? "" }));
     return res.json({ ok: true, email, rows });
   }
 

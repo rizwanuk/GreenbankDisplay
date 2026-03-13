@@ -11,7 +11,8 @@ import JummahTimesPanel from "./admin/panels/JummahTimesPanel";
 import TestModePanel from "./admin/panels/TestModePanel";
 import IslamicCalendarPanel from "./admin/panels/IslamicCalendarPanel";
 import PrayerTimesPanel from "./admin/panels/PrayerTimesPanel";
-import SlideshowPanel from "./admin/panels/SlideshowPanel"; // ✅ NEW
+import SlideshowPanel from "./admin/panels/SlideshowPanel";
+import DevicesPanel from "./admin/panels/DevicesPanel";
 import SignInPanel from "./admin/components/SignInPanel";
 
 const PANELS = [
@@ -72,6 +73,13 @@ const PANELS = [
     desc: "Edit slide duration and the slides shown on the slideshow screen.",
     emoji: "🖼️",
     render: (props) => <SlideshowPanel {...props} />,
+  },
+  {
+    id: "devices",
+    title: "Devices",
+    desc: "Manage remote display screens by their 6-digit device code.",
+    emoji: "📺",
+    render: () => <DevicesPanel />,
   },
 
   {
