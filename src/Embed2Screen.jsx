@@ -64,7 +64,7 @@ export default function Embed2Screen() {
     return () => clearInterval(fullReload);
   }, []);
 
-  // ✅ Auto-reload when Google Sheet settings change (meta.lastUpdated)
+  // ✅ Auto-reload when settings change (meta.lastUpdated)
   // Poll a PUBLIC endpoint so it works even if useSettings() isn't refetching.
   const prevLastUpdated = useRef("");
   const hardReloadRef = useRef(Date.now());
@@ -93,7 +93,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
 
         if (next && prevLastUpdated.current !== next) {
           // eslint-disable-next-line no-console
-          console.log("🔄 Detected change in Google Sheet. Reloading page...");
+          console.log("🔄 Detected settings change. Reloading page...");
           window.location.reload();
           return;
         }

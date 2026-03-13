@@ -503,7 +503,7 @@ export default function PrayerTimesPanel() {
 
           <div className="px-3 py-2 text-xs opacity-70 border-t border-white/10">
             {editMode
-              ? "Edit times (HH:MM). Changes are highlighted. Click Save to write back to Google Sheets."
+              ? "Edit times (HH:MM). Changes are highlighted. Click Save to update the database."
               : "Read-only view. Enable Edit mode to make changes."}
           </div>
         </div>

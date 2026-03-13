@@ -151,7 +151,7 @@ export default function MobileScreen() {
       ? settingsHook.settings || settingsHook.parsed || null
       : null;
 
-  // ✅ Auto-reload when Google Sheet settings change (public endpoint)
+  // ✅ Auto-reload when settings change
   const lastUpdatedRef = useRef("");
   const lastHardReloadRef = useRef(Date.now());
 

@@ -193,7 +193,7 @@ const mosque = useMemo(() => {
 
   const is24Hour = settingsMap["toggles.clock24Hours"] === "TRUE";
 
-  // Auto-reload when Google Sheet changes (works even if useSettings() doesn't refetch)
+  // Auto-reload when settings change (works even if useSettings() doesn't refetch)
   const lastUpdatedRef = useRef("");
   const lastHardReloadRef = useRef(Date.now());
 

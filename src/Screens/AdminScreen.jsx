@@ -184,7 +184,7 @@ export default function AdminScreen() {
 
   const subtitle = needsSignIn
     ? "Please sign in to load and edit settings."
-    : "Edit live settings stored in Google Sheets.";
+    : "Edit live settings stored in the database.";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black text-white">
