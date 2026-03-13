@@ -238,6 +238,18 @@ export default function useSheetWithCache({
     };
   }, [channelName, getCache, refreshNow]);
 
+  // SSE cross-device updates
+  useEffect(() => {
+    const es = new EventSource("/api/events");
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data?.type === "update") refreshNow({ reason: "sse" });
+      } catch {}
+    };
+    return () => es.close();
+  }, [refreshNow]);
+
   const out = Array.isArray(data) ? data : [];
   const outArr = [...out];
 

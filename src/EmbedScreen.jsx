@@ -66,7 +66,7 @@ export default function EmbedScreen() {
     [rawSettings]
   );
 
-  // ✅ Auto-reload when Google Sheet settings change (meta.lastUpdated)
+  // ✅ Auto-reload when settings settings change (meta.lastUpdated)
   // This polls a PUBLIC endpoint so it works even if useSettings() doesn't refetch.
   const prevLastUpdated = useRef("");
   const hardReloadRef = useRef(Date.now());
@@ -97,7 +97,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
         // changed => reload
         if (next && prevLastUpdated.current !== next) {
           // eslint-disable-next-line no-console
-          console.log("🔄 Detected change in Google Sheet. Reloading page...");
+          console.log("🔄 Detected change in settings. Reloading page...");
           window.location.reload();
           return;
         }
@@ -303,7 +303,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
             </tr>
             <tr className="text-[0.6rem] text-right text-black/60">
               <th className="text-right py-1" colSpan={6}>
-                {lastUpdated && <span>Last updated: {lastUpdated}</span>}
+                {lastUpdated && <span>{rawSettings?.refreshStatus?.isOnline !== false ? "● Live" : "⚠ Cached"} | Last updated: {lastUpdated}</span>}
               </th>
             </tr>
             <tr className="border-t border-black/20">

@@ -47,3 +47,4 @@ greenbankdisplay-admin-*.json
 # App-specific ignores
 # ================================
 /src/version.js
+ecosystem.config.cjs

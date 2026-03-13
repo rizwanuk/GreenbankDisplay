@@ -353,7 +353,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
         {/* Footer tick + optional remote error */}
         <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded flex items-center gap-3">
           <span className="text-green-400">●</span>
-          <span>Last updated{lastUpdatedStr ? `: ${lastUpdatedStr}` : ": —"}</span>
+          <span>{settings?.refreshStatus?.isOnline !== false ? "● Live" : "⚠ Cached"}</span><span>Last updated{lastUpdatedStr ? `: ${lastUpdatedStr}` : ": —"}</span>
           {remoteErr ? (
             <span className="text-red-300">• Remote: {String(remoteErr)}</span>
           ) : null}

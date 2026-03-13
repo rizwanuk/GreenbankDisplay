@@ -1,56 +1,66 @@
-// api/wp/prayer-times-2day.js
-// READ-ONLY, STANDALONE SERVERLESS FUNCTION
-// No React, no RSC, no app imports
+// api/wp/prayer-times-2day.js (MySQL version)
+import mysql from "mysql2/promise";
 
-export const config = {
-  runtime: "nodejs",
-};
+function getPool() {
+  if (!getPool._pool) {
+    getPool._pool = mysql.createPool({
+      host:     process.env.MYSQL_HOST     || "127.0.0.1",
+      port:     Number(process.env.MYSQL_PORT || 3306),
+      database: process.env.MYSQL_DATABASE || "greenbank",
+      user:     process.env.MYSQL_USER     || "root",
+      password: process.env.MYSQL_PASSWORD || "",
+      waitForConnections: true,
+      connectionLimit: 10,
+      charset: "utf8mb4",
+    });
+  }
+  return getPool._pool;
+}
+
+function formatRow(r) {
+  if (!r) return null;
+  return {
+    day:           r.day,
+    month:         r.month,
+    fajrAdhan:     r.fajr_adhan     || "",
+    fajrIqamah:    r.fajr_iqamah    || "",
+    shouruq:       r.shouruq         || "",
+    dhuhrAdhan:    r.dhuhr_adhan    || "",
+    dhuhrIqamah:   r.dhuhr_iqamah   || "",
+    asrAdhan:      r.asr_adhan      || "",
+    asrIqamah:     r.asr_iqamah     || "",
+    maghribAdhan:  r.maghrib_adhan  || "",
+    maghribIqamah: r.maghrib_iqamah || "",
+    ishaAdhan:     r.isha_adhan     || "",
+    ishaIqamah:    r.isha_iqamah    || "",
+  };
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  try {
-    // 🔒 Inline OpenSheet URL (prevents import-time crashes)
-    const PRAYER_TIMES_URL =
-      "https://opensheet.elk.sh/1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g/PrayerTimes";
+  const now      = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const response = await fetch(PRAYER_TIMES_URL);
+  const pool = getPool();
+  const [[todayRows], [tomorrowRows]] = await Promise.all([
+    pool.query(
+      "SELECT * FROM prayer_times WHERE day = ? AND month = ? LIMIT 1",
+      [now.getDate(), now.getMonth() + 1]
+    ),
+    pool.query(
+      "SELECT * FROM prayer_times WHERE day = ? AND month = ? LIMIT 1",
+      [tomorrow.getDate(), tomorrow.getMonth() + 1]
+    ),
+  ]);
 
-    if (!response.ok) {
-      res.status(502).json({
-        error: "Upstream fetch failed",
-        status: response.status,
-      });
-      return;
-    }
-
-    const rows = await response.json();
-
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    const matchRow = (d) =>
-      rows.find(
-        (r) =>
-          Number(r.Day) === d.getDate() &&
-          Number(r.Month) === d.getMonth() + 1
-      );
-
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-
-    res.status(200).json({
-      today: matchRow(today) || null,
-      tomorrow: matchRow(tomorrow) || null,
-      generatedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    res.status(500).json({
-      error: "Serverless function error",
-      message: String(err),
-    });
-  }
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.json({
+    ok: true,
+    today:    formatRow(todayRows[0]    || null),
+    tomorrow: formatRow(tomorrowRows[0] || null),
+  });
 }

@@ -382,7 +382,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
 
               <tr className="text-[0.6rem] text-right text-black/60">
                 <th className="text-right py-1" colSpan={6}>
-                  {lastUpdated && <span>Last updated: {lastUpdated}</span>}
+                  {lastUpdated && <span>{rawSettings?.refreshStatus?.isOnline !== false ? "● Live" : "⚠ Cached"} | Last updated: {lastUpdated}</span>}
                 </th>
               </tr>
 

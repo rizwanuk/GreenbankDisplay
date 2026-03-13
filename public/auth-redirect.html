@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Auth</title></head>
+<body>
+<script type="module">
+  import { PublicClientApplication } from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/index.esm.js";
+  const msal = new PublicClientApplication({
+    auth: {
+      clientId: "e7651bd2-051d-4b26-9f82-259ecc469f0c",
+      authority: "https://login.microsoftonline.com/53ae4ab9-b1ae-49ca-84e0-b349ae49593f",
+      redirectUri: window.location.origin + "/auth-redirect.html",
+    }
+  });
+  await msal.initialize();
+  await msal.handleRedirectPromise();
+</script>
+</body>
+</html>

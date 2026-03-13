@@ -155,7 +155,7 @@ const mosque = useMemo(() => {
   const L = useMemo(() => getEnglishLabels(settingsMap), [settingsMap]);
   const A = useMemo(() => getArabicLabels(settingsMap), [settingsMap]);
 
-  // Hijri months (prefer Google Sheet spellings, fall back to nice defaults)
+  // Hijri months (prefer settings spellings, fall back to nice defaults)
   const hijriMonthKeys = [
     "muharram",
     "safar",
@@ -236,7 +236,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
 
         // changed => reload
         if (next && prevLastUpdated.current !== next) {
-          console.log("🔄 Detected change in Google Sheet. Reloading page...");
+          console.log("🔄 Detected change in settings. Reloading page...");
           window.location.reload();
           return;
         }
@@ -398,7 +398,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
           </div>
 
           <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
-            ● Last updated at {lastUpdated ? moment(lastUpdated).format("DD MMM YYYY, HH:mm:ss") : "—"}
+            ● {settings?.refreshStatus?.isOnline !== false ? "Live" : "⚠ Cached"} | Last updated at {lastUpdated ? moment(lastUpdated).format("DD MMM YYYY, HH:mm:ss") : "—"}
 
             {remoteErr ? (
               <span className="ml-2 text-red-400">• Remote: {String(remoteErr)}</span>

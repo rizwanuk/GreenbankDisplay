@@ -1,46 +1,31 @@
-import { OAuth2Client } from "google-auth-library";
+import { verifyMicrosoftToken, getAllowedUsers } from "./_auth.js";
+import mysql from "mysql2/promise";
 
-const ALLOWLIST = new Set(["rizwan.uk@gmail.com", "eid.bristol@gmail.com"]);
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST || "127.0.0.1",
+  port: process.env.MYSQL_PORT || 3306,
+  database: process.env.MYSQL_DATABASE || "greenbank",
+  user: process.env.MYSQL_USER || "root",
+  password: process.env.MYSQL_PASSWORD,
+  socketPath: process.env.MYSQL_SOCKET || undefined,
+});
 
 export default async function handler(req, res) {
   try {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
     if (!token) {
       return res.status(401).json({ ok: false, error: "Missing Bearer token" });
     }
 
-    const clientId = (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
-    if (!clientId) {
-      return res.status(500).json({ ok: false, error: "Missing GOOGLE_OAUTH_CLIENT_ID env var" });
+    const email = await verifyMicrosoftToken(token);
+    const allowed = await getAllowedUsers(pool);
+
+    if (!allowed.has(email)) {
+      return res.status(403).json({ ok: false, error: "Not authorised", email });
     }
 
-    const client = new OAuth2Client(clientId);
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: clientId,
-    });
-
-    const payload = ticket.getPayload() || {};
-    const email = String(payload.email || "").toLowerCase();
-    const emailVerified = Boolean(payload.email_verified);
-
-    if (!email || !emailVerified) {
-      return res.status(401).json({ ok: false, error: "Email not verified" });
-    }
-
-    const allowed = ALLOWLIST.has(email);
-    if (!allowed) {
-      return res.status(403).json({ ok: false, error: "Not allowlisted", email });
-    }
-
-    return res.status(200).json({
-      ok: true,
-      email,
-      name: payload.name || "",
-      picture: payload.picture || "",
-    });
+    return res.status(200).json({ ok: true, email });
   } catch (err) {
     return res.status(401).json({
       ok: false,

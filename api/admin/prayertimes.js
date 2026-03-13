@@ -1,283 +1,135 @@
-// api/admin/prayertimes.js
-import { google } from "googleapis";
-import crypto from "crypto";
+import { broadcast } from "../events.js";
+// api/admin/prayertimes.js (MySQL version)
+import mysql from "mysql2/promise";
+import { verifyMicrosoftToken, getAllowedUsers } from "./_auth.js";
 
-/**
- * Verifies a Google ID token from the browser (Google Sign-In).
- */
-async function verifyGoogleToken(authHeader) {
-  const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new Error("Missing bearer token");
+const HEADERS = [
+  "Day", "Month",
+  "Fajr Adhan", "Fajr Iqamah", "Shouruq",
+  "Dhuhr Adhan", "Dhuhr Iqamah",
+  "Asr Adhan", "Asr Iqamah",
+  "Maghrib Adhan", "Maghrib Iqamah",
+  "Isha Adhan", "Isha Iqamah",
+];
 
-  const clientId = (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
-  if (!clientId) throw new Error("Missing GOOGLE_OAUTH_CLIENT_ID");
+const COL_MAP = {
+  1: "day", 2: "month",
+  3: "fajr_adhan", 4: "fajr_iqamah", 5: "shouruq",
+  6: "dhuhr_adhan", 7: "dhuhr_iqamah",
+  8: "asr_adhan", 9: "asr_iqamah",
+  10: "maghrib_adhan", 11: "maghrib_iqamah",
+  12: "isha_adhan", 13: "isha_iqamah",
+};
 
-  const client = new google.auth.OAuth2(clientId);
+const READONLY_COLS = new Set(["day", "month"]);
 
-  const ticket = await client.verifyIdToken({
-    idToken: token,
-    audience: clientId,
-  });
-
-  const payload = ticket.getPayload();
-  if (!payload?.email) throw new Error("Invalid token payload");
-
-  return {
-    email: payload.email.toLowerCase(),
-    name: payload.name || "",
-    picture: payload.picture || "",
-  };
-}
-
-/**
- * ✅ Robust private key loader.
- * Prefer base64 env var (avoids newline/quote/CRLF issues on Vercel),
- * fallback to raw PEM env var.
- */
-function getPrivateKeyFromEnv() {
-  const b64 = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64 || "").trim();
-  if (b64) {
-    return Buffer.from(b64, "base64").toString("utf8");
+function getPool() {
+  if (!getPool._pool) {
+    getPool._pool = mysql.createPool({
+      host:     process.env.MYSQL_HOST     || "127.0.0.1",
+      port:     Number(process.env.MYSQL_PORT || 3306),
+      database: process.env.MYSQL_DATABASE || "greenbank",
+      user:     process.env.MYSQL_USER     || "root",
+      password: process.env.MYSQL_PASSWORD || "",
+      waitForConnections: true,
+      connectionLimit: 10,
+      charset: "utf8mb4",
+    });
   }
-
-  let k = String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").trim();
-
-  // Strip accidental wrapping quotes
-  if (
-    (k.startsWith('"') && k.endsWith('"')) ||
-    (k.startsWith("'") && k.endsWith("'"))
-  ) {
-    k = k.slice(1, -1).trim();
-  }
-
-  // Normalise Windows newlines and literal \n sequences
-  k = k.replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
-
-  return k;
+  return getPool._pool;
 }
 
-function getGoogleAuth() {
-  const email = (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
-  const privateKey = getPrivateKeyFromEnv();
-
-  if (!email) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL");
-  if (!privateKey) {
-    throw new Error(
-      "Missing GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_B64)"
-    );
-  }
-
-  // Validate key early (gives clearer error than downstream OpenSSL)
-  try {
-    crypto.createPrivateKey(privateKey);
-  } catch (e) {
-    throw new Error(`Service account private key invalid: ${e?.message || e}`);
-  }
-
-  return new google.auth.JWT({
-    email,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-}
-
-const SETTINGS_SHEET_NAME = process.env.GOOGLE_SETTINGS_SHEET_NAME || "Settings";
-const PRAYERTIMES_SHEET_NAME =
-  process.env.GOOGLE_PRAYERTIMES_SHEET_NAME || "PrayerTimes";
-
-function norm(s) {
-  return String(s || "").trim().toLowerCase();
-}
-
-async function readSheetValues(sheets, sheetId, sheetName) {
-  const resp = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${sheetName}!A:Z`,
-    majorDimension: "ROWS",
-  });
-  return resp.data.values || [];
-}
-
-/**
- * Reads Settings sheet and determines role from "adminUsers" group.
- */
-async function getUserRole(sheets, sheetId, email) {
-  const rows = await readSheetValues(sheets, sheetId, SETTINGS_SHEET_NAME);
-
-  for (let i = 0; i < rows.length; i++) {
-    const [group, key, value] = rows[i] || [];
-    if (norm(group) === "adminusers" && norm(key) === norm(email)) {
-      return norm(value) || "";
-    }
-  }
-  return "";
-}
-
-function colToA1(c1) {
-  // c1 is 1-based column index
-  let n = Number(c1);
-  let s = "";
-  while (n > 0) {
-    const mod = (n - 1) % 26;
-    s = String.fromCharCode(65 + mod) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
-}
-
-function isValidTimeHHMM(v) {
-  const s = String(v ?? "").trim();
-  if (s === "") return true; // allow clearing
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
-  if (!m) return false;
-  const hh = Number(m[1]);
-  const mm = Number(m[2]);
-  return hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
-}
-
-function normalizeTime(v) {
-  const s = String(v ?? "").trim();
-  if (s === "") return "";
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
-  if (!m) return s;
-  const hh = String(Number(m[1])).padStart(2, "0");
-  return `${hh}:${m[2]}`;
-}
-
-/**
- * ✅ FIXED: Works with dev-api.mjs (req.body is a string),
- * and with Vercel (req.body is already an object).
- */
-async function readJsonBody(req) {
-  // Vercel: already parsed
-  if (req.body && typeof req.body === "object") return req.body;
-
-  // dev-api.mjs: req.body is a raw string
-  if (typeof req.body === "string") {
-    const raw = req.body.trim();
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw);
-    } catch {
-      throw new Error("Invalid JSON body");
-    }
-  }
-
-  // fallback (only if stream not already consumed)
-  const chunks = [];
-  for await (const ch of req) chunks.push(ch);
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error("Invalid JSON body");
-  }
+function isValidTime(v) {
+  if (!v) return true;
+  return /^\d{2}:\d{2}$/.test(v);
 }
 
 export default async function handler(req, res) {
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return res.status(401).json({ ok: false, error: "Missing bearer token" });
+
+  let email;
   try {
-    const sheetId = (process.env.GOOGLE_SHEET_ID || "").trim();
-    if (!sheetId) throw new Error("Missing GOOGLE_SHEET_ID");
-
-    // Auth
-    const user = await verifyGoogleToken(req.headers.authorization);
-
-    // Google Sheets client
-    const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: "v4", auth });
-
-    // Role check
-    const role = await getUserRole(sheets, sheetId, user.email);
-    if (!role) {
-      return res.status(403).json({ ok: false, error: "Not allowed" });
-    }
-
-    // GET: Read PrayerTimes
-    if (req.method === "GET") {
-      const rows = await readSheetValues(
-        sheets,
-        sheetId,
-        PRAYERTIMES_SHEET_NAME
-      );
-      return res.status(200).json({
-        ok: true,
-        sheet: PRAYERTIMES_SHEET_NAME,
-        rows,
-        role,
-        email: user.email,
-      });
-    }
-
-    // POST: Write patches
-    if (req.method === "POST") {
-      if (role !== "admin" && role !== "editor") {
-        return res.status(403).json({ ok: false, error: "Read-only access" });
-      }
-
-      const body = await readJsonBody(req);
-      const sheetName = String(body?.sheet || PRAYERTIMES_SHEET_NAME).trim();
-      const patches = Array.isArray(body?.patches) ? body.patches : [];
-
-      if (sheetName !== PRAYERTIMES_SHEET_NAME) {
-        return res.status(400).json({ ok: false, error: "Invalid sheet" });
-      }
-
-      if (!patches.length) {
-        return res
-          .status(400)
-          .json({ ok: false, error: "No patches provided" });
-      }
-
-      if (patches.length > 1000) {
-        return res
-          .status(400)
-          .json({ ok: false, error: "Too many changes in one save" });
-      }
-
-      const data = patches.map((p) => {
-        const r = Number(p?.r); // 1-based row
-        const c = Number(p?.c); // 1-based col
-        const value = normalizeTime(p?.value);
-
-        if (!Number.isInteger(r) || r < 2) {
-          throw new Error(`Invalid row in patch: ${JSON.stringify(p)}`);
-        }
-        if (!Number.isInteger(c) || c < 1) {
-          throw new Error(`Invalid col in patch: ${JSON.stringify(p)}`);
-        }
-        if (!isValidTimeHHMM(value)) {
-          throw new Error(
-            `Invalid time "${p?.value}" at r${r} c${c}. Use HH:MM`
-          );
-        }
-
-        const a1 = `${colToA1(c)}${r}`;
-        return {
-          range: `${sheetName}!${a1}`,
-          values: [[value]],
-        };
-      });
-
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: sheetId,
-        requestBody: {
-          valueInputOption: "USER_ENTERED",
-          data,
-        },
-      });
-
-      return res.status(200).json({
-        ok: true,
-        written: data.length,
-      });
-    }
-
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    email = await verifyMicrosoftToken(token);
   } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || String(e),
-    });
+    return res.status(401).json({ ok: false, error: e.message || "Invalid token" });
   }
+
+  const pool = getPool();
+  const allowed = await getAllowedUsers(pool);
+  if (!allowed.has(email)) {
+    return res.status(403).json({ ok: false, error: `${email} is not an admin user` });
+  }
+
+  if (req.method === "GET") {
+    const [dbRows] = await pool.query(
+      `SELECT day, month,
+              fajr_adhan, fajr_iqamah, shouruq,
+              dhuhr_adhan, dhuhr_iqamah,
+              asr_adhan, asr_iqamah,
+              maghrib_adhan, maghrib_iqamah,
+              isha_adhan, isha_iqamah
+       FROM prayer_times ORDER BY month, day`
+    );
+    const rows = dbRows.map((r) => [
+      r.day, r.month,
+      r.fajr_adhan    || "", r.fajr_iqamah   || "", r.shouruq        || "",
+      r.dhuhr_adhan   || "", r.dhuhr_iqamah  || "",
+      r.asr_adhan     || "", r.asr_iqamah    || "",
+      r.maghrib_adhan || "", r.maghrib_iqamah|| "",
+      r.isha_adhan    || "", r.isha_iqamah   || "",
+    ]);
+    return res.json({ ok: true, sheet: "PrayerTimes", headers: HEADERS, rows });
+  }
+
+  if (req.method === "POST") {
+    const { patches } = req.body || {};
+    if (!Array.isArray(patches) || patches.length === 0) {
+      return res.status(400).json({ ok: false, error: "No patches provided" });
+    }
+
+    const [orderedRows] = await pool.query(
+      "SELECT id, day, month FROM prayer_times ORDER BY month, day"
+    );
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      for (const patch of patches) {
+        const rowIndex = patch.r - 2;
+        const colIndex = patch.c;
+        const value    = String(patch.value ?? "").trim();
+
+        if (rowIndex < 0 || rowIndex >= orderedRows.length) {
+          return res.status(400).json({ ok: false, error: `Row ${patch.r} out of range` });
+        }
+        const colName = COL_MAP[colIndex];
+        if (!colName) {
+          return res.status(400).json({ ok: false, error: `Unknown column ${colIndex}` });
+        }
+        if (READONLY_COLS.has(colName)) {
+          return res.status(400).json({ ok: false, error: `Column ${colName} is read-only` });
+        }
+        if (!isValidTime(value)) {
+          return res.status(400).json({ ok: false, error: `Invalid time "${value}"` });
+        }
+        const { id } = orderedRows[rowIndex];
+        await conn.execute(
+          `UPDATE prayer_times SET \`${colName}\` = ? WHERE id = ?`,
+          [value || null, id]
+        );
+      }
+      await conn.execute("INSERT INTO settings (`group`, `key`, `value`) VALUES ('meta', 'lastUpdated', NOW()) ON DUPLICATE KEY UPDATE `value` = NOW()");
+      await conn.commit();
+      broadcast({ type: "update", source: "prayertimes" });
+      return res.json({ ok: true });
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  }
+
+  return res.status(405).json({ ok: false, error: "Method not allowed" });
 }

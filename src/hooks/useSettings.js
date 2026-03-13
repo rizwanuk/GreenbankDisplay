@@ -18,7 +18,7 @@ export default function useSettings() {
 
     // ✅ localhost: very fast checks
     // ✅ production: still fast enough to feel "immediate" but not noisy
-    checkIntervalMs: isLocalhost ? 2000 : 30000,
+    checkIntervalMs: isLocalhost ? 2000 : 5000,
 
     // ✅ instant cross-tab sync + admin save invalidation
     invalidateKey: "gbm_settings_invalidate",

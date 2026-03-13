@@ -1,39 +1,40 @@
-// api/settings.js
+// api/settings.js (MySQL version)
+import mysql from "mysql2/promise";
+
+function getPool() {
+  if (!getPool._pool) {
+    getPool._pool = mysql.createPool({
+      host:     process.env.MYSQL_HOST     || "127.0.0.1",
+      port:     Number(process.env.MYSQL_PORT || 3306),
+      database: process.env.MYSQL_DATABASE || "greenbank",
+      user:     process.env.MYSQL_USER     || "root",
+      password: process.env.MYSQL_PASSWORD || "",
+      waitForConnections: true,
+      connectionLimit: 10,
+      charset: "utf8mb4",
+    });
+  }
+  return getPool._pool;
+}
+
+const PRIVATE_GROUPS = new Set(["adminUsers"]);
+
 export default async function handler(req, res) {
-  // Optional: only allow GET
-  if (req.method && req.method !== "GET") {
+  if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  try {
-    const SHEET_ID =
-      process.env.SHEET_ID || "1TBbaQgecVXEjqJJLTTYlaskcnmfzD1X6OFBpL7Zsw2g";
+  const [dbRows] = await getPool().query(
+    "SELECT `group`, `key`, `value` FROM settings ORDER BY `group`, `key`"
+  );
 
-    const url = `https://opensheet.elk.sh/${SHEET_ID}/settings`;
+  const rows = [
+    ["Group", "Key", "Value"],
+    ...dbRows
+      .filter((r) => !PRIVATE_GROUPS.has(r.group))
+      .map((r) => [r.group, r.key, r.value ?? ""]),
+  ];
 
-    const r = await fetch(url, {
-      headers: { "Cache-Control": "no-store" },
-    });
-
-    if (!r.ok) {
-      const body = await r.text();
-      return res.status(502).json({
-        ok: false,
-        error: "Failed to fetch OpenSheet settings",
-        status: r.status,
-        body: body.slice(0, 300),
-      });
-    }
-
-    const rows = await r.json(); // OpenSheet returns an array
-
-    res.setHeader(
-      "Cache-Control",
-      "no-store, no-cache, must-revalidate, max-age=0"
-    );
-
-    return res.status(200).json({ ok: true, rows });
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: String(e?.message || e) });
-  }
+  res.setHeader("Cache-Control", "public, max-age=15");
+  return res.json({ ok: true, rows });
 }
