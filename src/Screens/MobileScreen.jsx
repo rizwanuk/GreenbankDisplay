@@ -20,7 +20,6 @@ import { registerMobileSW, applySWUpdate, checkForUpdates } from "../pwa/registe
 import MobileTopActions from "../Components/MobileTopActions";
 
 // ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
-import { getSettingsUrl } from "../utils/getSettingsUrl";
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -162,7 +161,7 @@ export default function MobileScreen() {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-        const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+        const r = await fetch("/api/settings", { cache: "no-store" });
         const j = await r.json();
 
         // ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }

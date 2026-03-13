@@ -17,7 +17,6 @@ import { buildSettingsMap, getTheme } from "./utils/helpers";
 import { getEnglishLabels, getArabicLabels } from "./utils/labels";
 
 // ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
-import { getSettingsUrl } from "./utils/getSettingsUrl";
 
 // Weather
 import WeatherCardUnified from "./Components/WeatherCardUnified";
@@ -216,7 +215,7 @@ const mosque = useMemo(() => {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const r = await fetch("/api/settings", { cache: "no-store" });
 const j = await r.json();
 
 // ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }

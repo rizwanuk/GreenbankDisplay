@@ -11,7 +11,6 @@ import useDeviceId from "../hooks/useDeviceId";
 import useRemoteDeviceConfig from "../hooks/useRemoteDeviceConfig";
 
 import useLocalDisplayMode from "../hooks/useLocalDisplayMode";
-import { getSettingsUrl } from "../utils/getSettingsUrl";
 
 /* ---------------- helpers (copied from SlideshowScreen to keep behaviour consistent) ---------------- */
 
@@ -110,7 +109,7 @@ export default function MessagesSlidesScreen() {
 
     const poll = async () => {
       try {
-        const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+        const r = await fetch("/api/settings", { cache: "no-store" });
         const j = await r.json();
         const rows = Array.isArray(j) ? j : (j.rows || j.values || j.settings || []);
         const next = extractLastUpdatedFromSettingsRows(rows);

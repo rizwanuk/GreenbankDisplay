@@ -17,7 +17,6 @@ import { getCurrentPrayerState } from "./utils/getCurrentPrayerState";
 import applyJummahOverride from "./helpers/applyJummahOverride";
 
 // ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
-import { getSettingsUrl } from "./utils/getSettingsUrl";
 
 moment.locale("en-gb");
 
@@ -77,7 +76,7 @@ export default function EmbedScreen() {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const r = await fetch("/api/settings", { cache: "no-store" });
 const j = await r.json();
 
 // ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }

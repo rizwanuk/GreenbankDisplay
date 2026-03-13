@@ -20,7 +20,6 @@ import useDeviceId from "../hooks/useDeviceId";
 import useRemoteDeviceConfig from "../hooks/useRemoteDeviceConfig";
 
 // ✅ Localhost settings URL helper (localhost -> OpenSheet, prod -> /api/settings)
-import { getSettingsUrl } from "../utils/getSettingsUrl";
 
 /* ---------------- helpers ---------------- */
 
@@ -204,7 +203,7 @@ const mosque = useMemo(() => {
     const poll = async () => {
       try {
         // ✅ IMPORTANT: this must be a PUBLIC endpoint (no admin token)
-const r = await fetch(getSettingsUrl(), { cache: "no-store" });
+const r = await fetch("/api/settings", { cache: "no-store" });
 const j = await r.json();
 
 // ✅ OpenSheet returns an array; Vercel /api/settings returns { rows: [...] }
