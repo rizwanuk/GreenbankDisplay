@@ -48,3 +48,4 @@ greenbankdisplay-admin-*.json
 # ================================
 /src/version.js
 ecosystem.config.cjs
+public/quran/
