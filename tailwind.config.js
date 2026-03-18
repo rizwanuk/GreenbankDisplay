@@ -38,6 +38,7 @@ module.exports = {
 
     // Named Tailwind text sizes (if your sheet uses these tokens)
     { pattern: /^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/ },
+    { pattern: /^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/, variants: ["sm","md","lg","xl"] },
 
     // ===== Main display: arbitrary font sizes from the sheet =====
     // e.g. text-[28px], text-[2.8vw], text-[1.75rem]
@@ -64,8 +65,8 @@ module.exports = {
     { pattern: /^hover:bg-(white|black)\/(5|10|15|20|30|40|50|60|70|80|90)$/ },
 
     // Small color-family net for occasional sheet colors on desktop
-    { pattern: /^(bg|text|border)-(gray|emerald|yellow)-(50|100|200|300|400|500|600|700|800|900)$/ },
-    { pattern: /^hover:bg-(gray|emerald|yellow)-(50|100|200|300|400|500|600|700|800|900)$/ },
+    { pattern: /^(bg|text|border)-(gray|emerald|green|yellow)-(50|100|200|300|400|500|600|700|800|900)$/ },
+    { pattern: /^hover:bg-(gray|emerald|green|yellow)-(50|100|200|300|400|500|600|700|800|900)$/ },
 
     // If your themes use gradient stops like from-emerald-700 etc.
     { pattern: /^(from|via|to)-(slate|zinc|neutral|stone|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(100|200|300|400|500|600|700|800|900)$/ },
