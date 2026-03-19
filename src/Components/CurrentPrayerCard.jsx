@@ -6,6 +6,7 @@ import formatWithSmallAmPm from '../helpers/formatWithSmallAmPm';
 import { getCurrentPrayerState } from '../utils/getCurrentPrayerState';
 import applyJummahOverride from '../helpers/applyJummahOverride';
 import { toFontVars } from '../utils/fontMap';
+import { applyFakeDateTime } from '../hooks/useFakeDateTime';
 
 function JamaahBanner({ label, arabic, theme = {} }) {
   return (
@@ -28,7 +29,7 @@ function JamaahBanner({ label, arabic, theme = {} }) {
         )}
       </div>
       <div className={`${theme?.jamaahTextSize || 'text-5xl'} font-eng font-semibold`}>
-        Jama‘ah in progress
+        Jamā'ah in progress
       </div>
     </div>
   );
@@ -61,15 +62,8 @@ export default function CurrentPrayerCard({
     );
   }
 
-  const fakeEnabled = String(settingsMap['toggles.fakeTimeEnabled'] ?? 'false').toLowerCase() === 'true';
-  const fakeTimeStr = settingsMap['toggles.fakeTime']; // e.g. "01:25"
-  let effectiveNow = now;
-  if (fakeEnabled && fakeTimeStr) {
-    const frozen = moment(`${now.format('YYYY-MM-DD')} ${fakeTimeStr}`, 'YYYY-MM-DD HH:mm', true);
-    if (frozen.isValid()) {
-      effectiveNow = frozen;
-    }
-  }
+  // Use localStorage-based fake datetime (browser-local only)
+  const effectiveNow = applyFakeDateTime(now);
 
   const current = getCurrentPrayerState({
     now: effectiveNow,
@@ -123,9 +117,8 @@ export default function CurrentPrayerCard({
   return (
     <div
       style={toFontVars(theme)}
-      className={`rounded-xl overflow-hidden mb-4 text-center ${bgClass} h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex`}
+      className={`rounded-xl overflow-hidden mb-4 text-center ${bgClass} min-h-[8rem] md:h-[12rem] flex`}
     >
-      {/* Left accent with vertical NOW */}
       <div className={`w-12 sm:w-14 md:w-16 ${accentColor} flex items-center justify-center`}>
         <span
           className="uppercase tracking-widest font-extrabold text-lg sm:text-xl md:text-2xl text-white -rotate-90 select-none"
@@ -141,16 +134,17 @@ export default function CurrentPrayerCard({
             <span
               className={`${
                 current.isMakrooh
-                  ? 'text-3xl sm:text-4xl md:text-5xl'
-                  : theme?.nameSize || 'text-6xl sm:text-7xl md:text-8xl'
+                  ? ''
+                  : theme?.nameSize || 'text-3xl sm:text-6xl md:text-7xl lg:text-8xl'
               } font-eng font-semibold`}
+              style={current.isMakrooh ? { fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)', lineHeight: 1.2 } : {}}
             >
               {displayLabel}
             </span>
 
             {displayArabic && !(displayLabel || '').includes(displayArabic) && (
               <span
-                className={`${theme?.nameSizeArabic || 'text-5xl sm:text-6xl md:text-7xl'} font-arabic`}
+                className={`${current.isMakrooh ? "text-2xl sm:text-3xl" : theme?.nameSizeArabic || 'text-3xl sm:text-5xl md:text-6xl lg:text-7xl'} font-arabic`}
                 lang="ar"
                 dir="rtl"
               >
@@ -161,10 +155,10 @@ export default function CurrentPrayerCard({
         </div>
 
         {!current.isMakrooh && displayStart && (displayJamaah || displayStart) && (
-          <div className={`${theme?.timeRowSize || 'text-4xl md:text-6xl'} text-white/80 font-eng`}>
+          <div className={`${theme?.timeRowSize || 'text-xl sm:text-3xl md:text-4xl lg:text-6xl'} text-white/80 font-eng`}>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-2">
               <div>Begins: {formatWithSmallAmPm(displayStart, is24Hour)}</div>
-              {displayJamaah && <div>| Jama’ah: {formatWithSmallAmPm(displayJamaah, is24Hour)}</div>}
+              {displayJamaah && <div>| Jamā'ah: {formatWithSmallAmPm(displayJamaah, is24Hour)}</div>}
             </div>
           </div>
         )}

@@ -21,7 +21,15 @@ export default function Clock({ settings = {}, theme = {} }) {
     : "";
 
   const fontFamily = theme.fontEng || "font-mono";
-  const fontSize = theme.fontSize || "text-[180px]";
+  // Convert fixed px sizes to responsive clamp for mobile compatibility
+  const rawSize = theme.fontSize || "text-[180px]";
+  const pxMatch = rawSize.match(/text-\[(\d+)px\]/);
+  const fontSize = pxMatch
+    ? undefined  // use inline style instead
+    : rawSize;
+  const clockFontStyle = pxMatch
+    ? { fontSize: `clamp(2rem, ${Math.round(parseInt(pxMatch[1]) * 0.09)}vw, ${pxMatch[1]}px)` }
+    : {};
   const amPmSize = theme.amPmSize || "text-4xl";
 
   const monospaceStyle = {
@@ -44,8 +52,8 @@ export default function Clock({ settings = {}, theme = {} }) {
       <div className="inline-flex flex-col items-center">
         {/* Time */}
         <span
-          className={`${fontFamily} ${fontSize} font-bold leading-none tracking-tight text-right`}
-          style={{ ...monospaceStyle, width: is24Hour ? "8ch" : "7ch" }}
+          className={`${fontFamily} ${fontSize || ""} font-bold leading-none tracking-tight text-right`}
+          style={{ ...monospaceStyle, ...clockFontStyle, width: is24Hour ? "8ch" : "7ch" }}
         >
           {timeDisplay}
         </span>

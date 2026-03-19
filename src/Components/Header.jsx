@@ -38,7 +38,7 @@ function Header({ mosque = {}, theme = {} }) {
         </div>
 
         {/* Right: Web address */}
-        <div className={`${theme.urlSize || "text-sm"} opacity-90 ${fontEng}`}>
+        <div className={`${theme.urlSize || "text-sm"} opacity-90 ${fontEng} truncate max-w-full`}>
           {mosque.webpage ? (
             <a
               href={`https://${mosque.webpage}`}
