@@ -82,7 +82,14 @@ function App() {
   useEffect(() => localStorage.setItem("ui.showWeather", String(showWeather)), [showWeather]);
   useEffect(() => localStorage.setItem("ui.weatherMode", weatherMode), [weatherMode]);
 
-  const [displayMode, setDisplayMode] = useLocalDisplayMode("1080p");
+  const [displayMode, setDisplayMode, isAutoMode, resetToAuto] = useLocalDisplayMode("1080p");
+
+  // Ticker for alert progress bar — updates every second
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Apply display mode class to <html>
   useEffect(() => {
@@ -368,15 +375,76 @@ const next = extractLastUpdatedFromSettingsRows(rows);
 
             <div className="w-full md:w-2/3 flex flex-col h-full overflow-hidden min-h-0">
               <div className="shrink-0 mb-6">
-                <CurrentPrayerCard
-                  theme={themeCurrentPrayer}
-                  todayRow={todayRow}
-                  yesterdayRow={yesterdayRow}
-                  settingsMap={settingsMap}
-                  labels={L}
-                  arabicLabels={A}
-                  is24Hour={is24Hour}
-                />
+                {(() => {
+                  const alertEnabled = settingsMap["alert.enabled"] === "true";
+                  const alertMsg     = settingsMap["alert.message"] || "";
+                  const expiresAt    = settingsMap["alert.expiresAt"] || "";
+                  const isExpired    = expiresAt ? new Date(expiresAt).getTime() < now : false;
+                  const alertActive  = alertEnabled && alertMsg && !isExpired;
+
+                  // Compute progress bar width
+                  const duration   = Number(settingsMap["alert.duration"] || 60);
+                  const expiresMs  = expiresAt ? new Date(expiresAt).getTime() : now + duration * 1000;
+                  const totalMs    = duration * 1000;
+                  const remainMs   = Math.max(0, expiresMs - now);
+                  const progress   = totalMs > 0 ? (remainMs / totalMs) * 100 : 100;
+
+                  const alertStyle = settingsMap["alert.style"] || "urgent";
+                  const scrolling  = settingsMap["alert.scrolling"] === "true";
+                  const styleBg    = {
+                    urgent:  "#dc2626",
+                    warning: "#d97706",
+                    info:    "#2563eb",
+                    notice:  "#059669",
+                  }[alertStyle] || "#dc2626";
+
+                  return (
+                    <div className="rounded-xl overflow-hidden h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex flex-col"
+                      style={{ backgroundColor: styleBg }}>
+                      <div className="flex-1 flex items-center justify-center">
+                        {scrolling ? (
+                          <div className="w-full overflow-hidden px-6">
+                            <div className="overflow-hidden whitespace-nowrap">
+                              <span className="text-white font-extrabold text-4xl md:text-5xl"
+                                style={{ display: "inline-block", animation: "marquee 18s linear infinite" }}>
+                                {alertMsg} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {alertMsg}
+                              </span>
+                              <style>{`@keyframes marquee { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }`}</style>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full px-8 flex items-center justify-center h-full">
+                            <p className="text-white font-extrabold text-center leading-tight break-words w-full"
+                              style={{ fontSize: "clamp(1.5rem, 4vw, 3.5rem)", wordBreak: "break-word", hyphens: "auto" }}>
+                              {alertMsg}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      {/* Progress bar */}
+                      <div style={{ height: "4px", backgroundColor: "rgba(0,0,0,0.25)" }}>
+                        <div style={{ height: "4px", width: `${progress}%`, backgroundColor: "rgba(255,255,255,0.6)", transition: "width 1s linear" }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+                {!(() => {
+                  const alertEnabled = settingsMap["alert.enabled"] === "true";
+                  const alertMsg     = settingsMap["alert.message"] || "";
+                  const expiresAt    = settingsMap["alert.expiresAt"] || "";
+                  const isExpired    = expiresAt ? new Date(expiresAt).getTime() < now : false;
+                  return alertEnabled && alertMsg && !isExpired;
+                })() && (
+                  <CurrentPrayerCard
+                    theme={themeCurrentPrayer}
+                    todayRow={todayRow}
+                    yesterdayRow={yesterdayRow}
+                    settingsMap={settingsMap}
+                    labels={L}
+                    arabicLabels={A}
+                    is24Hour={is24Hour}
+                  />
+                )}
               </div>
 
               <div className="flex-1 flex flex-col">
@@ -396,8 +464,8 @@ const next = extractLastUpdatedFromSettingsRows(rows);
             </div>
           </div>
 
-          <div className="absolute bottom-2 left-4 text-xs text-white bg-black/60 px-3 py-1 rounded">
-            ● {settings?.refreshStatus?.isOnline !== false ? "Live" : "⚠ Cached"} | Last updated at {lastUpdated ? moment(lastUpdated).format("DD MMM YYYY, HH:mm:ss") : "—"}
+          <div className={`absolute bottom-2 left-4 text-xs px-3 py-1 rounded ${settings?.refreshStatus?.isFromCache ? "text-amber-300 bg-black/70 border border-amber-400/30" : "text-white bg-black/60"}`}>
+            {settings?.refreshStatus?.isFromCache ? "⚠ Cached" : "● Live"} | {settings?.refreshStatus?.isFromCache ? `Showing cached data from ${settings?.refreshStatus?.cacheTimestamp ? moment(settings.refreshStatus.cacheTimestamp).format("DD MMM, HH:mm") : "unknown"}` : `Last updated ${lastUpdated ? moment(lastUpdated).format("DD MMM YYYY, HH:mm:ss") : "—"}`}
 
             {remoteErr ? (
               <span className="ml-2 text-red-400">• Remote: {String(remoteErr)}</span>
@@ -411,6 +479,8 @@ const next = extractLastUpdatedFromSettingsRows(rows);
           setThemeName={handleSetTheme}
           themeOptions={allThemes}
           displayMode={displayMode}
+          isAutoMode={isAutoMode}
+          resetToAuto={resetToAuto}
           setDisplayMode={setDisplayMode}
           showWeather={showWeather}
           setShowWeather={setShowWeather}

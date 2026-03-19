@@ -314,16 +314,68 @@ const next = extractLastUpdatedFromSettingsRows(rows);
           <div className="w-full lg:w-[30%] flex flex-col items-stretch gap-4 overflow-hidden min-h-0">
             <SlideshowClock now={now} theme={themeClock} settingsMap={settingsMap} />
             <SlideshowDateCard now={now} theme={themeDateCard} settingsMap={settingsMap} />
-            <SlideshowCurrentPrayerCard
-              now={now}
-              theme={themeCurrentPrayer}
-              todayRow={todayRow}
-              yesterdayRow={yesterdayRow}
-              settingsMap={settingsMap}
-              labels={labels}
-              arabicLabels={arabicLabels}
-              is24Hour={is24Hour}
-            />
+            {(() => {
+              const alertEnabled = settingsMap["alert.enabled"] === "true";
+              const alertMsg     = settingsMap["alert.message"] || "";
+              const expiresAt    = settingsMap["alert.expiresAt"] || "";
+              const isExpired    = expiresAt ? new Date(expiresAt).getTime() < now : false;
+              const alertActive  = alertEnabled && alertMsg && !isExpired;
+
+              if (!alertActive) return (
+                <SlideshowCurrentPrayerCard
+                  now={now}
+                  theme={themeCurrentPrayer}
+                  todayRow={todayRow}
+                  yesterdayRow={yesterdayRow}
+                  settingsMap={settingsMap}
+                  labels={labels}
+                  arabicLabels={arabicLabels}
+                  is24Hour={is24Hour}
+                />
+              );
+
+              const duration  = Number(settingsMap["alert.duration"] || 60);
+              const expiresMs = expiresAt ? new Date(expiresAt).getTime() : now + duration * 1000;
+              const totalMs   = duration * 1000;
+              const remainMs  = Math.max(0, expiresMs - now);
+              const progress  = totalMs > 0 ? (remainMs / totalMs) * 100 : 100;
+              const alertStyle = settingsMap["alert.style"] || "urgent";
+              const scrolling  = settingsMap["alert.scrolling"] === "true";
+              const styleBg    = {
+                urgent:  "#dc2626",
+                warning: "#d97706",
+                info:    "#2563eb",
+                notice:  "#059669",
+              }[alertStyle] || "#dc2626";
+
+              return (
+                <div className="rounded-xl overflow-hidden flex flex-col"
+                  style={{ backgroundColor: styleBg, minHeight: "8rem" }}>
+                  <div className="flex-1 flex items-center justify-center p-4">
+                    {scrolling ? (
+                      <div className="w-full overflow-hidden">
+                        <div className="overflow-hidden whitespace-nowrap">
+                          <span className="text-white font-extrabold text-2xl md:text-3xl"
+                            style={{ display: "inline-block", animation: "marquee 18s linear infinite" }}>
+                            {alertMsg} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {alertMsg}
+                          </span>
+                          <style>{`@keyframes marquee { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }`}</style>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-white font-extrabold text-center leading-tight break-words w-full"
+                        style={{ fontSize: "clamp(1rem, 2.5vw, 2rem)", wordBreak: "break-word", hyphens: "auto" }}>
+                        {alertMsg}
+                      </p>
+                    )}
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ height: "4px", backgroundColor: "rgba(0,0,0,0.25)" }}>
+                    <div style={{ height: "4px", width: `${progress}%`, backgroundColor: "rgba(255,255,255,0.6)", transition: "width 1s linear" }} />
+                  </div>
+                </div>
+              );
+            })()}
             <SlideshowUpcomingPrayerRows
               now={now}
               timetable={timetable}
