@@ -6,6 +6,7 @@ import AdminScreen from "./Screens/AdminScreen";
 import SlideshowScreen from "./Screens/SlideshowScreen";
 import MessagesSlidesScreen from "./Screens/MessagesSlidesScreen";
 import MobileScreen from "./Screens/MobileScreen";
+import MobileAdminScreen from "./Screens/MobileAdminScreen";
 import EmbedScreen from "./EmbedScreen";
 import Embed2Screen from "./Embed2Screen";
 
@@ -28,6 +29,7 @@ const router = createBrowserRouter([
   { path: "/embed2", element: <Embed2Screen />, errorElement: <ErrorPage /> },
 
   { path: "/mobile", element: <MobileRoute />, errorElement: <ErrorPage /> },
+  { path: "/mobile-admin", element: <MobileAdminScreen />, errorElement: <ErrorPage /> },
 
   // ✅ Catch-all
   { path: "*", element: <ErrorPage /> },
