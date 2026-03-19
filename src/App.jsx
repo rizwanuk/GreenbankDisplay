@@ -398,6 +398,7 @@ const next = extractLastUpdatedFromSettingsRows(rows);
                     notice:  "#059669",
                   }[alertStyle] || "#dc2626";
 
+                  if (!alertActive) return null;
                   return (
                     <div className="rounded-xl overflow-hidden h-[11rem] sm:h-[11.5rem] md:h-[12rem] flex flex-col"
                       style={{ backgroundColor: styleBg }}>

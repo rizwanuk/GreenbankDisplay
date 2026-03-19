@@ -23,14 +23,6 @@ const DURATION_OPTIONS = [
   { label: "Custom", value: "custom" },
 ];
 
-const TEMPLATES = [
-  { label: "🚗 Car blocking entrance", style: "urgent",  scrolling: false, message: "A car is blocking the entrance — the owner is kindly requested to move it immediately." },
-  { label: "🕌 Jumu'ah reminder",      style: "notice",  scrolling: true,  message: "Jumu'ah Mubarak — Khutbah begins at 1:15pm. Please ensure all mobile phones are on silent." },
-  { label: "🔇 Silence phones",        style: "info",    scrolling: false, message: "Please ensure your mobile phone is on silent or switched off. Jazākallāhu Khayran." },
-  { label: "📢 General announcement",  style: "info",    scrolling: false, message: "" },
-  { label: "⚠️ Facility closed",       style: "warning", scrolling: false, message: "The Wudhu facility is temporarily closed. We apologise for any inconvenience." },
-  { label: "🌙 Ramadan Mubarak",       style: "notice",  scrolling: true,  message: "Ramadan Mubarak from Greenbank Masjid — may Allah accept your fasts, prayers and good deeds." },
-];
 
 export default function AlertPanel({ groups, setValue, reload }) {
   const alert = getGroup(groups, "alert");
@@ -54,12 +46,6 @@ export default function AlertPanel({ groups, setValue, reload }) {
     return diff > 0 ? diff : 0;
   })();
 
-  function applyTemplate(tpl) {
-    setValue("alert", "message",  tpl.message);
-    setValue("alert", "style",    tpl.style);
-    setValue("alert", "scrolling", String(tpl.scrolling));
-    if (tpl.message) setValue("alert", "enabled", "true");
-  }
 
   async function saveAlert(overrides = {}) {
     setSaving(true); setErr(""); setSavedMsg("");
@@ -141,20 +127,7 @@ export default function AlertPanel({ groups, setValue, reload }) {
         )}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-        <div className="text-sm font-semibold">Quick templates</div>
-        <div className="grid grid-cols-1 gap-2">
-          {TEMPLATES.map((tpl) => (
-            <button key={tpl.label} onClick={() => applyTemplate(tpl)}
-              className="text-left px-3 py-2.5 rounded-xl border border-white/10 bg-black/10 hover:bg-white/10 transition-colors text-sm">
-              <span className="font-medium">{tpl.label}</span>
-              {tpl.message && (
-                <span className="block text-xs opacity-50 mt-0.5 truncate">{tpl.message}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
         <div className="text-sm font-semibold">Alert settings</div>
