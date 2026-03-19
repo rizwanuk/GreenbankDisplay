@@ -158,7 +158,7 @@ function UpcomingPrayerRows({
               } leading-[1.125]`}
             >
               {/* English prayer name */}
-              <div className="truncate font-eng font-bold whitespace-nowrap overflow-visible text-ellipsis text-[1.1em]">
+              <div className="font-eng font-bold whitespace-nowrap overflow-hidden text-ellipsis text-[1.1em] min-w-0">
                 {getLabel(p.lookupKey || p.name, labels)}
               </div>
 
